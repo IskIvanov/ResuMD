@@ -12,12 +12,14 @@ import { resolve } from "path";
 import yaml from "js-yaml";
 import type { CvData } from "./types.ts";
 import * as render from "./renderers.ts";
+import { patchResumeJson } from "./render-json.ts";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const SOURCE = resolve(ROOT, "src/content/cv/en.md");
 const OUTPUT = resolve(ROOT, "Resume.md");
+const JSON_OUTPUT = resolve(ROOT, "Resume.json");
 
 // ─── Frontmatter parser ───────────────────────────────────────────────────────
 
@@ -61,7 +63,16 @@ function compose(cv: CvData, body: string): string {
 
 const raw = readFileSync(SOURCE, "utf-8");
 const { data, body } = parseFrontmatter(raw);
+
 const output = compose(data, body);
 writeFileSync(OUTPUT, output + "\n", "utf-8");
-
 console.log(`✓ Resume.md generated from ${SOURCE}`);
+
+const currentJson = JSON.parse(readFileSync(JSON_OUTPUT, "utf-8"));
+const updatedJson = patchResumeJson(data, currentJson);
+writeFileSync(
+  JSON_OUTPUT,
+  JSON.stringify(updatedJson, null, 2) + "\n",
+  "utf-8",
+);
+console.log(`✓ Resume.json patched from ${SOURCE}`);
