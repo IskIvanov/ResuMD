@@ -8,7 +8,8 @@
  */
 
 import { readFileSync, writeFileSync } from "fs";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import yaml from "js-yaml";
 import type { CvData } from "./types.ts";
 import * as render from "./renderers.ts";
@@ -16,7 +17,8 @@ import { patchResumeJson } from "./render-json.ts";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
-const ROOT = resolve(import.meta.dirname, "../..");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, "../..");
 const SOURCE = resolve(ROOT, "src/content/cv/en.md");
 const OUTPUT = resolve(ROOT, "Resume.md");
 const JSON_OUTPUT = resolve(ROOT, "Resume.json");
