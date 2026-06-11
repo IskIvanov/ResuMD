@@ -12,55 +12,55 @@ import type {
   EducationItem,
   ExperienceItem,
   ProjectItem,
-} from "./types.ts";
+} from './types.ts'
 
 // ─── HTML renderers ───────────────────────────────────────────────────────────
 
 export function renderExperienceDescriptionHtml(item: ExperienceItem): string {
-  const parts: string[] = [];
+  const parts: string[] = []
 
   if (item.context) {
-    parts.push(`<p>${item.context}</p>`);
+    parts.push(`<p>${item.context}</p>`)
   }
 
-  const bullets = item.bullets.map((b) => `<li><p>${b}</p></li>`).join("");
-  parts.push(`<ul>${bullets}</ul>`);
+  const bullets = item.bullets.map((b) => `<li><p>${b}</p></li>`).join('')
+  parts.push(`<ul>${bullets}</ul>`)
 
-  parts.push(`<p><strong>Tech Stack:</strong> ${item.stack}</p>`);
+  parts.push(`<p><strong>Tech Stack:</strong> ${item.stack}</p>`)
 
-  return parts.join("");
+  return parts.join('')
 }
 
 export function renderEducationDescriptionHtml(item: EducationItem): string {
-  const parts: string[] = [];
+  const parts: string[] = []
 
   if (item.context) {
-    parts.push(`<p>${item.context}</p>`);
+    parts.push(`<p>${item.context}</p>`)
   }
 
   if (item.bullets.length > 0) {
     const bulletItems = item.bullets
       .map((b) => {
         if (b.href && b.linkText) {
-          return `<li><a target="_blank" rel="noopener noreferrer nofollow" href="${b.href}">${b.linkText}</a> ${b.text}</li>`;
+          return `<li><a target="_blank" rel="noopener noreferrer nofollow" href="${b.href}">${b.linkText}</a> ${b.text}</li>`
         }
-        return `<li>${b.text}</li>`;
+        return `<li>${b.text}</li>`
       })
-      .join("");
-    parts.push(`<ul>${bulletItems}</ul>`);
+      .join('')
+    parts.push(`<ul>${bulletItems}</ul>`)
   }
 
-  return parts.join("");
+  return parts.join('')
 }
 
 export function renderProjectDescriptionHtml(item: ProjectItem): string {
-  return `<p>${item.context}</p><p><strong>Tech Stack:</strong> ${item.stack}</p>`;
+  return `<p>${item.context}</p><p><strong>Tech Stack:</strong> ${item.stack}</p>`
 }
 
 export function renderCertDescriptionHtml(item: CertificationItem): string {
-  if (item.credentials.length === 0) return "";
-  const ids = item.credentials.map((c) => c.id).join(", ");
-  return `<p>Credential ID: ${ids}</p>`;
+  if (item.credentials.length === 0) return ''
+  const ids = item.credentials.map((c) => c.id).join(', ')
+  return `<p>Credential ID: ${ids}</p>`
 }
 
 // ─── Internal JSON shape ──────────────────────────────────────────────────────
@@ -70,61 +70,61 @@ export function renderCertDescriptionHtml(item: CertificationItem): string {
 // accidentally dropped.
 
 interface ExperienceJsonItem {
-  company: string;
-  position: string;
-  location: string;
-  period: string;
-  description: string;
-  [key: string]: unknown;
+  company: string
+  position: string
+  location: string
+  period: string
+  description: string
+  [key: string]: unknown
 }
 
 interface SkillJsonItem {
-  name: string;
-  keywords: string[];
-  [key: string]: unknown;
+  name: string
+  keywords: string[]
+  [key: string]: unknown
 }
 
 interface EducationJsonItem {
-  school: string;
-  description: string;
-  [key: string]: unknown;
+  school: string
+  description: string
+  [key: string]: unknown
 }
 
 interface ProjectJsonItem {
-  name: string;
-  description: string;
-  [key: string]: unknown;
+  name: string
+  description: string
+  [key: string]: unknown
 }
 
 interface CertJsonItem {
-  title: string;
-  issuer: string;
-  description: string;
-  [key: string]: unknown;
+  title: string
+  issuer: string
+  description: string
+  [key: string]: unknown
 }
 
 interface LanguageJsonItem {
-  language: string;
-  fluency: string;
-  [key: string]: unknown;
+  language: string
+  fluency: string
+  [key: string]: unknown
 }
 
 interface InterestJsonItem {
-  name: string;
-  [key: string]: unknown;
+  name: string
+  [key: string]: unknown
 }
 
 interface ResumeJson {
   sections: {
-    experience: { items: ExperienceJsonItem[] };
-    skills: { items: SkillJsonItem[] };
-    education: { items: EducationJsonItem[] };
-    projects: { items: ProjectJsonItem[] };
-    certifications: { items: CertJsonItem[] };
-    languages: { items: LanguageJsonItem[] };
-    interests: { items: InterestJsonItem[] };
-  };
-  [key: string]: unknown;
+    experience: { items: ExperienceJsonItem[] }
+    skills: { items: SkillJsonItem[] }
+    education: { items: EducationJsonItem[] }
+    projects: { items: ProjectJsonItem[] }
+    certifications: { items: CertJsonItem[] }
+    languages: { items: LanguageJsonItem[] }
+    interests: { items: InterestJsonItem[] }
+  }
+  [key: string]: unknown
 }
 
 // ─── Patcher ──────────────────────────────────────────────────────────────────
@@ -135,73 +135,73 @@ interface ResumeJson {
  * touched; all structural and metadata fields are preserved as-is.
  */
 export function patchResumeJson(cv: CvData, json: unknown): unknown {
-  const resume = json as ResumeJson;
-  const { sections } = resume;
+  const resume = json as ResumeJson
+  const { sections } = resume
 
   // Experience — match by company name
   for (const jsonItem of sections.experience.items) {
     const cvItem = cv.experience.items.find(
-      (e) => e.company === jsonItem.company,
-    );
-    if (!cvItem) continue;
-    jsonItem.position = cvItem.role;
-    jsonItem.location = cvItem.location;
-    jsonItem.period = cvItem.dates;
-    jsonItem.description = renderExperienceDescriptionHtml(cvItem);
+      (e) => e.company === jsonItem.company
+    )
+    if (!cvItem) continue
+    jsonItem.position = cvItem.role
+    jsonItem.location = cvItem.location
+    jsonItem.period = cvItem.dates
+    jsonItem.description = renderExperienceDescriptionHtml(cvItem)
   }
 
   // Skills — match by name (JSON) === heading (en.md)
   for (const jsonItem of sections.skills.items) {
-    const cvGroup = cv.skillGroups.find((g) => g.heading === jsonItem.name);
-    if (!cvGroup) continue;
-    jsonItem.keywords = [...cvGroup.items];
+    const cvGroup = cv.skillGroups.find((g) => g.heading === jsonItem.name)
+    if (!cvGroup) continue
+    jsonItem.keywords = [...cvGroup.items]
   }
 
   // Education — match by school name
   for (const jsonItem of sections.education.items) {
-    const cvItem = cv.education.items.find((e) => e.school === jsonItem.school);
-    if (!cvItem) continue;
-    jsonItem.description = renderEducationDescriptionHtml(cvItem);
+    const cvItem = cv.education.items.find((e) => e.school === jsonItem.school)
+    if (!cvItem) continue
+    jsonItem.description = renderEducationDescriptionHtml(cvItem)
   }
 
   // Projects — match by name (JSON) === title (en.md)
   for (const jsonItem of sections.projects.items) {
-    const cvItem = cv.projects.items.find((p) => p.title === jsonItem.name);
-    if (!cvItem) continue;
-    jsonItem.name = cvItem.title;
-    jsonItem.description = renderProjectDescriptionHtml(cvItem);
+    const cvItem = cv.projects.items.find((p) => p.title === jsonItem.name)
+    if (!cvItem) continue
+    jsonItem.name = cvItem.title
+    jsonItem.description = renderProjectDescriptionHtml(cvItem)
   }
 
   // Certifications — match by title
   for (const jsonItem of sections.certifications.items) {
     const cvItem = cv.certifications.items.find(
-      (c) => c.title === jsonItem.title,
-    );
-    if (!cvItem) continue;
-    jsonItem.issuer = cvItem.issuer;
-    jsonItem.description = renderCertDescriptionHtml(cvItem);
+      (c) => c.title === jsonItem.title
+    )
+    if (!cvItem) continue
+    jsonItem.issuer = cvItem.issuer
+    jsonItem.description = renderCertDescriptionHtml(cvItem)
   }
 
   // Languages — match by the name portion before " — "
   for (const jsonItem of sections.languages.items) {
     const cvLang = cv.footer.languages.items.find((l) => {
-      const [name] = l.split(" — ");
-      return name.trim() === jsonItem.language;
-    });
-    if (!cvLang) continue;
-    const [, fluency] = cvLang.split(" — ");
-    if (fluency) jsonItem.fluency = fluency.trim();
+      const [name] = l.split(' — ')
+      return name.trim() === jsonItem.language
+    })
+    if (!cvLang) continue
+    const [, fluency] = cvLang.split(' — ')
+    if (fluency) jsonItem.fluency = fluency.trim()
   }
 
   // Interests — replace names positionally from the dot-separated text
   const interestNames = cv.footer.interests.text
-    .split(" · ")
-    .map((s) => s.trim());
+    .split(' · ')
+    .map((s) => s.trim())
   sections.interests.items.forEach((jsonItem, i) => {
     if (i < interestNames.length) {
-      jsonItem.name = interestNames[i];
+      jsonItem.name = interestNames[i]
     }
-  });
+  })
 
-  return resume;
+  return resume
 }
