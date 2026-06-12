@@ -152,7 +152,9 @@ export function patchResumeJson(cv: CvData, json: unknown): unknown {
 
   // Skills — match by name (JSON) === heading (en.md)
   for (const jsonItem of sections.skills.items) {
-    const cvGroup = cv.skillGroups.find((g) => g.heading === jsonItem.name)
+    const cvGroup = cv.skillGroups.find(
+      (group) => group.heading === jsonItem.name
+    )
     if (!cvGroup) continue
     jsonItem.keywords = [...cvGroup.items]
   }

@@ -20,7 +20,8 @@ const DIVIDER = '---'
 // ─── Header ──────────────────────────────────────────────────────────────────
 
 export function renderHeader(name: string, title: string): string {
-  return [`# ${name}`, '', `**${title}**`].join('\n')
+  const header = [`# ${name}`, '', `**${title}**`].join(`\n`)
+  return header
 }
 
 // ─── Contact ─────────────────────────────────────────────────────────────────
