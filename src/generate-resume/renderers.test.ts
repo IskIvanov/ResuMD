@@ -67,6 +67,11 @@ const cert: CertificationItem = {
   credentials: [{ id: 'AWS-12345', href: '/certs/aws.pdf' }],
 }
 
+const certNoCredentials: CertificationItem = {
+  title: 'Example Certified Developer',
+  issuer: 'Example Institute',
+} as CertificationItem
+
 const contacts: ContactItem[] = [
   {
     label: 'hello@example.com',
@@ -240,11 +245,15 @@ describe('renderProjectItem', () => {
 })
 
 describe('renderCertificationItem', () => {
-  it('renders title in bold, issuer, and credential IDs', () => {
+  it('renders title in bold and issuer', () => {
     const output = renderCertificationItem(cert)
     expect(output).toContain('**AWS Solutions Architect**')
     expect(output).toContain('Amazon')
-    expect(output).toContain('AWS-12345')
+  })
+
+  it('renders a single credential ID', () => {
+    const output = renderCertificationItem(cert)
+    expect(output).toContain('Credential ID: AWS-12345')
   })
 
   it('joins multiple credential IDs with a comma', () => {
@@ -255,7 +264,23 @@ describe('renderCertificationItem', () => {
         { id: 'ID-2', href: '/2.pdf' },
       ],
     }
-    expect(renderCertificationItem(multi)).toContain('ID-1, ID-2')
+    expect(renderCertificationItem(multi)).toContain(
+      'Credential ID: ID-1, ID-2'
+    )
+  })
+
+  it('omits credential line when credentials array is empty', () => {
+    const empty: CertificationItem = { ...cert, credentials: [] }
+    const output = renderCertificationItem(empty)
+    expect(output).toContain('**AWS Solutions Architect**')
+    expect(output).not.toContain('Credential ID')
+  })
+
+  it('renders without crashing and omits credential line when credentials is absent', () => {
+    const output = renderCertificationItem(certNoCredentials)
+    expect(output).toContain('**Example Certified Developer**')
+    expect(output).toContain('Example Institute')
+    expect(output).not.toContain('Credential ID')
   })
 })
 

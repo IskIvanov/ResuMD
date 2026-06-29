@@ -150,7 +150,7 @@ export function renderProjects(items: ProjectItem[]): string {
 // ─── Certifications ──────────────────────────────────────────────────────────
 
 export function renderCertificationItem(cert: CertificationItem): string {
-  const credentialIds = cert.credentials.map((c) => c.id).join(', ')
+  const credentialIds = (cert.credentials ?? []).map((c) => c.id).join(', ')
   return [
     `**${cert.title}**`,
     '',

@@ -58,7 +58,7 @@ export interface Credential {
 export interface CertificationItem {
   title: string
   issuer: string
-  credentials: Credential[]
+  credentials?: Credential[]
 }
 
 export interface CvData {
