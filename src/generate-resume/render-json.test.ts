@@ -71,6 +71,7 @@ const certMultipleCredentials: CertificationItem = {
 // Minimal JSON that mirrors the shape of Resume.json
 const minimalJson = {
   basics: { name: 'Old Name' },
+  summary: { title: 'Summary', content: '<p>old summary</p>' },
   sections: {
     experience: {
       items: [
@@ -162,7 +163,11 @@ const minimalJson = {
 }
 
 const minimalCv: CvData = {
-  header: { name: 'New Name', title: 'New Title' },
+  header: {
+    name: 'New Name',
+    title: 'New Title',
+    tagline: 'The new tagline text.',
+  },
   contact: { items: [] },
   skillGroups: [
     { id: 'frontend', heading: 'Frontend', items: ['React', 'TypeScript'] },
@@ -197,11 +202,10 @@ describe('renderExperienceDescriptionHtml', () => {
     expect(output).not.toContain('A fintech scale-up.')
   })
 
-  it('wraps each bullet in <li><p>...</p></li> inside a <ul>', () => {
+  it('wraps each bullet in a <p> with a • prefix', () => {
     const output = renderExperienceDescriptionHtml(job)
-    expect(output).toContain('<ul>')
-    expect(output).toContain('<li><p>Built X</p></li>')
-    expect(output).toContain('<li><p>Improved Y by 30%</p></li>')
+    expect(output).toContain('<p>• Built X</p>')
+    expect(output).toContain('<p>• Improved Y by 30%</p>')
   })
 
   it('renders the tech stack in a closing <p> with a <strong> label', () => {
@@ -294,6 +298,14 @@ describe('renderCertDescriptionHtml', () => {
 // ─── patchResumeJson ─────────────────────────────────────────────────────────
 
 describe('patchResumeJson', () => {
+  it('syncs summary.content from header.tagline wrapped in a <p>', () => {
+    const result = patchResumeJson(
+      minimalCv,
+      structuredClone(minimalJson)
+    ) as typeof minimalJson
+    expect(result.summary.content).toBe('<p>The new tagline text.</p>')
+  })
+
   it('updates experience position, location, period and description when company matches', () => {
     const result = patchResumeJson(
       minimalCv,
@@ -304,7 +316,7 @@ describe('patchResumeJson', () => {
     expect(exp.location).toBe('Amsterdam')
     expect(exp.period).toBe('01/2023 – Present')
     expect(exp.description).toContain('A fintech scale-up.')
-    expect(exp.description).toContain('<li><p>Built X</p></li>')
+    expect(exp.description).toContain('<p>• Built X</p>')
   })
 
   it('preserves experience id, hidden flag and website url', () => {

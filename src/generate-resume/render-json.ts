@@ -23,8 +23,9 @@ export function renderExperienceDescriptionHtml(item: ExperienceItem): string {
     parts.push(`<p>${item.context}</p>`)
   }
 
-  const bullets = item.bullets.map((b) => `<li><p>${b}</p></li>`).join('')
-  parts.push(`<ul>${bullets}</ul>`)
+  for (const b of item.bullets) {
+    parts.push(`<p>• ${b}</p>`)
+  }
 
   parts.push(`<p><strong>Tech Stack:</strong> ${item.stack}</p>`)
 
@@ -38,16 +39,14 @@ export function renderEducationDescriptionHtml(item: EducationItem): string {
     parts.push(`<p>${item.context}</p>`)
   }
 
-  if (item.bullets.length > 0) {
-    const bulletItems = item.bullets
-      .map((b) => {
-        if (b.href && b.linkText) {
-          return `<li><a target="_blank" rel="noopener noreferrer nofollow" href="${b.href}">${b.linkText}</a> ${b.text}</li>`
-        }
-        return `<li>${b.text}</li>`
-      })
-      .join('')
-    parts.push(`<ul>${bulletItems}</ul>`)
+  for (const b of item.bullets) {
+    if (b.href && b.linkText) {
+      parts.push(
+        `<p>• <a target="_blank" rel="noopener noreferrer nofollow" href="${b.href}">${b.linkText}</a> ${b.text}</p>`
+      )
+    } else {
+      parts.push(`<p>• ${b.text}</p>`)
+    }
   }
 
   return parts.join('')
@@ -115,6 +114,7 @@ interface InterestJsonItem {
 }
 
 interface ResumeJson {
+  summary: { content: string; [key: string]: unknown }
   sections: {
     experience: { items: ExperienceJsonItem[] }
     skills: { items: SkillJsonItem[] }
@@ -137,6 +137,9 @@ interface ResumeJson {
 export function patchResumeJson(cv: CvData, json: unknown): unknown {
   const resume = json as ResumeJson
   const { sections } = resume
+
+  // Summary — sync tagline from header
+  resume.summary.content = `<p>${cv.header.tagline}</p>`
 
   // Experience — match by company name
   for (const jsonItem of sections.experience.items) {

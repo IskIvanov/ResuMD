@@ -65,6 +65,7 @@ export interface CvData {
   header: {
     name: string
     title: string
+    tagline: string
   }
   contact: {
     items: ContactItem[]
