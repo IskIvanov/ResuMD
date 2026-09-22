@@ -8,7 +8,7 @@
  * are never touched. On first run, en.md is reformatted by yaml.dump() —
  * this is intentional since the file becomes machine-maintained.
  *
- * Run: yarn resume:sync
+ * Run: bun run resume:sync
  */
 
 import { readFileSync, writeFileSync } from 'fs'

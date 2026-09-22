@@ -4,7 +4,7 @@
  * Pure functions that parse a Resume.md string into structured data.
  * No file I/O — all functions accept a raw markdown string and return data.
  *
- * Run via: yarn resume:sync
+ * Run via: bun run resume:sync
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────

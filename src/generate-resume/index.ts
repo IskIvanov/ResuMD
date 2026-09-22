@@ -4,7 +4,7 @@
  * Reads src/content/cv/en.md, renders each section via renderers.ts,
  * and writes the result to Resume.md at the project root.
  *
- * Run: yarn resume:generate
+ * Run: bun run resume:generate
  */
 
 import { readFileSync, writeFileSync } from 'fs'
