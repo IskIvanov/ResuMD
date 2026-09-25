@@ -20,8 +20,8 @@ import { patchResumeJson } from './render-json.ts'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
 const SOURCE = resolve(ROOT, 'src/content/cv/en.md')
-const OUTPUT = resolve(ROOT, 'Resume.md')
-const JSON_OUTPUT = resolve(ROOT, 'Resume.json')
+const OUTPUT = resolve(ROOT, '/resume/Resume.md')
+const JSON_OUTPUT = resolve(ROOT, '/resume/RxResume/Resume.json')
 
 // ─── Frontmatter parser ───────────────────────────────────────────────────────
 
