@@ -10,27 +10,28 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ParsedJob {
-  company: string
-  bullets: string[]
-  stack: string
+  company: string;
+  role: string;
+  bullets: string[];
+  stack: string;
 }
 
 export interface ParsedSkillGroup {
-  heading: string
-  items: string[]
+  heading: string;
+  items: string[];
 }
 
 export interface ParsedEduItem {
-  school: string
-  context: string
-  bullets: string[]
+  school: string;
+  context: string;
+  bullets: string[];
 }
 
 export interface ParsedResume {
-  summary: string
-  jobs: ParsedJob[]
-  skillGroups: ParsedSkillGroup[]
-  eduItems: ParsedEduItem[]
+  summary: string;
+  jobs: ParsedJob[];
+  skillGroups: ParsedSkillGroup[];
+  eduItems: ParsedEduItem[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -40,15 +41,47 @@ export interface ParsedResume {
  * Prepends a newline so the first heading is always found by /\n## /.
  */
 function splitSections(md: string): Record<string, string> {
-  const sections: Record<string, string> = {}
-  const parts = ('\n' + md).split(/\n## /)
+  const sections: Record<string, string> = {};
+  const parts = ("\n" + md).split(/\n## /);
   for (const part of parts.slice(1)) {
-    const newlineIdx = part.indexOf('\n')
-    const heading = part.slice(0, newlineIdx).trim()
-    const body = part.slice(newlineIdx + 1)
-    sections[heading] = body
+    const newlineIdx = part.indexOf("\n");
+    const heading = part.slice(0, newlineIdx).trim();
+    const body = part.slice(newlineIdx + 1);
+    sections[heading] = body;
   }
-  return sections
+  return sections;
+}
+
+/** Line prefixes that always open a new logical line (bullet, heading, rule). */
+const BLOCK_START_PREFIXES = ["- ", "#", "---"] as const;
+
+/** Matches a `**Role** | dates` line; group 1 is the role. */
+const ROLE_LINE_REGEX = /^\*\*(.+?)\*\* \| /;
+
+/**
+ * Joins hard-wrapped markdown lines (e.g. Prettier's 80-char wrap) into
+ * logical lines. Blank lines and lines starting with a block marker open a new
+ * logical line; every other line — indented bullet continuations and plain
+ * paragraph continuations alike — is appended to the previous one.
+ */
+function unwrapLines(text: string): string[] {
+  const logical: string[] = [];
+  let current: string | null = null;
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    const startsBlock = BLOCK_START_PREFIXES.some((p) => raw.startsWith(p));
+
+    if (line.length === 0 || startsBlock || current === null) {
+      if (current !== null) logical.push(current);
+      current = line.length > 0 ? line : null;
+    } else {
+      current = `${current} ${line}`;
+    }
+  }
+  if (current !== null) logical.push(current);
+
+  return logical;
 }
 
 /**
@@ -56,10 +89,10 @@ function splitSections(md: string): Record<string, string> {
  * Returns text before ' — ', or the full line if no ' — ' is present.
  */
 function extractName(headingLine: string): string {
-  const dashIdx = headingLine.indexOf(' — ')
+  const dashIdx = headingLine.indexOf(" — ");
   return dashIdx >= 0
     ? headingLine.slice(0, dashIdx).trim()
-    : headingLine.trim()
+    : headingLine.trim();
 }
 
 // ─── Section parsers ──────────────────────────────────────────────────────────
@@ -69,10 +102,10 @@ function extractName(headingLine: string): string {
  * Throws if the `## Summary` section is missing.
  */
 export function parseSummary(md: string): string {
-  const sections = splitSections(md)
-  const body = sections['Summary']
-  if (!body) throw new Error('Missing ## Summary section in Resume.md')
-  return body.split(/\n---/)[0].trim()
+  const sections = splitSections(md);
+  const body = sections["Summary"];
+  if (!body) throw new Error("Missing ## Summary section in Resume.md");
+  return body.split(/\n---/)[0].trim();
 }
 
 /**
@@ -80,27 +113,32 @@ export function parseSummary(md: string): string {
  * Each `### Company — Location` block becomes one ParsedJob.
  */
 export function parseExperience(md: string): ParsedJob[] {
-  const sections = splitSections(md)
-  const body = sections['Experience']
-  if (!body) return []
+  const sections = splitSections(md);
+  const body = sections["Experience"];
+  if (!body) return [];
 
-  const jobBlocks = body.split(/\n### /).filter((b) => b.trim().length > 0)
+  const jobBlocks = body.split(/\n### /).filter((b) => b.trim().length > 0);
 
   return jobBlocks.map((block) => {
-    const lines = block.split('\n')
-    const company = extractName(lines[0])
+    const lines = unwrapLines(block);
+    const company = extractName(lines[0]);
+
+    const roleMatch = lines
+      .map((l) => ROLE_LINE_REGEX.exec(l))
+      .find((m) => m !== null);
+    const role = roleMatch ? roleMatch[1].trim() : "";
 
     const bullets = lines
-      .filter((l) => l.startsWith('- '))
-      .map((l) => l.slice(2).trim())
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.slice(2).trim());
 
-    const stackLine = lines.find((l) => l.startsWith('**Tech Stack:**'))
+    const stackLine = lines.find((l) => l.startsWith("**Tech Stack:**"));
     const stack = stackLine
-      ? stackLine.replace('**Tech Stack:** ', '').trim()
-      : ''
+      ? stackLine.replace("**Tech Stack:** ", "").trim()
+      : "";
 
-    return { company, bullets, stack }
-  })
+    return { company, role, bullets, stack };
+  });
 }
 
 /**
@@ -108,25 +146,26 @@ export function parseExperience(md: string): ParsedJob[] {
  * Each `**Heading:** item1, item2` line becomes one ParsedSkillGroup.
  */
 export function parseSkills(md: string): ParsedSkillGroup[] {
-  const sections = splitSections(md)
-  const body = sections['Technical Skills']
-  if (!body) return []
+  const sections = splitSections(md);
+  const body = sections["Technical Skills"];
+  if (!body) return [];
 
-  const groups: ParsedSkillGroup[] = []
-  const regex = /^\*\*(.+?):\*\* (.+)$/gm
-  let match
+  const groups: ParsedSkillGroup[] = [];
+  const regex = /^\*\*(.+?):\*\* (.+)$/;
 
-  while ((match = regex.exec(body)) !== null) {
+  for (const line of unwrapLines(body)) {
+    const match = regex.exec(line);
+    if (!match) continue;
     groups.push({
       heading: match[1].trim(),
       items: match[2]
-        .split(', ')
+        .split(", ")
         .map((s) => s.trim())
         .filter(Boolean),
-    })
+    });
   }
 
-  return groups
+  return groups;
 }
 
 /**
@@ -134,42 +173,39 @@ export function parseSkills(md: string): ParsedSkillGroup[] {
  * Each `### School` block becomes one ParsedEduItem.
  */
 export function parseEducation(md: string): ParsedEduItem[] {
-  const sections = splitSections(md)
-  const body = sections['Education']
-  if (!body) return []
+  const sections = splitSections(md);
+  const body = sections["Education"];
+  if (!body) return [];
 
-  const eduBlocks = body.split(/\n### /).filter((b) => b.trim().length > 0)
+  const eduBlocks = body.split(/\n### /).filter((b) => b.trim().length > 0);
 
   return eduBlocks.map((block) => {
-    const lines = block
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && l !== '---')
+    const lines = unwrapLines(block).filter((l) => l !== "---");
 
-    const school = extractName(lines[0])
+    const school = extractName(lines[0]);
 
     const bullets = lines
-      .filter((l) => l.startsWith('- '))
-      .map((l) => l.slice(2).trim())
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.slice(2).trim());
 
     // Context: non-bullet, non-heading line that immediately follows the degree line
     const degreeIdx = lines.findIndex(
-      (l) => l.startsWith('**') && l.includes('** | ')
-    )
-    let context = ''
+      (l) => l.startsWith("**") && l.includes("** | "),
+    );
+    let context = "";
     if (degreeIdx >= 0) {
       for (let i = degreeIdx + 1; i < lines.length; i++) {
-        const l = lines[i]
-        if (l.startsWith('- ')) break
-        if (!l.startsWith('**') && !l.startsWith('#')) {
-          context = l
-          break
+        const l = lines[i];
+        if (l.startsWith("- ")) break;
+        if (!l.startsWith("**") && !l.startsWith("#")) {
+          context = l;
+          break;
         }
       }
     }
 
-    return { school, context, bullets }
-  })
+    return { school, context, bullets };
+  });
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -184,5 +220,5 @@ export function parseResume(md: string): ParsedResume {
     jobs: parseExperience(md),
     skillGroups: parseSkills(md),
     eduItems: parseEducation(md),
-  }
+  };
 }

@@ -64,8 +64,8 @@ const resumeRaw = readFileSync(RESUME_PATH, 'utf-8')
 const cvRaw = readFileSync(CV_PATH, 'utf-8')
 
 const { data: cvData } = parseFrontmatter(cvRaw)
-const parsed = parseResume(resumeRaw)
-const summary = merge(cvData, parsed)
+const parsedResume = parseResume(resumeRaw)
+const summary = merge(cvData, parsedResume)
 
 writeFileSync(CV_PATH, serializeCv(cvData, summary), 'utf-8')
 console.log(`✓ src/content/cv/en.md synced from Resume.md`)

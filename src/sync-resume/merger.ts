@@ -8,33 +8,37 @@
  * On no match: console.warn + skip (never throw).
  */
 
-import type { CvData, EducationBullet } from './types.ts'
+import type { CvData, EducationBullet } from "./types.ts";
 import type {
   ParsedJob,
   ParsedSkillGroup,
   ParsedEduItem,
   ParsedResume,
-} from './parser.ts'
+} from "./parser.ts";
 
 // ─── Experience ───────────────────────────────────────────────────────────────
 
 /**
- * Updates bullets and stack for each matched experience item.
+ * Updates role, bullets and stack for each matched experience item.
  * Match key: company name. Unmatched jobs emit a warning and are skipped.
+ * An empty parsed role (no `**Role** | dates` line) keeps the existing role.
  */
 export function mergeExperience(cv: CvData, jobs: ParsedJob[]): void {
   for (const parsed of jobs) {
     const cvJob = cv.experience.items.find(
-      (item) => item.company === parsed.company
-    )
+      (item) => item.company === parsed.company,
+    );
     if (!cvJob) {
       console.warn(
-        `sync-resume: no experience match for company "${parsed.company}" — skipping`
-      )
-      continue
+        `sync-resume: no experience match for company "${parsed.company}" — skipping`,
+      );
+      continue;
     }
-    cvJob.bullets = parsed.bullets
-    cvJob.stack = parsed.stack
+    if (parsed.role) {
+      cvJob.role = parsed.role;
+    }
+    cvJob.bullets = parsed.bullets;
+    cvJob.stack = parsed.stack;
   }
 }
 
@@ -46,14 +50,14 @@ export function mergeExperience(cv: CvData, jobs: ParsedJob[]): void {
  */
 export function mergeSkills(cv: CvData, groups: ParsedSkillGroup[]): void {
   for (const parsed of groups) {
-    const cvGroup = cv.skillGroups.find((g) => g.heading === parsed.heading)
+    const cvGroup = cv.skillGroups.find((g) => g.heading === parsed.heading);
     if (!cvGroup) {
       console.warn(
-        `sync-resume: no skill group match for heading "${parsed.heading}" — skipping`
-      )
-      continue
+        `sync-resume: no skill group match for heading "${parsed.heading}" — skipping`,
+      );
+      continue;
     }
-    cvGroup.items = parsed.items
+    cvGroup.items = parsed.items;
   }
 }
 
@@ -71,38 +75,38 @@ export function mergeSkills(cv: CvData, groups: ParsedSkillGroup[]): void {
  */
 export function mergeEducation(cv: CvData, eduItems: ParsedEduItem[]): void {
   for (const parsed of eduItems) {
-    const cvEdu = cv.education.items.find((e) => e.school === parsed.school)
+    const cvEdu = cv.education.items.find((e) => e.school === parsed.school);
     if (!cvEdu) {
       console.warn(
-        `sync-resume: no education match for school "${parsed.school}" — skipping`
-      )
-      continue
+        `sync-resume: no education match for school "${parsed.school}" — skipping`,
+      );
+      continue;
     }
 
     if (parsed.context) {
-      cvEdu.context = parsed.context
+      cvEdu.context = parsed.context;
     }
 
     if (parsed.bullets.length !== cvEdu.bullets.length) {
       console.warn(
         `sync-resume: bullet count mismatch for "${parsed.school}": ` +
           `Resume.md has ${parsed.bullets.length}, en.md has ${cvEdu.bullets.length} — ` +
-          `updating overlapping indices only`
-      )
+          `updating overlapping indices only`,
+      );
     }
 
-    const count = Math.min(parsed.bullets.length, cvEdu.bullets.length)
+    const count = Math.min(parsed.bullets.length, cvEdu.bullets.length);
     for (let i = 0; i < count; i++) {
-      const parsedLine = parsed.bullets[i]
-      const cvBullet = cvEdu.bullets[i] as EducationBullet
+      const parsedLine = parsed.bullets[i];
+      const cvBullet = cvEdu.bullets[i] as EducationBullet;
 
       if (cvBullet.linkText) {
-        const prefix = cvBullet.linkText + ' '
+        const prefix = cvBullet.linkText + " ";
         cvBullet.text = parsedLine.startsWith(prefix)
           ? parsedLine.slice(prefix.length)
-          : parsedLine
+          : parsedLine;
       } else {
-        cvBullet.text = parsedLine
+        cvBullet.text = parsedLine;
       }
     }
   }
@@ -115,8 +119,8 @@ export function mergeEducation(cv: CvData, eduItems: ParsedEduItem[]): void {
  * Returns the new summary body string for writing to the en.md body.
  */
 export function merge(cv: CvData, parsed: ParsedResume): string {
-  mergeExperience(cv, parsed.jobs)
-  mergeSkills(cv, parsed.skillGroups)
-  mergeEducation(cv, parsed.eduItems)
-  return parsed.summary
+  mergeExperience(cv, parsed.jobs);
+  mergeSkills(cv, parsed.skillGroups);
+  mergeEducation(cv, parsed.eduItems);
+  return parsed.summary;
 }
