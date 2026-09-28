@@ -8,7 +8,7 @@
  * On no match: console.warn + skip (never throw).
  */
 
-import type { CvData, EducationBullet } from '../generate-resume/types.ts'
+import type { CvData, EducationBullet } from './types.ts'
 import type {
   ParsedJob,
   ParsedSkillGroup,

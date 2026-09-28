@@ -5,7 +5,7 @@ import {
   mergeEducation,
   merge,
 } from './merger.ts'
-import type { CvData } from '../generate-resume/types.ts'
+import type { CvData } from './types.ts'
 import type { ParsedResume } from './parser.ts'
 
 // ─── CvData fixture ───────────────────────────────────────────────────────────

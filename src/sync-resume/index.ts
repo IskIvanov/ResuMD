@@ -2,7 +2,8 @@
  * sync-resume/index.ts
  *
  * Reads Resume.md, parses it via parser.ts, merges text-only changes into
- * src/content/cv/en.md via merger.ts, and writes the updated file.
+ * src/content/cv/en.md via merger.ts, and writes the updated file. The merged
+ * data is then patched into resume/RxResume/Resume.json via render-json.ts.
  *
  * Metadata-only fields in en.md (href, datetime, icon, credential IDs, etc.)
  * are never touched. On first run, en.md is reformatted by yaml.dump() —
@@ -15,16 +16,19 @@ import { readFileSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import yaml from 'js-yaml'
-import type { CvData } from '../generate-resume/types.ts'
+import type { CvData } from './types.ts'
 import { parseResume } from './parser.ts'
 import { merge } from './merger.ts'
+import { patchResumeJson } from './render-json.ts'
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '../..')
-const RESUME_PATH = resolve(ROOT, 'Resume.md')
+const RESUME = resolve(__dirname, '../../resume')
+const RESUME_PATH = resolve(RESUME, 'Resume.md')
 const CV_PATH = resolve(ROOT, 'src/content/cv/en.md')
+const RESUME_JSON_PATH = resolve(RESUME, 'RxResume/Resume.json')
 
 // ─── Frontmatter helpers ──────────────────────────────────────────────────────
 
@@ -65,3 +69,12 @@ const summary = merge(cvData, parsed)
 
 writeFileSync(CV_PATH, serializeCv(cvData, summary), 'utf-8')
 console.log(`✓ src/content/cv/en.md synced from Resume.md`)
+
+const resumeJson = JSON.parse(readFileSync(RESUME_JSON_PATH, 'utf-8'))
+const patchedJson = patchResumeJson(cvData, resumeJson)
+writeFileSync(
+  RESUME_JSON_PATH,
+  JSON.stringify(patchedJson, null, 2) + '\n',
+  'utf-8'
+)
+console.log(`✓ resume/RxResume/Resume.json patched from en.md`)
