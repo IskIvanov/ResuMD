@@ -18,19 +18,18 @@ export const SyncOption = {
 
 /** Default locations, relative to the resume-tools package root. */
 const DefaultPath = {
-  Resume: "resume/Resume.md",
   Json: "resume/RxResume/Resume.json",
   Template: "resume/RxResume/Resume.template.json",
 } as const;
 
 export const USAGE =
-  "Usage: sync-resume --cv <path> [--resume <path>] [--json <path>] [--template <path>]";
+  "Usage: sync-resume --cv <path> --resume <path> [--json <path>] [--template <path>]";
 
 /** Absolute paths the sync run reads from and writes to. */
 export interface SyncPaths {
   /** Site CV markdown with YAML frontmatter (e.g. src/content/cv/en.md). */
   cv: string;
-  /** Source-of-truth Resume.md. */
+  /** Source-of-truth Resume.md. Lives outside this package. */
   resume: string;
   /** RxResume JSON to patch; created from `template` when it does not exist. */
   json: string;
@@ -52,15 +51,15 @@ export interface PathContext {
  * @param argv - Arguments after the script name (`process.argv.slice(2)`).
  * @param context - Directories used to resolve given and default paths.
  * @returns The resolved input and output paths.
- * @throws If `--cv` is missing or an unknown option is passed.
+ * @throws If `--cv` or `--resume` is missing, or an unknown option is passed.
  *
  * @example
- * resolveSyncPaths(['--cv', 'src/content/cv/en.md'], {
+ * resolveSyncPaths(['--cv', 'src/content/cv/en.md', '--resume', 'resume/Resume.md'], {
  *   cwd: '/portfolio',
  *   packageRoot: '/portfolio/packages/resume-tools',
  * })
  * // { cv: '/portfolio/src/content/cv/en.md',
- * //   resume: '/portfolio/packages/resume-tools/resume/Resume.md', ... }
+ * //   resume: '/portfolio/resume/Resume.md', ... }
  */
 export function resolveSyncPaths(
   argv: string[],
@@ -79,18 +78,20 @@ export function resolveSyncPaths(
 
   const cv = values[SyncOption.Cv];
   if (!cv) throw new Error(`--${SyncOption.Cv} <path> is required\n${USAGE}`);
+  const resume = values[SyncOption.Resume];
+  if (!resume)
+    throw new Error(`--${SyncOption.Resume} <path> is required\n${USAGE}`);
 
   const fromCwd = (path: string): string => resolve(context.cwd, path);
   const fromPackage = (path: string): string =>
     resolve(context.packageRoot, path);
 
-  const resume = values[SyncOption.Resume];
   const json = values[SyncOption.Json];
   const template = values[SyncOption.Template];
 
   return {
     cv: fromCwd(cv),
-    resume: resume ? fromCwd(resume) : fromPackage(DefaultPath.Resume),
+    resume: fromCwd(resume),
     json: json ? fromCwd(json) : fromPackage(DefaultPath.Json),
     template: template ? fromCwd(template) : fromPackage(DefaultPath.Template),
   };

@@ -10,7 +10,7 @@
  * are never touched. On first run, the CV is reformatted by yaml.dump() —
  * this is intentional since the file becomes machine-maintained.
  *
- * Run: bun src/sync-resume/index.ts --cv <path> [--resume <path>]
+ * Run: bun src/sync-resume/index.ts --cv <path> --resume <path>
  *        [--json <path>] [--template <path>]
  */
 

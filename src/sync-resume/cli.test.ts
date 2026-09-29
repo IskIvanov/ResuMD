@@ -6,15 +6,15 @@ const CWD = "/work/portfolio";
 const PACKAGE_ROOT = "/work/portfolio/packages/resume-tools";
 
 describe("resolveSyncPaths", () => {
-  it("uses package defaults for everything except --cv", () => {
-    const paths = resolveSyncPaths(["--cv", "src/content/cv/en.md"], {
-      cwd: CWD,
-      packageRoot: PACKAGE_ROOT,
-    });
+  it("uses package defaults for the RxResume paths", () => {
+    const paths = resolveSyncPaths(
+      ["--cv", "src/content/cv/en.md", "--resume", "resume/Resume.md"],
+      { cwd: CWD, packageRoot: PACKAGE_ROOT },
+    );
 
     expect(paths).toEqual({
       cv: resolve(CWD, "src/content/cv/en.md"),
-      resume: resolve(PACKAGE_ROOT, "resume/Resume.md"),
+      resume: resolve(CWD, "resume/Resume.md"),
       json: resolve(PACKAGE_ROOT, "resume/RxResume/Resume.json"),
       template: resolve(PACKAGE_ROOT, "resume/RxResume/Resume.template.json"),
     });
@@ -45,13 +45,25 @@ describe("resolveSyncPaths", () => {
 
   it("throws a usage error when --cv is missing", () => {
     expect(() =>
-      resolveSyncPaths([], { cwd: CWD, packageRoot: PACKAGE_ROOT }),
+      resolveSyncPaths(["--resume", "Resume.md"], {
+        cwd: CWD,
+        packageRoot: PACKAGE_ROOT,
+      }),
     ).toThrow(/--cv <path> is required/);
+  });
+
+  it("throws a usage error when --resume is missing", () => {
+    expect(() =>
+      resolveSyncPaths(["--cv", "cv.md"], {
+        cwd: CWD,
+        packageRoot: PACKAGE_ROOT,
+      }),
+    ).toThrow(/--resume <path> is required/);
   });
 
   it("throws on unknown options", () => {
     expect(() =>
-      resolveSyncPaths(["--cv", "cv.md", "--nope", "x"], {
+      resolveSyncPaths(["--cv", "cv.md", "--resume", "r.md", "--nope", "x"], {
         cwd: CWD,
         packageRoot: PACKAGE_ROOT,
       }),

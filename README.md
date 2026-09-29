@@ -28,13 +28,13 @@ Requires [Bun](https://bun.sh).
 
 ```bash
 bun install
-bun run sync --cv path/to/cv.md
+bun run sync --cv path/to/cv.md --resume path/to/Resume.md
 ```
 
 | Option              | Default                                | Description                                                                         |
 | ------------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
 | `--cv <path>`       | required                               | Site CV to update: Markdown with YAML frontmatter. The body is the summary.         |
-| `--resume <path>`   | `resume/Resume.md`                     | The source-of-truth resume.                                                         |
+| `--resume <path>`   | required                               | Your source-of-truth resume. It lives in your own project, not in this package.     |
 | `--json <path>`     | `resume/RxResume/Resume.json`          | Reactive Resume export to patch. Created from `--template` if it doesn't exist yet. |
 | `--template <path>` | `resume/RxResume/Resume.template.json` | Starting point for a new Reactive Resume JSON.                                      |
 
@@ -56,7 +56,9 @@ Nothing gets added or removed.
 
 ## Resume data
 
-- `resume/Resume.md` is the central, hand-edited resume.
+- `Resume.md` is your central, hand-edited resume. It belongs to your own
+  project and is passed in with `--resume`. This repo never stores one, and
+  `.gitignore` blocks any `*.md` other than the README and test fixtures.
 - `resume/RxResume/Resume.template.json` is a Reactive Resume v5 template with
   placeholder content. It is the only JSON file in version control.
 - `resume/RxResume/Resume.json` is your real export. It is gitignored, because
