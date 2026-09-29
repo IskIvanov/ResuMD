@@ -12,7 +12,7 @@ import type { ParsedJob, ParsedResume } from "./parser.ts";
 
 function makeCv(): CvData {
   return {
-    header: { name: "Test User", title: "Engineer" },
+    header: { name: "Test User", title: "Engineer", tagline: "Tagline" },
     contact: { items: [] },
     skillGroups: [
       {

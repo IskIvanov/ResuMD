@@ -57,8 +57,9 @@ export function renderProjectDescriptionHtml(item: ProjectItem): string {
 }
 
 export function renderCertDescriptionHtml(item: CertificationItem): string {
-  if (item.credentials.length === 0) return ''
-  const ids = item.credentials.map((c) => c.id).join(', ')
+  const credentials = item.credentials ?? []
+  if (credentials.length === 0) return ''
+  const ids = credentials.map((c) => c.id).join(', ')
   return `<p>Credential ID: ${ids}</p>`
 }
 

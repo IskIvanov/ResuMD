@@ -293,6 +293,11 @@ describe('renderCertDescriptionHtml', () => {
     const noCreds: CertificationItem = { ...cert, credentials: [] }
     expect(renderCertDescriptionHtml(noCreds)).toBe('')
   })
+
+  it('returns empty string when credentials are omitted', () => {
+    const { credentials: _omitted, ...noCreds } = cert
+    expect(renderCertDescriptionHtml(noCreds)).toBe('')
+  })
 })
 
 // ─── patchResumeJson ─────────────────────────────────────────────────────────
