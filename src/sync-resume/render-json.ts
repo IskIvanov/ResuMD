@@ -12,6 +12,7 @@ import type {
   EducationItem,
   ExperienceItem,
   ProjectItem,
+  ResumeJson,
 } from './types.ts'
 
 // ─── HTML renderers ───────────────────────────────────────────────────────────
@@ -92,71 +93,6 @@ export function renderCertDescriptionHtml(item: CertificationItem): string {
   if (credentials.length === 0) return ''
   const ids = credentials.map((c) => c.id).join(', ')
   return `<p>Credential ID: ${ids}</p>`
-}
-
-// ─── Internal JSON shape ──────────────────────────────────────────────────────
-//
-// Only the fields that patchResumeJson reads or writes are typed here.
-// Everything else is carried through as `unknown` so no structural field is
-// accidentally dropped.
-
-interface ExperienceJsonItem {
-  company: string
-  position: string
-  location: string
-  period: string
-  description: string
-  [key: string]: unknown
-}
-
-interface SkillJsonItem {
-  name: string
-  keywords: string[]
-  [key: string]: unknown
-}
-
-interface EducationJsonItem {
-  school: string
-  description: string
-  [key: string]: unknown
-}
-
-interface ProjectJsonItem {
-  name: string
-  description: string
-  [key: string]: unknown
-}
-
-interface CertJsonItem {
-  title: string
-  issuer: string
-  description: string
-  [key: string]: unknown
-}
-
-interface LanguageJsonItem {
-  language: string
-  fluency: string
-  [key: string]: unknown
-}
-
-interface InterestJsonItem {
-  name: string
-  [key: string]: unknown
-}
-
-interface ResumeJson {
-  summary: { content: string; [key: string]: unknown }
-  sections: {
-    experience: { items: ExperienceJsonItem[] }
-    skills: { items: SkillJsonItem[] }
-    education: { items: EducationJsonItem[] }
-    projects: { items: ProjectJsonItem[] }
-    certifications: { items: CertJsonItem[] }
-    languages: { items: LanguageJsonItem[] }
-    interests: { items: InterestJsonItem[] }
-  }
-  [key: string]: unknown
 }
 
 // ─── Patcher ──────────────────────────────────────────────────────────────────

@@ -138,10 +138,8 @@ describe("parseSummary", () => {
     expect(result).toBe("Senior engineer with 9+ years shipping products.");
   });
 
-  it("throws if ## Summary is missing", () => {
-    expect(() => parseSummary("## Experience\n\nsome content")).toThrow(
-      "Missing ## Summary",
-    );
+  it("returns an empty string if ## Summary is missing", () => {
+    expect(parseSummary("## Experience\n\nsome content")).toBe("");
   });
 });
 
@@ -576,30 +574,89 @@ describe("parseReferences", () => {
 // ─── parseResume ──────────────────────────────────────────────────────────────
 
 describe("parseResume", () => {
+  /** A resume with every required section; `overrides` swaps sections out. */
+  function buildResume(overrides: Partial<Record<string, string>> = {}): string {
+    const sections: Record<string, string> = {
+      header: HEADER_FIXTURE,
+      experience: EXPERIENCE_FIXTURE,
+      skills: SKILLS_FIXTURE.replace("## Technical Skills\n", ""),
+      education: EDUCATION_FIXTURE,
+      projects: PROJECTS_FIXTURE,
+      certifications: CERTIFICATIONS_FIXTURE.replace("## Certifications\n", ""),
+      footer: FOOTER_FIXTURE.replace("## Languages\n", ""),
+      ...overrides,
+    };
+    return Object.values(sections).join("\n\n---\n\n");
+  }
+
   it("parses every section of a full resume", () => {
-    const parsed = parseResume(
-      [
-        HEADER_FIXTURE,
-        "---",
-        EXPERIENCE_FIXTURE,
-        "---",
-        EDUCATION_FIXTURE,
-        "---",
-        PROJECTS_FIXTURE,
-        CERTIFICATIONS_FIXTURE.replace("## Certifications\n", ""),
-        FOOTER_FIXTURE.replace("## Languages\n", ""),
-      ].join("\n\n"),
-    );
+    const parsed = parseResume(buildResume());
 
     expect(parsed.basics.name).toBe("Jane Doe");
     expect(parsed.summary).toBe("Senior engineer.");
     expect(parsed.jobs).toHaveLength(2);
+    expect(parsed.skillGroups).toHaveLength(2);
     expect(parsed.eduItems).toHaveLength(2);
     expect(parsed.projects).toHaveLength(2);
     expect(parsed.certifications).toHaveLength(2);
     expect(parsed.languages).toHaveLength(3);
     expect(parsed.interests).toHaveLength(3);
     expect(parsed.references).toHaveLength(1);
+  });
+
+  it("throws if ## Summary is missing", () => {
+    expect(() => parseResume(buildResume({ header: "# Jane Doe" }))).toThrow(
+      "summary: required",
+    );
+  });
+
+  it("throws if a job has no role line", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "**Engineer** | 01/2021 – 12/2022\n",
+      "",
+    );
+    const parse = (): unknown => parseResume(buildResume({ experience }));
+    expect(parse).toThrow("jobs[1].role: required");
+    expect(parse).toThrow("jobs[1].period: required");
+  });
+
+  it("throws if a job has no tech stack line", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "**Tech Stack:** React, Java\n",
+      "",
+    );
+    expect(() => parseResume(buildResume({ experience }))).toThrow(
+      "jobs[1].stack: required",
+    );
+  });
+
+  it("throws if ## Experience is missing", () => {
+    expect(() => parseResume(buildResume({ experience: "" }))).toThrow(
+      "jobs: needs at least one entry",
+    );
+  });
+
+  it("throws if ## Technical Skills is missing", () => {
+    const experience = EXPERIENCE_FIXTURE.replace("## Technical Skills", "");
+    expect(() => parseResume(buildResume({ experience, skills: "" }))).toThrow(
+      "skillGroups: needs at least one entry",
+    );
+  });
+
+  it("throws if ## Education is missing", () => {
+    expect(() => parseResume(buildResume({ education: "" }))).toThrow(
+      "eduItems: needs at least one entry",
+    );
+  });
+
+  it("throws if an education item has no degree line", () => {
+    const education = EDUCATION_FIXTURE.replace(
+      "**Master's degree, Engineering** | 2018 – 2019\n",
+      "",
+    );
+    expect(() => parseResume(buildResume({ education }))).toThrow(
+      "eduItems[0].degree: required",
+    );
   });
 });
 

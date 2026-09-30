@@ -6,6 +6,8 @@
  * key nor the instance URLs appear in code, on the command line or in git.
  */
 
+import type { ApiConfig } from "./types.ts";
+
 /** Variables the Reactive Resume tools need from `.env`. */
 export const EnvVar = {
   ApiKey: "RXRESUME_API_KEY",
@@ -17,14 +19,6 @@ export const EnvVar = {
 export const ENV_FILE = ".env";
 const ENV_EXAMPLE_FILE = ".env.example";
 const BUILDER_PATH = "/builder";
-
-export interface ApiConfig {
-  apiKey: string;
-  /** Base URL of the API, e.g. `https://rxresu.me/api/openapi`. */
-  baseUrl: string;
-  /** URL of the web app, e.g. `https://rxresu.me`; used for builder links. */
-  appUrl: string;
-}
 
 /**
  * Resolves the API key and the instance URLs from an environment.

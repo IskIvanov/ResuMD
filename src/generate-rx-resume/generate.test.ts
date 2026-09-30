@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateResume } from "./generate.ts";
-import type { RxResumeClient } from "../rx-resume/client.ts";
 import { SECTION_ORDER } from "../rx-resume/layout.ts";
 import type {
   ParsedResumeData,
   Resume,
   ResumeData,
+  RxResumeClient,
 } from "../rx-resume/types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────

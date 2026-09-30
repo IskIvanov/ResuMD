@@ -6,7 +6,14 @@
  * network.
  */
 
-import type { CreateResumeBody, Resume, UpdateResumeBody } from "./types.ts";
+import type {
+  ApiErrorBody,
+  CreateResumeBody,
+  Resume,
+  RxResumeClient,
+  RxResumeClientConfig,
+  UpdateResumeBody,
+} from "./types.ts";
 
 /** Header carrying the API key. */
 export const ApiKeyHeader = "x-api-key";
@@ -25,24 +32,6 @@ type HttpMethod = (typeof HttpMethod)[keyof typeof HttpMethod];
 
 const RESUMES_PATH = "/resumes";
 
-/** The subset of `fetch` the client uses; `globalThis.fetch` satisfies it. */
-export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
-
-export interface RxResumeClientConfig {
-  baseUrl: string;
-  apiKey: string;
-  fetch: FetchFn;
-}
-
-export interface RxResumeClient {
-  /** `POST /resumes`; resolves to the new resume's id. */
-  createResume(body: CreateResumeBody): Promise<string>;
-  /** `GET /resumes/{id}`. */
-  getResume(id: string): Promise<Resume>;
-  /** `PUT /resumes/{id}`; resolves to the updated resume. */
-  updateResume(id: string, body: UpdateResumeBody): Promise<Resume>;
-}
-
 /** A non-2xx response, with the API's error code when it sent one. */
 export class RxResumeApiError extends Error {
   readonly status: number;
@@ -54,11 +43,6 @@ export class RxResumeApiError extends Error {
     this.status = status;
     this.code = code;
   }
-}
-
-interface ApiErrorBody {
-  code?: unknown;
-  message?: unknown;
 }
 
 /** Builds an RxResumeApiError from a failed response, JSON body or not. */

@@ -18,11 +18,11 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve, dirname, relative } from "path";
 import { fileURLToPath } from "url";
 import yaml from "js-yaml";
-import type { CvData } from "./types.ts";
+import type { CvData, SyncPaths } from "./types.ts";
 import { parseResume } from "./parser.ts";
 import { merge } from "./merger.ts";
 import { patchResumeJson } from "./render-json.ts";
-import { resolveSyncPaths, type SyncPaths } from "./cli.ts";
+import { resolveSyncPaths } from "./cli.ts";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 

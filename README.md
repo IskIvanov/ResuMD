@@ -93,12 +93,31 @@ Nothing gets added or removed.
   Rename the placeholder entries there so they match your companies, schools and
   skill groups, export the result, and save it at this path.
 
+### Validation
+
+Both commands check the parsed `Resume.md` before they write anything. The run
+fails if any of these is missing, and the error names each path, for example
+`jobs[2].role: required`:
+
+- the `## Summary` text
+- at least one job, skill group and education item
+- a job's company, `**Role** | dates` line and `**Tech Stack:**` line
+- an education item's school and `**Degree** | dates` line
+- a skill group's heading and items
+
+Locations, context paragraphs, bullets, links and the other sections are
+optional.
+
 ## Development
 
 ```bash
 bun run test       # vitest
 bun run typecheck  # tsc --noEmit
 ```
+
+Each folder in `src/` keeps its Zod schemas in `schema.ts` and its types in
+`types.ts`. Data shapes are inferred from the schemas with `z.infer`; declare a
+type by hand only when it is not data, such as CLI options or the API client.
 
 Tests use the synthetic fixtures in `src/sync-resume/fixtures/`, never the real
 resume.

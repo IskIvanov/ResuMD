@@ -7,6 +7,7 @@
 
 import { resolve } from "path";
 import { parseArgs } from "util";
+import type { PathContext, SyncPaths } from "./types.ts";
 
 /** Command-line option names accepted by sync-resume. */
 export const SyncOption = {
@@ -24,26 +25,6 @@ const DefaultPath = {
 
 export const USAGE =
   "Usage: sync-resume --cv <path> --resume <path> [--json <path>] [--template <path>]";
-
-/** Absolute paths the sync run reads from and writes to. */
-export interface SyncPaths {
-  /** Site CV markdown with YAML frontmatter (e.g. src/content/cv/en.md). */
-  cv: string;
-  /** Source-of-truth Resume.md. Lives outside this package. */
-  resume: string;
-  /** RxResume JSON to patch; created from `template` when it does not exist. */
-  json: string;
-  /** RxResume template used to seed `json`. */
-  template: string;
-}
-
-/** Directories that relative paths are resolved against. */
-export interface PathContext {
-  /** Working directory — base for any path passed on the command line. */
-  cwd: string;
-  /** resume-tools package root — base for default paths. */
-  packageRoot: string;
-}
 
 /**
  * Parses sync-resume CLI arguments into absolute paths.

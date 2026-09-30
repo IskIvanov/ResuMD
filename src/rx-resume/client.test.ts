@@ -3,9 +3,8 @@ import {
   ApiKeyHeader,
   createRxResumeClient,
   RxResumeApiError,
-  type FetchFn,
 } from "./client.ts";
-import type { Resume, ResumeData } from "./types.ts";
+import type { FetchFn, Resume, ResumeData } from "./types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

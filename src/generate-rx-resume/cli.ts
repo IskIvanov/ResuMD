@@ -7,6 +7,7 @@
 
 import { resolve } from "path";
 import { parseArgs } from "util";
+import type { GenerateOptions } from "./types.ts";
 
 /** Command-line option names accepted by generate-rx-resume. */
 export const GenerateOption = {
@@ -18,16 +19,6 @@ export const GenerateOption = {
 
 export const USAGE =
   "Usage: generate-rx-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]";
-
-export interface GenerateOptions {
-  /** Absolute path to the source-of-truth Resume.md. */
-  resume: string;
-  /** Resume name shown in Reactive Resume. */
-  name: string;
-  /** URL slug; must be unique across your resumes. */
-  slug: string;
-  tags: string[];
-}
 
 /**
  * Converts a name into a URL slug: lowercase ASCII words joined by dashes.

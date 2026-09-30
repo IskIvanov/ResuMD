@@ -7,84 +7,32 @@
  * Run via: bun run resume:sync
  */
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { validateParsedResume } from "./schema.ts";
+import type {
+  ParsedBasics,
+  ParsedCertification,
+  ParsedEduItem,
+  ParsedJob,
+  ParsedLanguage,
+  ParsedLink,
+  ParsedProject,
+  ParsedResume,
+  ParsedSkillGroup,
+} from "./types.ts";
 
-/** A markdown link: `[label](url)`. */
-export interface ParsedLink {
-  label: string;
-  url: string;
-}
-
-/** Personal details from the header above the first `## ` section. */
-export interface ParsedBasics {
-  name: string;
-  headline: string;
-  email: string;
-  phone: string;
-  location: string;
-  /** As written in Resume.md, with or without a protocol. */
-  website: string;
-  /** Markdown links in the header, e.g. `[GitHub](https://github.com/me)`. */
-  profiles: ParsedLink[];
-}
-
-export interface ParsedJob {
-  company: string;
-  location: string;
-  role: string;
-  period: string;
-  context: string;
-  bullets: string[];
-  stack: string;
-  /** Company URL from a bare `https://…` line, or an empty string. */
-  website: string;
-}
-
-export interface ParsedSkillGroup {
-  heading: string;
-  items: string[];
-}
-
-export interface ParsedEduItem {
-  school: string;
-  location: string;
-  degree: string;
-  period: string;
-  context: string;
-  bullets: string[];
-}
-
-export interface ParsedProject {
-  title: string;
-  context: string;
-  stack: string;
-  /** Markdown links in the project block, in document order. */
-  links: ParsedLink[];
-}
-
-export interface ParsedCertification {
-  title: string;
-  issuer: string;
-  credentialIds: string[];
-}
-
-export interface ParsedLanguage {
-  language: string;
-  fluency: string;
-}
-
-export interface ParsedResume {
-  basics: ParsedBasics;
-  summary: string;
-  jobs: ParsedJob[];
-  skillGroups: ParsedSkillGroup[];
-  eduItems: ParsedEduItem[];
-  projects: ParsedProject[];
-  certifications: ParsedCertification[];
-  languages: ParsedLanguage[];
-  interests: string[];
-  references: string[];
-}
+// Re-exported so modules that import the parsed types from the parser keep
+// working; they are declared in types.ts.
+export type {
+  ParsedBasics,
+  ParsedCertification,
+  ParsedEduItem,
+  ParsedJob,
+  ParsedLanguage,
+  ParsedLink,
+  ParsedProject,
+  ParsedResume,
+  ParsedSkillGroup,
+} from "./types.ts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -326,13 +274,11 @@ export function parseBasics(md: string): ParsedBasics {
 
 /**
  * Extracts the summary paragraph from a Resume.md string.
- * Throws if the `## Summary` section is missing.
+ * Returns an empty string if the `## Summary` section is missing.
  */
 export function parseSummary(md: string): string {
-  const sections = splitSections(md);
-  const body = sections[SectionHeading.Summary];
-  if (!body) throw new Error("Missing ## Summary section in Resume.md");
-  return body.split(/\n---/)[0].trim();
+  const body = splitSections(md)[SectionHeading.Summary];
+  return body ? body.split(/\n---/)[0].trim() : "";
 }
 
 /**
@@ -487,11 +433,17 @@ export function parseReferences(md: string): string[] {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 /**
- * Parses a full Resume.md string into a structured ParsedResume object.
- * Throws if the `## Summary` section is missing.
+ * Parses a full Resume.md string into a structured ParsedResume object and
+ * validates it against ParsedResumeSchema.
+ *
+ * @param md - The full Resume.md string.
+ * @returns The parsed and validated resume.
+ * @throws If required content is missing (the summary, a job's role or tech
+ *   stack, a whole required section, …); the error names each path, e.g.
+ *   `jobs[2].role: required`.
  */
 export function parseResume(md: string): ParsedResume {
-  return {
+  return validateParsedResume({
     basics: parseBasics(md),
     summary: parseSummary(md),
     jobs: parseExperience(md),
@@ -502,5 +454,5 @@ export function parseResume(md: string): ParsedResume {
     languages: parseLanguages(md),
     interests: parseInterests(md),
     references: parseReferences(md),
-  };
+  });
 }

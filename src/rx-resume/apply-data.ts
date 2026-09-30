@@ -12,7 +12,9 @@ import type {
   CertificationItem,
   EducationItem,
   ExperienceItem,
+  IdFactory,
   InterestItem,
+  ItemCompleter,
   LanguageItem,
   ParsedCertificationItem,
   ParsedCustomField,
@@ -31,12 +33,6 @@ import type {
   SkillItem,
   Website,
 } from "./types.ts";
-
-/** Produces a unique item id; `crypto.randomUUID` in production. */
-export type IdFactory = () => string;
-
-/** Completes a parsed item into a full API item with the given id. */
-type ItemCompleter<TParsed, TItem> = (item: TParsed, id: string) => TItem;
 
 function emptyWebsite(): Website {
   return { url: "", label: "", inlineLink: false };

@@ -1,235 +1,73 @@
 /**
  * types.ts
  *
- * Reactive Resume v5 API shapes: the resume `data` object and the bodies of
- * `POST /resumes` and `PUT /resumes/{id}`. Only the parts that Resume.md feeds
- * are declared in full; see https://rxresu.me/api/openapi/spec.json for the
- * complete schema.
+ * Every type the Reactive Resume tools use, in one place. API shapes are
+ * inferred from the Zod schemas in schema.ts, which are the source of truth;
+ * only the shapes that are not data (the client, its config, function
+ * signatures) are declared here by hand.
  */
 
-// ─── API shapes ───────────────────────────────────────────────────────────────
+import type { z } from "zod";
+import type {
+  BasicsSchema,
+  BasicsCustomFieldSchema,
+  CertificationItemSchema,
+  CreateResumeBodySchema,
+  EducationItemSchema,
+  ExperienceItemSchema,
+  ExperienceRoleSchema,
+  InterestItemSchema,
+  LanguageItemSchema,
+  LayoutSchema,
+  LayoutPageSchema,
+  MetadataSchema,
+  ProjectItemSchema,
+  ReferenceItemSchema,
+  ResumeSchema,
+  ResumeDataSchema,
+  ResumeSectionsSchema,
+  SectionLayoutSchema,
+  SkillItemSchema,
+  SkillsSectionSchema,
+  SummarySchema,
+  UpdateResumeBodySchema,
+  WebsiteSchema,
+} from "./schema.ts";
 
-export interface Website {
-  url: string;
-  label: string;
-  inlineLink: boolean;
-}
+export { SkillKeywordLayout, SkillLayout } from "./schema.ts";
 
-export interface BasicsCustomField {
-  id: string;
-  icon: string;
-  text: string;
-  link: string;
-}
+// ─── API shapes ──────────────────────────────────────────────────────────────────
 
-export interface Basics {
-  name: string;
-  headline: string;
-  email: string;
-  phone: string;
-  location: string;
-  /** `url` needs a protocol; an empty `label` displays the URL as-is. */
-  website: Pick<Website, "url" | "label">;
-  customFields: BasicsCustomField[];
-}
-
-/** Layout fields shared by the summary and every section. */
-interface SectionLayout {
-  title: string;
-  /** Phosphor icon name; empty string uses the template default. */
-  icon: string;
-  /** 1–6. */
-  columns: number;
-  hidden: boolean;
-  showHeading?: boolean;
-  keepTogether: boolean;
-  startOnNewPage: boolean;
-}
-
-export interface Summary extends SectionLayout {
-  /** HTML. */
-  content: string;
-}
-
-export interface Section<TItem> extends SectionLayout {
-  items: TItem[];
-}
-
-interface SectionItem {
-  id: string;
-  hidden: boolean;
-}
-
-export interface ExperienceRole {
-  id: string;
-  position: string;
-  period: string;
-  /** HTML. */
-  description: string;
-}
-
-export interface ExperienceItem extends SectionItem {
-  company: string;
-  position: string;
-  location: string;
-  period: string;
-  website: Website;
-  /** HTML. */
-  description: string;
-  roles: ExperienceRole[];
-}
-
-export interface SkillItem extends SectionItem {
-  icon: string;
-  iconColor: string;
-  name: string;
-  proficiency: string;
-  /** 0–5; 0 hides the level indicator. */
-  level: number;
-  keywords: string[];
-}
-
-export const SkillKeywordLayout = { Inline: "inline", List: "list" } as const;
-export const SkillLayout = { Default: "default", Inline: "inline" } as const;
-
-export interface SkillsSection extends Section<SkillItem> {
-  keywordLayout?: (typeof SkillKeywordLayout)[keyof typeof SkillKeywordLayout];
-  layout?: (typeof SkillLayout)[keyof typeof SkillLayout];
-}
-
-export interface EducationItem extends SectionItem {
-  school: string;
-  degree: string;
-  area: string;
-  grade: string;
-  location: string;
-  period: string;
-  website: Website;
-  /** HTML. */
-  description: string;
-}
-
-export interface ProjectItem extends SectionItem {
-  name: string;
-  period: string;
-  website: Website;
-  /** HTML. */
-  description: string;
-}
-
-export interface CertificationItem extends SectionItem {
-  title: string;
-  issuer: string;
-  date: string;
-  website: Website;
-  /** HTML. */
-  description: string;
-}
-
-export interface LanguageItem extends SectionItem {
-  language: string;
-  fluency: string;
-  /** 0–5; 0 hides the level indicator. */
-  level: number;
-}
-
-export interface InterestItem extends SectionItem {
-  icon: string;
-  iconColor: string;
-  name: string;
-  keywords: string[];
-}
-
-export interface ReferenceItem extends SectionItem {
-  /** A person's name, or a note such as "Available upon request". */
-  name: string;
-  position: string;
-  website: Website;
-  phone: string;
-  /** HTML. */
-  description: string;
-}
-
-export interface LayoutPage {
-  /** True when the main column spans the page and the sidebar is empty. */
-  fullWidth: boolean;
-  /** Section ids, in display order. */
-  main: string[];
-  /** Section ids, in display order. */
-  sidebar: string[];
-}
-
-export interface Layout {
-  /** Percentage of the page width, 10–50. */
-  sidebarWidth: number;
-  pages: LayoutPage[];
-}
-
-/** Template and design settings; untyped fields are carried through. */
-export interface Metadata {
-  layout: Layout;
-  [setting: string]: unknown;
-}
-
+export type Website = z.infer<typeof WebsiteSchema>;
+export type BasicsCustomField = z.infer<typeof BasicsCustomFieldSchema>;
+export type Basics = z.infer<typeof BasicsSchema>;
+export type SectionLayout = z.infer<typeof SectionLayoutSchema>;
+export type Summary = z.infer<typeof SummarySchema>;
+export type ExperienceRole = z.infer<typeof ExperienceRoleSchema>;
+export type ExperienceItem = z.infer<typeof ExperienceItemSchema>;
+export type SkillItem = z.infer<typeof SkillItemSchema>;
+export type SkillsSection = z.infer<typeof SkillsSectionSchema>;
+export type EducationItem = z.infer<typeof EducationItemSchema>;
+export type ProjectItem = z.infer<typeof ProjectItemSchema>;
+export type CertificationItem = z.infer<typeof CertificationItemSchema>;
+export type LanguageItem = z.infer<typeof LanguageItemSchema>;
+export type InterestItem = z.infer<typeof InterestItemSchema>;
+export type ReferenceItem = z.infer<typeof ReferenceItemSchema>;
+export type LayoutPage = z.infer<typeof LayoutPageSchema>;
+export type Layout = z.infer<typeof LayoutSchema>;
+export type Metadata = z.infer<typeof MetadataSchema>;
 /**
- * The sections Resume.md feeds. The API requires every other section too;
- * they are carried through untyped so an update never drops them.
+ * A section of `TItem`s: the shared layout fields plus the items themselves.
  */
-export interface ResumeSections {
-  experience: Section<ExperienceItem>;
-  skills: SkillsSection;
-  education: Section<EducationItem>;
-  projects: Section<ProjectItem>;
-  certifications: Section<CertificationItem>;
-  languages: Section<LanguageItem>;
-  interests: Section<InterestItem>;
-  references: Section<ReferenceItem>;
-  [section: string]: unknown;
-}
+export type Section<TItem> = SectionLayout & { items: TItem[] };
+export type ResumeSections = z.infer<typeof ResumeSectionsSchema>;
+export type ResumeData = z.infer<typeof ResumeDataSchema>;
 
-/** The `data` object of a resume; untyped blocks are carried through. */
-export interface ResumeData {
-  basics: Basics;
-  summary: Summary;
-  sections: ResumeSections;
-  metadata: Metadata;
-  [block: string]: unknown;
-}
+// ─── Requests and responses ──────────────────────────────────────────────────────
 
-// ─── Requests and responses ───────────────────────────────────────────────────
-
-/** Body of `POST /resumes`. */
-export interface CreateResumeBody {
-  name: string;
-  slug: string;
-  tags: string[];
-  withSampleData?: boolean;
-}
-
-/** Body of `PUT /resumes/{id}`. Every field is optional. */
-export interface UpdateResumeBody {
-  name?: string;
-  slug?: string;
-  tags?: string[];
-  isPublic?: boolean;
-  showDownloadButtons?: boolean;
-  /** Validated in full: every required block, section and item field. */
-  data?: ResumeData;
-}
-
-/** Response of `GET /resumes/{id}` and `PUT /resumes/{id}`. */
-export interface Resume {
-  id: string;
-  name: string;
-  slug: string;
-  tags: string[];
-  isPublic: boolean;
-  showDownloadButtons: boolean;
-  isLocked: boolean;
-  hasPassword: boolean;
-  updatedAt: string;
-  data: ResumeData;
-}
+export type CreateResumeBody = z.infer<typeof CreateResumeBodySchema>;
+export type UpdateResumeBody = z.infer<typeof UpdateResumeBodySchema>;
+export type Resume = z.infer<typeof ResumeSchema>;
 
 // ─── Parsed subset ────────────────────────────────────────────────────────────
 //
@@ -291,4 +129,49 @@ export interface ParsedResumeData {
     interests: ParsedSection<ParsedInterestItem>;
     references: ParsedSection<ParsedReferenceItem>;
   };
+}
+
+// ─── Applying parsed data ─────────────────────────────────────────────────────
+
+/** Produces a unique item id; `crypto.randomUUID` in production. */
+export type IdFactory = () => string;
+
+/** Completes a parsed item into a full API item with the given id. */
+export type ItemCompleter<TParsed, TItem> = (
+  item: TParsed,
+  id: string,
+) => TItem;
+
+// ─── Client and config ────────────────────────────────────────────────────────
+
+/** The subset of `fetch` the client uses; `globalThis.fetch` satisfies it. */
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
+export interface RxResumeClientConfig {
+  baseUrl: string;
+  apiKey: string;
+  fetch: FetchFn;
+}
+
+export interface RxResumeClient {
+  /** `POST /resumes`; resolves to the new resume's id. */
+  createResume(body: CreateResumeBody): Promise<string>;
+  /** `GET /resumes/{id}`. */
+  getResume(id: string): Promise<Resume>;
+  /** `PUT /resumes/{id}`; resolves to the updated resume. */
+  updateResume(id: string, body: UpdateResumeBody): Promise<Resume>;
+}
+
+/** The body of a failed response, when the API sent JSON. */
+export interface ApiErrorBody {
+  code?: unknown;
+  message?: unknown;
+}
+
+export interface ApiConfig {
+  apiKey: string;
+  /** Base URL of the API, e.g. `https://rxresu.me/api/openapi`. */
+  baseUrl: string;
+  /** URL of the web app, e.g. `https://rxresu.me`; used for builder links. */
+  appUrl: string;
 }

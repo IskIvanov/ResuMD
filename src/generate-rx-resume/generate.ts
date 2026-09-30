@@ -6,21 +6,14 @@
  * client in tests.
  */
 
-import { applyResumeData, type IdFactory } from "../rx-resume/apply-data.ts";
-import type { RxResumeClient } from "../rx-resume/client.ts";
+import { applyResumeData } from "../rx-resume/apply-data.ts";
 import { applySectionOrder, SECTION_ORDER } from "../rx-resume/layout.ts";
 import type {
-  CreateResumeBody,
-  ParsedResumeData,
+  IdFactory,
   Resume,
+  RxResumeClient,
 } from "../rx-resume/types.ts";
-
-export interface GenerateResumeInput extends Omit<
-  CreateResumeBody,
-  "withSampleData"
-> {
-  data: ParsedResumeData;
-}
+import type { GenerateResumeInput } from "./types.ts";
 
 /**
  * Creates an empty resume, then updates it with the parsed data.

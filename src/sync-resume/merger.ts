@@ -8,13 +8,14 @@
  * On no match: console.warn + skip (never throw).
  */
 
-import type { CvData, EducationBullet } from "./types.ts";
 import type {
-  ParsedJob,
-  ParsedSkillGroup,
+  CvData,
+  EducationBullet,
   ParsedEduItem,
+  ParsedJob,
   ParsedResume,
-} from "./parser.ts";
+  ParsedSkillGroup,
+} from "./types.ts";
 
 // ─── Experience ───────────────────────────────────────────────────────────────
 
