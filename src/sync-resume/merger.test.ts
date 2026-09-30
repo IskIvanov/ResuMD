@@ -6,7 +6,7 @@ import {
   merge,
 } from "./merger.ts";
 import type { CvData } from "./types.ts";
-import type { ParsedJob, ParsedResume } from "./parser.ts";
+import type { ParsedJob } from "./parser.ts";
 
 // ─── CvData fixture ───────────────────────────────────────────────────────────
 
@@ -90,9 +90,13 @@ function makeCv(): CvData {
 function makeParsedJob(overrides: Partial<ParsedJob> = {}): ParsedJob {
   return {
     company: "Acme Corp",
+    location: "Amsterdam",
     role: "Senior Engineer",
+    period: "01/2023 – Present",
+    context: "",
     bullets: ["New bullet."],
     stack: "New Stack",
+    website: "",
     ...overrides,
   };
 }
@@ -250,7 +254,7 @@ describe("mergeEducation", () => {
 describe("merge", () => {
   it("returns the parsed summary as the new body", () => {
     const cv = makeCv();
-    const parsed: ParsedResume = {
+    const parsed: Parameters<typeof merge>[1] = {
       summary: "New summary paragraph.",
       jobs: [],
       skillGroups: [],

@@ -16,7 +16,24 @@ import type {
 
 // ─── HTML renderers ───────────────────────────────────────────────────────────
 
-export function renderExperienceDescriptionHtml(item: ExperienceItem): string {
+/**
+ * Renders an external link that opens in a new tab.
+ *
+ * @param label - The link text.
+ * @param href - The URL to link to.
+ * @returns An `<a>` element.
+ */
+export function renderLinkHtml(label: string, href: string): string {
+  return `<a target="_blank" rel="noopener noreferrer nofollow" href="${href}">${label}</a>`
+}
+
+function renderTechStackHtml(stack: string): string {
+  return `<p><strong>Tech Stack:</strong> ${stack}</p>`
+}
+
+export function renderExperienceDescriptionHtml(
+  item: Pick<ExperienceItem, 'context' | 'bullets' | 'stack'>
+): string {
   const parts: string[] = []
 
   if (item.context) {
@@ -27,12 +44,16 @@ export function renderExperienceDescriptionHtml(item: ExperienceItem): string {
     parts.push(`<p>• ${b}</p>`)
   }
 
-  parts.push(`<p><strong>Tech Stack:</strong> ${item.stack}</p>`)
+  if (item.stack) {
+    parts.push(renderTechStackHtml(item.stack))
+  }
 
   return parts.join('')
 }
 
-export function renderEducationDescriptionHtml(item: EducationItem): string {
+export function renderEducationDescriptionHtml(
+  item: Pick<EducationItem, 'context' | 'bullets'>
+): string {
   const parts: string[] = []
 
   if (item.context) {
@@ -41,9 +62,7 @@ export function renderEducationDescriptionHtml(item: EducationItem): string {
 
   for (const b of item.bullets) {
     if (b.href && b.linkText) {
-      parts.push(
-        `<p>• <a target="_blank" rel="noopener noreferrer nofollow" href="${b.href}">${b.linkText}</a> ${b.text}</p>`
-      )
+      parts.push(`<p>• ${renderLinkHtml(b.linkText, b.href)} ${b.text}</p>`)
     } else {
       parts.push(`<p>• ${b.text}</p>`)
     }
@@ -52,8 +71,20 @@ export function renderEducationDescriptionHtml(item: EducationItem): string {
   return parts.join('')
 }
 
-export function renderProjectDescriptionHtml(item: ProjectItem): string {
-  return `<p>${item.context}</p><p><strong>Tech Stack:</strong> ${item.stack}</p>`
+export function renderProjectDescriptionHtml(
+  item: Pick<ProjectItem, 'context' | 'stack'>
+): string {
+  const parts: string[] = []
+
+  if (item.context) {
+    parts.push(`<p>${item.context}</p>`)
+  }
+
+  if (item.stack) {
+    parts.push(renderTechStackHtml(item.stack))
+  }
+
+  return parts.join('')
 }
 
 export function renderCertDescriptionHtml(item: CertificationItem): string {

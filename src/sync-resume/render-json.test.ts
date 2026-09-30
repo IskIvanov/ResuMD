@@ -219,6 +219,12 @@ describe('renderExperienceDescriptionHtml', () => {
     const output = renderExperienceDescriptionHtml(job)
     expect(output).not.toContain('\n')
   })
+
+  it('omits the tech stack paragraph when the stack is empty', () => {
+    expect(
+      renderExperienceDescriptionHtml({ bullets: ['Built X'], stack: '' })
+    ).toBe('<p>• Built X</p>')
+  })
 })
 
 // ─── renderEducationDescriptionHtml ──────────────────────────────────────────
@@ -273,6 +279,18 @@ describe('renderProjectDescriptionHtml', () => {
   it('produces a single string with no newlines', () => {
     const output = renderProjectDescriptionHtml(project)
     expect(output).not.toContain('\n')
+  })
+
+  it('omits the tech stack paragraph when the stack is empty', () => {
+    expect(
+      renderProjectDescriptionHtml({ context: 'A small tool.', stack: '' })
+    ).toBe('<p>A small tool.</p>')
+  })
+
+  it('omits the context paragraph when the context is empty', () => {
+    expect(renderProjectDescriptionHtml({ context: '', stack: 'Vite' })).toBe(
+      '<p><strong>Tech Stack:</strong> Vite</p>'
+    )
   })
 })
 

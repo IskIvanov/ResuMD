@@ -3,6 +3,8 @@
 **Software Engineer**
 
 jane.doe@example.com | City, Country | example.com
+[LinkedIn](https://linkedin.com/in/jane-doe) |
+[GitHub](https://github.com/jane-doe)
 
 ---
 
@@ -45,3 +47,39 @@ Graduated with honours.
 
 - (link) Degree course
 - Thesis: Distributed Task Scheduling
+
+---
+
+## Projects
+
+### Example Project
+
+A small example project that shows how the resume tools fit together.
+
+**Tech Stack:** TypeScript, Bun
+
+[GitHub](https://github.com/example/example-project) |
+[Demo](https://example.com/demo)
+
+---
+
+## Certifications
+
+**Example Certification** Example Issuer Credential ID: EX-0001
+
+---
+
+## Languages
+
+- English — Native
+- Dutch — Conversational
+
+---
+
+## Interests
+
+Cycling · Travel
+
+---
+
+References available upon request

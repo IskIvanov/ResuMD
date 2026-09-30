@@ -23,7 +23,10 @@ import type {
  * Match key: company name. Unmatched jobs emit a warning and are skipped.
  * An empty parsed role (no `**Role** | dates` line) keeps the existing role.
  */
-export function mergeExperience(cv: CvData, jobs: ParsedJob[]): void {
+export function mergeExperience(
+  cv: CvData,
+  jobs: Pick<ParsedJob, "company" | "role" | "bullets" | "stack">[],
+): void {
   for (const parsed of jobs) {
     const cvJob = cv.experience.items.find(
       (item) => item.company === parsed.company,
@@ -73,7 +76,10 @@ export function mergeSkills(cv: CvData, groups: ParsedSkillGroup[]): void {
  * - No linkText: replace text directly.
  * - Count mismatch: warn and update overlapping indices only.
  */
-export function mergeEducation(cv: CvData, eduItems: ParsedEduItem[]): void {
+export function mergeEducation(
+  cv: CvData,
+  eduItems: Pick<ParsedEduItem, "school" | "context" | "bullets">[],
+): void {
   for (const parsed of eduItems) {
     const cvEdu = cv.education.items.find((e) => e.school === parsed.school);
     if (!cvEdu) {
@@ -118,7 +124,10 @@ export function mergeEducation(cv: CvData, eduItems: ParsedEduItem[]): void {
  * Merges all parsed sections into cv (mutates in place).
  * Returns the new summary body string for writing to the en.md body.
  */
-export function merge(cv: CvData, parsed: ParsedResume): string {
+export function merge(
+  cv: CvData,
+  parsed: Pick<ParsedResume, "summary" | "jobs" | "skillGroups" | "eduItems">,
+): string {
   mergeExperience(cv, parsed.jobs);
   mergeSkills(cv, parsed.skillGroups);
   mergeEducation(cv, parsed.eduItems);

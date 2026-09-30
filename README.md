@@ -10,16 +10,16 @@ layout and styling in the target stay as they are.
 
 ## What's included
 
-| Tool          | What it does                                                                                                                                                                                              |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sync-resume` | Parses `Resume.md` and merges the text into a site CV (Markdown with YAML frontmatter). It then patches a [Reactive Resume](https://rxresu.me) JSON export, which you can re-import into Reactive Resume. |
+| Tool                 | What it does                                                                                                                                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync-resume`        | Parses `Resume.md` and merges the text into a site CV (Markdown with YAML frontmatter). It then patches a [Reactive Resume](https://rxresu.me) JSON export, which you can re-import into Reactive Resume. |
+| `generate-rx-resume` | Parses `Resume.md` and creates a new resume in [Reactive Resume](https://rxresu.me) through its API, filled with your personal details, summary and every section of the resume.                          |
 
 ### Planned
 
 - A CLI that renders a CV with a custom layout straight from `Resume.md`.
-- Direct integration with the
-  [Reactive Resume API](https://docs.rxresu.me/api-reference), so you don't have
-  to export and re-import JSON by hand.
+- Downloading the generated resume as a PDF from the
+  [Reactive Resume API](https://docs.rxresu.me/api-reference).
 - Adapters for more CV builders, all fed by the same typed resume model.
 
 ## Usage
@@ -40,6 +40,33 @@ bun run sync --cv path/to/cv.md --resume path/to/Resume.md
 
 Paths you pass on the command line are resolved from the current directory.
 Defaults are resolved from the package root.
+
+### generate-rx-resume
+
+Copy `.env.example` to `.env` and fill it in. The API key and URL are read only
+from there, and `.gitignore` keeps `.env` out of git.
+
+```bash
+cp .env.example .env
+bun run generate-rx-resume --resume path/to/Resume.md --name "Jane Doe"
+```
+
+| Option            | Default             | Description                                            |
+| ----------------- | ------------------- | ------------------------------------------------------ |
+| `--resume <path>` | required            | Your source-of-truth resume.                           |
+| `--name <name>`   | required            | Name of the new resume in Reactive Resume.             |
+| `--slug <slug>`   | the name, slugified | URL slug. Must not be used by another of your resumes. |
+| `--tags <a,b>`    | none                | Comma-separated tags.                                  |
+
+| `.env` variable    | Description                                                                     |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `RXRESUME_API_KEY` | API key from your Reactive Resume account settings.                             |
+| `RXRESUME_API_URL` | Base URL of the API. `.env.example` has the hosted one; change it to self-host. |
+| `RXRESUME_APP_URL` | URL of the web app, used to print a link to the new resume in the builder.      |
+
+The tool creates an empty resume, fetches it to get the server's defaults for
+layout and template, then updates it with the parsed content. Bun loads `.env`
+from the directory you run the command in.
 
 ### How matching works
 

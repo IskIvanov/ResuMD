@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "sync": "bun src/sync-resume/index.ts",
+    "generate-rx-resume": "bun src/generate-rx-resume/index.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
