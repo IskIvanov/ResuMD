@@ -6,7 +6,17 @@
  * ../rx-resume/schema.ts.
  */
 
-import type { CreateResumeBody, ParsedResumeData } from "../rx-resume/types.ts";
+import type {
+  CreateResumeBody,
+  ParsedResumeData,
+  RxResumeClient,
+} from "../rx-resume/types.ts";
+
+/** The client methods generateResume calls; new client methods don't touch it. */
+export type GenerateClient = Pick<
+  RxResumeClient,
+  "createResume" | "getResume" | "updateResume"
+>;
 
 /** Options parsed from the generate-rx-resume command line. */
 export interface GenerateOptions {

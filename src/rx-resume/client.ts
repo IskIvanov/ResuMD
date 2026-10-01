@@ -27,6 +27,7 @@ const HttpMethod = {
   Get: "GET",
   Post: "POST",
   Put: "PUT",
+  Delete: "DELETE",
 } as const;
 type HttpMethod = (typeof HttpMethod)[keyof typeof HttpMethod];
 
@@ -96,7 +97,9 @@ export function createRxResumeClient(
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!response.ok) throw await toApiError(response);
-    return response.json();
+    // DELETE replies with an empty body, which response.json() rejects.
+    const text = await response.text();
+    return text ? JSON.parse(text) : undefined;
   }
 
   return {
@@ -118,6 +121,10 @@ export function createRxResumeClient(
     async updateResume(id: string, body: UpdateResumeBody): Promise<Resume> {
       // Trusts the API's documented response shape; not validated at runtime.
       return (await request(HttpMethod.Put, resumePath(id), body)) as Resume;
+    },
+
+    async deleteResume(id: string): Promise<void> {
+      await request(HttpMethod.Delete, resumePath(id));
     },
   };
 }

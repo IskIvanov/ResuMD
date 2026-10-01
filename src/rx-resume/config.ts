@@ -6,14 +6,14 @@
  * key nor the instance URLs appear in code, on the command line or in git.
  */
 
-import type { ApiConfig } from "./types.ts";
+import type { ApiConfig, Env } from "./types.ts";
 
 /** Variables the Reactive Resume tools need from `.env`. */
-export const EnvVar = {
-  ApiKey: "RXRESUME_API_KEY",
-  BaseUrl: "RXRESUME_API_URL",
-  AppUrl: "RXRESUME_APP_URL",
-} as const;
+export enum EnvVar {
+  ApiKey = "RXRESUME_API_KEY",
+  BaseUrl = "RXRESUME_API_URL",
+  AppUrl = "RXRESUME_APP_URL",
+}
 
 /** The file the variables belong in. */
 export const ENV_FILE = ".env";
@@ -32,9 +32,7 @@ const BUILDER_PATH = "/builder";
  * resolveApiConfig(process.env);
  * // { apiKey: "…", baseUrl: "https://…/api/openapi", appUrl: "https://…" }
  */
-export function resolveApiConfig(
-  env: Record<string, string | undefined>,
-): ApiConfig {
+export function resolveApiConfig(env: Env): ApiConfig {
   const apiKey = env[EnvVar.ApiKey];
   const baseUrl = env[EnvVar.BaseUrl];
   const appUrl = env[EnvVar.AppUrl];
@@ -48,6 +46,25 @@ export function resolveApiConfig(
   }
 
   return { apiKey, baseUrl, appUrl };
+}
+
+/**
+ * Explains why the Reactive Resume API can't be used, for a tool's preflight.
+ *
+ * @param env - The environment to read.
+ * @returns The missing-variable message, or undefined when every variable is
+ *   set.
+ *
+ * @example
+ * apiConfigProblem({}); // "Missing RXRESUME_API_KEY, … Copy .env.example …"
+ */
+export function apiConfigProblem(env: Env): string | undefined {
+  try {
+    resolveApiConfig(env);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 }
 
 /**

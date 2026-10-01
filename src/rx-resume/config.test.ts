@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  apiConfigProblem,
   ENV_FILE,
   EnvVar,
   resolveApiConfig,
@@ -63,5 +64,15 @@ describe("resolveBuilderUrl", () => {
     expect(resolveBuilderUrl("https://rx.example", "a/b")).toBe(
       "https://rx.example/builder/a%2Fb",
     );
+  });
+});
+
+describe("apiConfigProblem", () => {
+  it("returns the missing variables as the reason", () => {
+    expect(apiConfigProblem({})).toMatch(/^Missing RXRESUME_API_KEY/);
+  });
+
+  it("returns undefined when every variable is set", () => {
+    expect(apiConfigProblem(env)).toBeUndefined();
   });
 });

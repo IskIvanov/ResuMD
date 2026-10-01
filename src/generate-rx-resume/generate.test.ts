@@ -5,8 +5,8 @@ import type {
   ParsedResumeData,
   Resume,
   ResumeData,
-  RxResumeClient,
 } from "../rx-resume/types.ts";
+import type { GenerateClient } from "./types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ const input = {
   data: parsed,
 };
 
-function makeClient(): RxResumeClient {
+function makeClient(): GenerateClient {
   return {
     createResume: vi.fn().mockResolvedValue("resume-1"),
     getResume: vi.fn().mockResolvedValue(makeResume(createdData)),

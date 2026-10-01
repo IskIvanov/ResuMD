@@ -160,13 +160,24 @@ export interface RxResumeClient {
   getResume(id: string): Promise<Resume>;
   /** `PUT /resumes/{id}`; resolves to the updated resume. */
   updateResume(id: string, body: UpdateResumeBody): Promise<Resume>;
+  /** `DELETE /resumes/{id}`; permanent, and rejected for a locked resume. */
+  deleteResume(id: string): Promise<void>;
 }
+
+/** The client methods patchResumeData calls. */
+export type PatchClient = Pick<RxResumeClient, "getResume" | "updateResume">;
+
+/** Turns a resume's current data into the data to save. */
+export type ResumeDataPatch = (data: ResumeData) => ResumeData;
 
 /** The body of a failed response, when the API sent JSON. */
 export interface ApiErrorBody {
   code?: unknown;
   message?: unknown;
 }
+
+/** Environment variables, usually `process.env` after Bun has loaded `.env`. */
+export type Env = Record<string, string | undefined>;
 
 export interface ApiConfig {
   apiKey: string;

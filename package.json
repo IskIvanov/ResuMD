@@ -5,12 +5,12 @@
   "description": "Keep a single Resume.md as the source of truth and sync it into site CVs and CV builders like Reactive Resume.",
   "type": "module",
   "scripts": {
-    "sync": "bun src/sync-resume/index.ts",
-    "generate-rx-resume": "bun src/generate-rx-resume/index.ts",
+    "cli": "bun src/cli/index.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.7.2",
     "js-yaml": "^4.1.0",
     "zod": "^4.6.5"
   },

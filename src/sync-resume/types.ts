@@ -3,7 +3,7 @@
  *
  * Every type sync-resume uses, in one place. Data shapes are inferred from the
  * Zod schemas in schema.ts, which are the source of truth; only the shapes
- * that are not data (CLI paths) are declared here by hand.
+ * that are not data (file paths) are declared here by hand.
  */
 
 import type { z } from "zod";
@@ -85,12 +85,4 @@ export interface SyncPaths {
   json: string;
   /** RxResume template used to seed `json`. */
   template: string;
-}
-
-/** Directories that relative paths are resolved against. */
-export interface PathContext {
-  /** Working directory — base for any path passed on the command line. */
-  cwd: string;
-  /** resume-tools package root — base for default paths. */
-  packageRoot: string;
 }
