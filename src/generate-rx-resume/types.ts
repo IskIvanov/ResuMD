@@ -30,9 +30,7 @@ export interface GenerateOptions {
 }
 
 /** The new resume's name, slug and tags, plus the parsed data to fill it. */
-export interface GenerateResumeInput extends Omit<
-  CreateResumeBody,
-  "withSampleData"
-> {
+export interface GenerateResumeInput
+  extends Omit<CreateResumeBody, "withSampleData"> {
   data: ParsedResumeData;
 }

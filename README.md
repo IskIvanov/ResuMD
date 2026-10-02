@@ -1,12 +1,7 @@
 # resume-tools
 
 Keep one `Resume.md` as the source of truth for your CV, and sync it everywhere
-else it has to live: a personal website, a CV builder, an application form.
-
-Resume content drifts when it's copied by hand between places. `resume-tools`
-parses a plain Markdown resume into typed, structured data, then writes that
-data into each target's own format. It only touches text fields. Links, IDs,
-layout and styling in the target stay as they are.
+else it has to live: a personal website, a CV builder or an application form.
 
 ## What's included
 
@@ -16,6 +11,9 @@ layout and styling in the target stay as they are.
 | `generate-rx-resume` | Parses `Resume.md` and creates a new resume in [Reactive Resume](https://rxresu.me) through its API, filled with your personal details, summary and every section of the resume.                          |
 | `update-rx-resume`   | Parses `Resume.md` and rewrites an existing resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints. Layout, template and picture are kept.            |
 | `delete-rx-resume`   | Permanently deletes a resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints.                                                                         |
+| `encode-cv`          | Encodes a CV (`.pdf`, `.docx` or `.md`) as bare base64 and checks that it decodes back to the same bytes.                                                                                                 |
+| `decode-cv`          | Decodes a base64 text file back into a CV, so you can open it and see exactly what an API receives.                                                                                                       |
+| `apply-careers-api`  | Validates a job application and sends it to the Careers API, as a test call that saves nothing or for real.                                                                                               |
 
 Run any tool from an interactive menu (`bun run cli`) or directly with
 `bun run cli <tool> [flags]`.
@@ -52,6 +50,10 @@ Before running, it prints the matching direct command and asks to confirm:
   Generate resume — create a new resume in Reactive Resume via its API
   Update resume — rewrite an existing resume in Reactive Resume from Resume.md
   Delete resume — permanently delete a resume in Reactive Resume via its API
+ ── Careers API ──
+  Encode CV — encode a CV as base64 and check it decodes back
+  Decode CV — decode base64 text back into a CV to open and check
+  Apply — validate an application and send it to the careers APIs
   Exit
 ```
 
@@ -64,85 +66,6 @@ Before running, it prints the matching direct command and asks to confirm:
   settings.
 - Ctrl+C cancels. Exit codes: `0` success, `1` failure, `130` cancelled.
 - The menu needs a terminal. Without one, it prints each tool's usage line.
-
-### sync-resume
-
-```bash
-bun run cli sync-resume --cv path/to/cv.md --resume path/to/Resume.md
-```
-
-| Option              | Default                                | Description                                                                         |
-| ------------------- | -------------------------------------- | ----------------------------------------------------------------------------------- |
-| `--cv <path>`       | required                               | Site CV to update: Markdown with YAML frontmatter. The body is the summary.         |
-| `--resume <path>`   | required                               | Your source-of-truth resume. It lives in your own project, not in this package.     |
-| `--json <path>`     | `resume/RxResume/Resume.json`          | Reactive Resume export to patch. Created from `--template` if it doesn't exist yet. |
-| `--template <path>` | `resume/RxResume/Resume.template.json` | Starting point for a new Reactive Resume JSON.                                      |
-
-Paths you pass on the command line are resolved from the current directory.
-Defaults are resolved from the package root.
-
-### generate-rx-resume
-
-Copy `.env.example` to `.env` and fill it in. The API key and URL are read only
-from there, and `.gitignore` keeps `.env` out of git.
-
-```bash
-cp .env.example .env
-bun run cli generate-rx-resume --resume path/to/Resume.md --name "Jane Doe"
-```
-
-| Option            | Default             | Description                                            |
-| ----------------- | ------------------- | ------------------------------------------------------ |
-| `--resume <path>` | required            | Your source-of-truth resume.                           |
-| `--name <name>`   | required            | Name of the new resume in Reactive Resume.             |
-| `--slug <slug>`   | the name, slugified | URL slug. Must not be used by another of your resumes. |
-| `--tags <a,b>`    | none                | Comma-separated tags.                                  |
-
-| `.env` variable    | Description                                                                     |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `RXRESUME_API_KEY` | API key from your Reactive Resume account settings.                             |
-| `RXRESUME_API_URL` | Base URL of the API. `.env.example` has the hosted one; change it to self-host. |
-| `RXRESUME_APP_URL` | URL of the web app, used to print a link to the new resume in the builder.      |
-
-The tool creates an empty resume, fetches it to get the server's defaults for
-layout and template, then updates it with the parsed content. Bun loads `.env`
-from the directory you run the command in.
-
-### update-rx-resume
-
-Uses the same `.env` as `generate-rx-resume`.
-
-```bash
-bun run cli update-rx-resume --id <id> --resume path/to/Resume.md
-```
-
-| Option            | Default  | Description                                                 |
-| ----------------- | -------- | ----------------------------------------------------------- |
-| `--id <id>`       | required | Id of the resume to update, as `generate-rx-resume` prints. |
-| `--resume <path>` | required | Your source-of-truth resume.                                |
-
-The tool fetches the resume, applies the parsed content and saves it. It
-rewrites the personal details, the summary and every section `Resume.md` feeds.
-Items in those sections are replaced, so edits made to them in the builder
-(hidden items, skill levels, experience roles) are lost on each update. The
-name, slug, tags, layout, template, picture and every other section stay as they
-are.
-
-### delete-rx-resume
-
-Uses the same `.env` as `generate-rx-resume`.
-
-```bash
-bun run cli delete-rx-resume --id <id>
-```
-
-| Option      | Default  | Description                                                 |
-| ----------- | -------- | ----------------------------------------------------------- |
-| `--id <id>` | required | Id of the resume to delete, as `generate-rx-resume` prints. |
-
-Deletion is permanent: Reactive Resume also removes the resume's screenshots and
-PDFs. A locked resume is refused until you unlock it in the builder. In the
-menu, the "Run it?" prompt is the only confirmation.
 
 ### How matching works
 
@@ -187,8 +110,10 @@ optional.
 ## Development
 
 ```bash
-bun run test       # vitest
-bun run typecheck  # tsc --noEmit
+bun run test          # vitest
+bun run typecheck     # tsc --noEmit
+bun run format        # biome format --write .
+bun run format:check  # biome format .
 ```
 
 Each folder in `src/` keeps its Zod schemas in `schema.ts` and its types in

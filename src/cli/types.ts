@@ -10,6 +10,7 @@
 export enum Platform {
   Site = "Site",
   ReactiveResume = "Reactive Resume",
+  JobApplication = "Job Application",
 }
 
 /** How an option is prompted for, validated and parsed. */
@@ -19,12 +20,13 @@ export enum OptionKind {
   List = "list",
 }
 
-/** File extensions a path option can accept. .pdf and .docx are for upcoming tools. */
+/** File extensions a path option can accept. */
 export enum FileExtension {
   Markdown = ".md",
   Json = ".json",
   Pdf = ".pdf",
   Docx = ".docx",
+  Text = ".txt",
 }
 
 export enum ExitCode {
@@ -118,7 +120,9 @@ type ParsedValue<TOption extends OptionSpec> =
 
 /** Options that always have a value: required, defaulted, or a list ([] when absent). */
 type AlwaysSet =
-  { required: true } | { default: DefaultFn } | { kind: OptionKind.List };
+  | { required: true }
+  | { default: DefaultFn }
+  | { kind: OptionKind.List };
 
 /** The typed values a tool's run receives, inferred from its OptionSpecs. */
 export type OptionValues<TOptions extends OptionSpecs> = {

@@ -20,3 +20,8 @@ resume/RxResume/Resume.json
 .env
 .env.*
 !.env.example
+
+# encode-cv and decode-cv output: your CV, so personal data.
+*.base64.txt
+*.pdf
+*.docx

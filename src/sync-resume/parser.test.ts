@@ -575,7 +575,9 @@ describe("parseReferences", () => {
 
 describe("parseResume", () => {
   /** A resume with every required section; `overrides` swaps sections out. */
-  function buildResume(overrides: Partial<Record<string, string>> = {}): string {
+  function buildResume(
+    overrides: Partial<Record<string, string>> = {},
+  ): string {
     const sections: Record<string, string> = {
       header: HEADER_FIXTURE,
       experience: EXPERIENCE_FIXTURE,

@@ -25,11 +25,11 @@ enum DeleteLabel {
 }
 
 const ToolOptions = {
-    [Option.Id]: {
-      message: DeleteLabel.ResumeId,
-      kind: OptionKind.Text,
-      required: true,
-    },
+  [Option.Id]: {
+    message: DeleteLabel.ResumeId,
+    kind: OptionKind.Text,
+    required: true,
+  },
 } as const;
 
 // The Reactive Resume API does not return any data on deletion, so we just print the id.
@@ -37,11 +37,11 @@ const runDeleteClient = async (id: string, env: Env): Promise<void> => {
   const config: RxResumeClientConfig = {
     ...resolveApiConfig(env),
     fetch: globalThis.fetch,
-  }
+  };
   const client = createRxResumeClient(config);
   await client.deleteResume(id);
   console.log(`${DeleteLabel.Deleted} ${id}`);
-}; 
+};
 
 export const deleteTool = defineTool({
   id: DeleteLabel.Id,
@@ -50,5 +50,5 @@ export const deleteTool = defineTool({
   platform: Platform.ReactiveResume,
   options: ToolOptions,
   preflight: apiConfigProblem,
-  run: ({id}, { env }) => runDeleteClient(id, env),
+  run: ({ id }, { env }) => runDeleteClient(id, env),
 });

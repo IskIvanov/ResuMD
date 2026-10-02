@@ -64,6 +64,14 @@ src/
 │   └── run.ts                    runUpdate(options: UpdateOptions, env: Env): Promise<void>
 ├── rx-resume/                    Reactive Resume adapter: client, config (incl. apiConfigProblem), schema,
 │                                 patch (patchResumeData: get → patch → put, shared by generate and update)
+├── cv-base64/                    domain, vendor-neutral
+│   ├── codec.ts, schema.ts, types.ts   encodeBase64, decodeBase64 (strict), encodeVerified (round trip)
+│   └── run.ts                    runEncode(options, cwd), runDecode(options, cwd)
+├── careers-api/                  careers API adapter: client, config (incl. careersConfigProblem),
+│                                 schema (ApplicationPayloadSchema, validateApplicationPayload)
+├── apply-job/                    domain
+│   ├── payload.ts, types.ts      buildApplicationPayload(applicant, cv, mode)
+│   └── run.ts                    runApply(options: ApplyOptions, env: Env): Promise<void>
 └── cli/
     ├── types.ts                  ToolSpec, ToolDefinition, OptionSpec, OptionValues, Prompter, enums
     ├── define-tool.ts            defineTool(spec) → ToolDefinition; parseToolArgs, the one argv parser
@@ -80,7 +88,10 @@ src/
         ├── sync-resume.ts        options + run: (paths, { cwd }) => runSync(paths, cwd)
         ├── generate-rx-resume.ts options + run: (options, { env }) => runGenerate(options, env)
         ├── update-rx-resume.ts   options + run: (options, { env }) => runUpdate(options, env)
-        └── delete-rx-resume.ts   options + run: client.deleteResume(id), no domain folder
+        ├── delete-rx-resume.ts   options + run: client.deleteResume(id), no domain folder
+        ├── encode-cv.ts          options + run: (options, { cwd }) => runEncode(options, cwd)
+        ├── decode-cv.ts          options + run: (options, { cwd }) => runDecode(options, cwd)
+        └── apply-job.ts          options + run: (values, { env }) => runApply(…, env)
 ```
 
 Rules:
@@ -105,9 +116,9 @@ bun run cli <id> [flags]:  process.argv ─────────────�
 ## Types
 
 ```ts
-enum Platform { Site = "Site", ReactiveResume = "Reactive Resume" } // never a vendor
+enum Platform { Site = "Site", ReactiveResume = "Reactive Resume", JobApplication = "Job Application" } // where a tool writes
 enum OptionKind { Path = "path", Text = "text", List = "list" }
-enum FileExtension { Markdown = ".md", Json = ".json", Pdf = ".pdf", Docx = ".docx" }
+enum FileExtension { Markdown = ".md", Json = ".json", Pdf = ".pdf", Docx = ".docx", Text = ".txt" }
 enum ExitCode { Success = 0, Failure = 1, Cancelled = 130 }
 
 interface PathRule {
@@ -223,6 +234,8 @@ Per kind:
 A future tool with a fixed set of values (e.g. a target language) adds
 `OptionKind.Choice` with a `choices` field, mapped to `select`. That's one new
 case in `prompt-options.ts`, added with the first tool that needs it.
+`apply-job`'s `--mode` is plain `Text` instead: with two values, its domain
+checks it (`parseApplyMode`).
 
 ### 4. Path schema (interactive only)
 
@@ -243,19 +256,27 @@ it from the same `cwd`, exactly as in direct mode. The prompt's `validate` runs
 
 Rules per tool:
 
-| Tool               | Option       | Extensions | mustExist | Required |
-| ------------------ | ------------ | ---------- | --------- | -------- |
-| sync               | `--cv`       | `.md`      | yes       | yes      |
-| sync               | `--resume`   | `.md`      | yes       | yes      |
-| sync               | `--json`     | `.json`    | no        | no       |
-| sync               | `--template` | `.json`    | yes       | no       |
-| generate-rx-resume | `--resume`   | `.md`      | yes       | yes      |
-| update-rx-resume   | `--resume`   | `.md`      | yes       | yes      |
+| Tool               | Option       | Extensions           | mustExist | Required |
+| ------------------ | ------------ | -------------------- | --------- | -------- |
+| sync               | `--cv`       | `.md`                | yes       | yes      |
+| sync               | `--resume`   | `.md`                | yes       | yes      |
+| sync               | `--json`     | `.json`              | no        | no       |
+| sync               | `--template` | `.json`              | yes       | no       |
+| generate-rx-resume | `--resume`   | `.md`                | yes       | yes      |
+| update-rx-resume   | `--resume`   | `.md`                | yes       | yes      |
+| encode-cv          | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
+| encode-cv          | `--out`      | `.txt`               | no        | no       |
+| decode-cv          | `--base64`   | `.txt`               | yes       | yes      |
+| decode-cv          | `--out`      | `.pdf` `.docx` `.md` | no        | yes      |
+| apply-job          | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
 
 Generate's other options: `--name` (`Text`, required), `--slug` (`Text`,
 optional, default `slugify(name)`) and `--tags` (`List`, optional). Sync's
 defaults for `--json` and `--template` are `DefaultPath` resolved from the
-package root. Update and delete each take `--id` (`Text`, required).
+package root. Update and delete each take `--id` (`Text`, required). Encode's
+`--out` defaults to `<cv>.base64.txt`. Apply's other options are `--vacancy` and
+one `Text` per applicant field, all required, then `--mode` (`Text`, required,
+`test` or `live`).
 
 ### 5. Confirm
 
@@ -286,6 +307,12 @@ bun run cli generate-rx-resume --resume resume/Resume.md --name "Jane Doe"
 `resolveApiConfig(env)` and returns the error's message when it throws, or
 `undefined` when it doesn't. Bun loads `.env` from the package root, because
 `bun run cli` runs there.
+
+### Preflight: job applications
+
+`apply-job` uses `careersConfigProblem(env)` from `src/careers-api/config.ts`,
+which needs `CAREERS_API_URL`. `encode-cv` and `decode-cv` need no settings and
+are always available.
 
 ## Providers
 
@@ -370,16 +397,22 @@ main failure for each unit. Don't build exhaustive edge-case matrices.
 - Tool files get no unit tests of their own: their parsing is covered once by
   `define-tool.test.ts`, and their work by the domain tests.
 
-| Test file                                       | Base cases                                                                                   |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                |
-| `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                  |
-| `cli/prompt-options.test.ts`                    | required only; one optional flag ticked                                                      |
-| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                           |
-| `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; usage; run gets typed values |
-| `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id    |
-| `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                             |
-| `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                             |
+| Test file                                       | Base cases                                                                                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                                                   |
+| `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                                                     |
+| `cli/prompt-options.test.ts`                    | required only; one optional flag ticked                                                                                         |
+| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                                                              |
+| `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; usage; run gets typed values                                    |
+| `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id                                       |
+| `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                                                                |
+| `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                                                                |
+| `cv-base64/codec.test.ts`                       | encode; decode; data URL, bad character and empty rejected; round trip passes and fails                                         |
+| `careers-api/schema.test.ts`                    | valid payload; one failure per field rule; every failure listed; Dutch phone formats; request size at and over the limit        |
+| `careers-api/config.test.ts`                    | reads the URL; missing or empty throws; `careersConfigProblem`                                                                  |
+| `careers-api/client.test.ts`                    | POST body and headers; slug encoded; 200 tested; 201 applied; raw response kept; 404 meaning and full response; 429 Retry-After |
+| `careers-api/response.test.ts`                  | JSON body pretty-printed; other text as received; empty body marked; `parseJson`                                                |
+| `apply-job/payload.test.ts`                     | fields mapped; live sends `test: false`; extension case; every invalid field listed; mode                                       |
 
 ## Delivery
 

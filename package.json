@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "cli": "bun src/cli/index.ts",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -15,6 +17,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
