@@ -7,7 +7,7 @@
  */
 
 import type {
-  ParsedBasics,
+  ParsedContact,
   ParsedCertification,
   ParsedEduItem,
   ParsedJob,
@@ -87,7 +87,7 @@ export function toCustomField(link: ParsedLink): ParsedCustomField {
  * toBasics({ ...details, website: "example.com" }).website;
  * // { url: "https://example.com", label: "example.com" }
  */
-export function toBasics(basics: ParsedBasics): ParsedBasicsData {
+export function toBasics(basics: ParsedContact): ParsedBasicsData {
   const { name, headline, email, phone, location, website } = basics;
   const hasProtocol = PROTOCOL_REGEX.test(website);
 
@@ -278,7 +278,7 @@ export function toReferenceItem(reference: string): ParsedReferenceItem {
  */
 export function toResumeData(parsed: ParsedResume): ParsedResumeData {
   return {
-    basics: toBasics(parsed.basics),
+    basics: toBasics(parsed.contact),
     summary: { content: renderSummaryHtml(parsed.summary) },
     sections: {
       experience: { items: parsed.jobs.map(toExperienceItem) },

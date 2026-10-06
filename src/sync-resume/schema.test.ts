@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import yaml from "js-yaml";
 import {
   CvDataSchema,
+  ParsedContactSchema,
   ParsedEduItemSchema,
   ParsedJobSchema,
   ParsedResumeSchema,
@@ -15,6 +16,7 @@ import {
   validateParsedResume,
 } from "./schema.ts";
 import type {
+  ParsedContact,
   ParsedEduItem,
   ParsedJob,
   ParsedResume,
@@ -36,6 +38,16 @@ const job: ParsedJob = {
   website: "https://acme.example/",
 };
 
+const contact: ParsedContact = {
+  name: "Jane Doe",
+  headline: "Software Engineer",
+  email: "jane.doe@example.com",
+  phone: "",
+  location: "City, Country",
+  website: "example.com",
+  profiles: [{ label: "GitHub", url: "https://github.com/jane-doe" }],
+};
+
 const skillGroup: ParsedSkillGroup = {
   heading: "Languages",
   items: ["TypeScript", "Python"],
@@ -51,15 +63,7 @@ const eduItem: ParsedEduItem = {
 };
 
 const resume: ParsedResume = {
-  basics: {
-    name: "Jane Doe",
-    headline: "Software Engineer",
-    email: "jane.doe@example.com",
-    phone: "",
-    location: "City, Country",
-    website: "example.com",
-    profiles: [{ label: "GitHub", url: "https://github.com/jane-doe" }],
-  },
+  contact: contact,
   summary: "Senior engineer.",
   jobs: [job, { ...job, company: "Beta Inc" }],
   skillGroups: [skillGroup],
@@ -88,6 +92,39 @@ describe("formatIssuePath", () => {
 });
 
 // ─── Item schemas ─────────────────────────────────────────────────────────────
+
+describe("ParsedContactSchema", () => {
+  it("accepts a valid contact", () => {
+    expect(ParsedContactSchema.safeParse(contact).success).toBe(true);
+  });
+
+  it("accepts an empty phone", () => {
+    expect(
+      ParsedContactSchema.safeParse({ ...contact, phone: "" }).success,
+    ).toBe(true);
+  });
+
+  it.each(["not-an-email", "jane@", "@example.com", ""])(
+    "rejects the invalid email %j",
+    (email) => {
+      const result = ParsedContactSchema.safeParse({ ...contact, email });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].path).toEqual(["email"]);
+    },
+  );
+
+  it.each(["abc", "+31 6 1234 abcd", "06#12345678"])(
+    "rejects the invalid phone %j",
+    (phone) => {
+      const result = ParsedContactSchema.safeParse({ ...contact, phone });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].path).toEqual(["phone"]);
+      expect(result.error?.issues[0].message).toBe(
+        "invalid phone number format",
+      );
+    },
+  );
+});
 
 describe("ParsedJobSchema", () => {
   it("accepts a complete job", () => {

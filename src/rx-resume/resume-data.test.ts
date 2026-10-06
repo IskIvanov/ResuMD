@@ -14,7 +14,7 @@ import {
   toSkillItem,
 } from "./resume-data.ts";
 import type {
-  ParsedBasics,
+  ParsedContact,
   ParsedCertification,
   ParsedEduItem,
   ParsedJob,
@@ -26,7 +26,7 @@ import type {
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const basics: ParsedBasics = {
+const basics: ParsedContact = {
   name: "Jane Doe",
   headline: "Software Engineer",
   email: "jane.doe@example.com",
@@ -80,7 +80,7 @@ const language: ParsedLanguage = {
 };
 
 const parsed: ParsedResume = {
-  basics,
+  contact: basics,
   summary: "Senior engineer shipping products.",
   jobs: [job],
   skillGroups: [skillGroup],
@@ -328,7 +328,7 @@ describe("toResumeData", () => {
   it("returns empty item lists when the resume has no sections", () => {
     const data = toResumeData({
       ...parsed,
-      basics: { ...basics, profiles: [] },
+      contact: { ...basics, profiles: [] },
       jobs: [],
       skillGroups: [],
       eduItems: [],

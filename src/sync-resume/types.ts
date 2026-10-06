@@ -20,8 +20,8 @@ import type {
   ExperienceJsonItemSchema,
   InterestJsonItemSchema,
   LanguageJsonItemSchema,
-  ParsedBasicsSchema,
   ParsedCertificationSchema,
+  ParsedContactSchema,
   ParsedEduItemSchema,
   ParsedJobSchema,
   ParsedLanguageSchema,
@@ -40,7 +40,7 @@ import type {
 // ─── Parsed Resume.md ─────────────────────────────────────────────────────────
 
 export type ParsedLink = z.infer<typeof ParsedLinkSchema>;
-export type ParsedBasics = z.infer<typeof ParsedBasicsSchema>;
+export type ParsedContact = z.infer<typeof ParsedContactSchema>;
 export type ParsedJob = z.infer<typeof ParsedJobSchema>;
 export type ParsedSkillGroup = z.infer<typeof ParsedSkillGroupSchema>;
 export type ParsedEduItem = z.infer<typeof ParsedEduItemSchema>;

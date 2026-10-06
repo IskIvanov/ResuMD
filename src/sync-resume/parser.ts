@@ -9,8 +9,8 @@
 
 import { validateParsedResume } from "./schema.ts";
 import type {
-  ParsedBasics,
   ParsedCertification,
+  ParsedContact,
   ParsedEduItem,
   ParsedJob,
   ParsedLanguage,
@@ -23,8 +23,8 @@ import type {
 // Re-exported so modules that import the parsed types from the parser keep
 // working; they are declared in types.ts.
 export type {
-  ParsedBasics,
   ParsedCertification,
+  ParsedContact,
   ParsedEduItem,
   ParsedJob,
   ParsedLanguage,
@@ -234,7 +234,7 @@ export function parseLinks(text: string): ParsedLink[] {
  * @param md - The full Resume.md string.
  * @returns The details; fields that are not found are empty strings.
  */
-export function parseBasics(md: string): ParsedBasics {
+export function parseContact(md: string): ParsedContact {
   const header = ("\n" + md).split(/\n## /)[0];
   const lines = header
     .split("\n")
@@ -436,23 +436,24 @@ export function parseReferences(md: string): string[] {
  * Parses a full Resume.md string into a structured ParsedResume object and
  * validates it against ParsedResumeSchema.
  *
- * @param md - The full Resume.md string.
+ * @param resume_data - The full Resume.md string.
  * @returns The parsed and validated resume.
  * @throws If required content is missing (the summary, a job's role or tech
  *   stack, a whole required section, …); the error names each path, e.g.
  *   `jobs[2].role: required`.
  */
-export function parseResume(md: string): ParsedResume {
-  return validateParsedResume({
-    basics: parseBasics(md),
-    summary: parseSummary(md),
-    jobs: parseExperience(md),
-    skillGroups: parseSkills(md),
-    eduItems: parseEducation(md),
-    projects: parseProjects(md),
-    certifications: parseCertifications(md),
-    languages: parseLanguages(md),
-    interests: parseInterests(md),
-    references: parseReferences(md),
-  });
+export function parseResume(resume_data: string): ParsedResume {
+  const ParsedResumeSchema: ParsedResume = {
+    contact: parseContact(resume_data),
+    summary: parseSummary(resume_data),
+    jobs: parseExperience(resume_data),
+    skillGroups: parseSkills(resume_data),
+    eduItems: parseEducation(resume_data),
+    projects: parseProjects(resume_data),
+    certifications: parseCertifications(resume_data),
+    languages: parseLanguages(resume_data),
+    interests: parseInterests(resume_data),
+    references: parseReferences(resume_data),
+  };
+  return validateParsedResume(ParsedResumeSchema);
 }

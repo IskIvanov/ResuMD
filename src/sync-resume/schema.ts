@@ -39,11 +39,11 @@ export const ParsedLinkSchema = z.object({
 });
 
 /** Personal details from the header above the first `## ` section. */
-export const ParsedBasicsSchema = z.object({
+export const ParsedContactSchema = z.object({
   name: z.string(),
   headline: z.string(),
-  email: z.string(),
-  phone: z.string(),
+  email: z.email("invalid email format"),
+  phone: z.string().regex(/^\+?[0-9\s\-()]*$/, "invalid phone number format"),
   location: z.string(),
   /** As written in Resume.md, with or without a protocol. */
   website: z.string(),
@@ -101,7 +101,7 @@ export const ParsedLanguageSchema = z.object({
  * education item are required; the remaining sections may be empty.
  */
 export const ParsedResumeSchema = z.object({
-  basics: ParsedBasicsSchema,
+  contact: ParsedContactSchema,
   summary: requiredText,
   jobs: z.array(ParsedJobSchema).min(1, ValidationMessage.Empty),
   skillGroups: z.array(ParsedSkillGroupSchema).min(1, ValidationMessage.Empty),

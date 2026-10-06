@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { ParsedContactSchema } from "./schema.ts";
 import {
-  parseBasics,
+  parseContact,
   parseSummary,
   parseExperience,
   parseSkills,
@@ -368,19 +369,19 @@ Cycling · Weightlifting · Travel
 References available upon request
 `.trim();
 
-// ─── parseBasics ──────────────────────────────────────────────────────────────
+// ─── parseContact ──────────────────────────────────────────────────────────────
 
-describe("parseBasics", () => {
+describe("parseContact", () => {
   it("extracts the name from the # heading", () => {
-    expect(parseBasics(HEADER_FIXTURE).name).toBe("Jane Doe");
+    expect(parseContact(HEADER_FIXTURE).name).toBe("Jane Doe");
   });
 
   it("extracts the headline from the bold line", () => {
-    expect(parseBasics(HEADER_FIXTURE).headline).toBe("Software Engineer");
+    expect(parseContact(HEADER_FIXTURE).headline).toBe("Software Engineer");
   });
 
   it("classifies the contact line into email, phone, location and website", () => {
-    expect(parseBasics(HEADER_FIXTURE)).toMatchObject({
+    expect(parseContact(HEADER_FIXTURE)).toMatchObject({
       email: "jane.doe@example.com",
       phone: "+31 6 12345678",
       location: "City, Country",
@@ -388,11 +389,25 @@ describe("parseBasics", () => {
     });
   });
 
+  it("leaves email empty when the email is malformed", () => {
+    const header = HEADER_FIXTURE.replace("jane.doe@example.com", "jane.doe@");
+    const contact = parseContact(header);
+    expect(contact.email).toBe("");
+    expect(() => ParsedContactSchema.parse(contact)).toThrow(
+      "invalid email format",
+    );
+  });
+
+  it("leaves phone empty when the phone has invalid characters", () => {
+    const header = HEADER_FIXTURE.replace("+31 6 12345678", "+31 6 123s5678");
+    expect(parseContact(header).phone).toBe("");
+  });
+
   it("classifies contact parts regardless of their order", () => {
-    const basics = parseBasics(
+    const contact = parseContact(
       "# Jane Doe\n\n**Engineer**\n\nhttps://example.com/me | City | jane@example.com",
     );
-    expect(basics).toMatchObject({
+    expect(contact).toMatchObject({
       email: "jane@example.com",
       phone: "",
       location: "City",
@@ -401,7 +416,7 @@ describe("parseBasics", () => {
   });
 
   it("returns empty strings when the header is missing", () => {
-    expect(parseBasics("## Summary\n\nSenior engineer.")).toEqual({
+    expect(parseContact("## Summary\n\nSenior engineer.")).toEqual({
       name: "",
       headline: "",
       email: "",
@@ -594,7 +609,7 @@ describe("parseResume", () => {
   it("parses every section of a full resume", () => {
     const parsed = parseResume(buildResume());
 
-    expect(parsed.basics.name).toBe("Jane Doe");
+    expect(parsed.contact.name).toBe("Jane Doe");
     expect(parsed.summary).toBe("Senior engineer.");
     expect(parsed.jobs).toHaveLength(2);
     expect(parsed.skillGroups).toHaveLength(2);
@@ -604,6 +619,11 @@ describe("parseResume", () => {
     expect(parsed.languages).toHaveLength(3);
     expect(parsed.interests).toHaveLength(3);
     expect(parsed.references).toHaveLength(1);
+  });
+
+  it("throws if the email in the header is invalid", () => {
+    const header = HEADER_FIXTURE.replace("jane.doe@example.com", "jane.doe@");
+    expect(() => parseResume(buildResume({ header }))).toThrow("contact.email");
   });
 
   it("throws if ## Summary is missing", () => {
@@ -724,25 +744,25 @@ describe("parseLinks", () => {
   });
 });
 
-// ─── parseBasics: profiles ────────────────────────────────────────────────────
+// ─── parseContact: profiles ────────────────────────────────────────────────────
 
-describe("parseBasics profiles", () => {
+describe("parseContact profiles", () => {
   it("extracts header links as profiles", () => {
-    expect(parseBasics(LINKED_HEADER_FIXTURE).profiles).toEqual([
+    expect(parseContact(LINKED_HEADER_FIXTURE).profiles).toEqual([
       { label: "LinkedIn", url: "https://linkedin.com/in/jane-doe" },
       { label: "GitHub", url: "https://github.com/jane-doe" },
     ]);
   });
 
   it("returns no profiles for plain labels without URLs", () => {
-    expect(parseBasics(HEADER_FIXTURE).profiles).toEqual([]);
+    expect(parseContact(HEADER_FIXTURE).profiles).toEqual([]);
   });
 
   it("keeps links on the contact line out of the contact details", () => {
-    const basics = parseBasics(
+    const contact = parseContact(
       "# Jane Doe\n\n**Engineer**\n\njane@example.com | [GitHub](https://github.com/jane) | City",
     );
-    expect(basics).toMatchObject({
+    expect(contact).toMatchObject({
       email: "jane@example.com",
       location: "City",
       website: "",
@@ -752,7 +772,7 @@ describe("parseBasics profiles", () => {
 
   it("does not pick up links from the sections below the header", () => {
     expect(
-      parseBasics(`${HEADER_FIXTURE}\n\n${LINKED_PROJECTS_FIXTURE}`).profiles,
+      parseContact(`${HEADER_FIXTURE}\n\n${LINKED_PROJECTS_FIXTURE}`).profiles,
     ).toEqual([]);
   });
 });

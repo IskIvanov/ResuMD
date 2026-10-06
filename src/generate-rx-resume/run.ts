@@ -18,6 +18,8 @@ import type { Env } from "../rx-resume/types.ts";
 import { generateResume } from "./generate.ts";
 import type { GenerateOptions } from "./types.ts";
 
+const UTF8 = "utf-8";
+
 /**
  * Creates a Reactive Resume resume from Resume.md and prints its builder link.
  *
@@ -36,7 +38,7 @@ export async function runGenerate(
   env: Env,
 ): Promise<void> {
   const config = resolveApiConfig(env);
-  const data = toResumeData(parseResume(readFileSync(options.resume, "utf-8")));
+  const data = toResumeData(parseResume(readFileSync(options.resume, UTF8)));
 
   const client = createRxResumeClient({
     baseUrl: config.baseUrl,
