@@ -16,6 +16,7 @@ import type { CliDeps } from "./run-cli.ts";
 import { encodeTool } from "./tools/encode-cv.ts";
 import { generateCoverLetterTool } from "./tools/generate-cover-letter.ts";
 import { generateTool } from "./tools/generate-rx-resume.ts";
+import { updateCoverLetterTool } from "./tools/update-cover-letter.ts";
 import {
   CliErrorCode,
   CliLabel,
@@ -199,6 +200,14 @@ export const generateLetterTemplateScript: PromptScript = {
   [promptFor(generateCoverLetterTool, "resume-id")]: "resume-1",
   [CliLabel.OptionalFlags]: ["template"],
   [promptFor(generateCoverLetterTool, "template")]: "onyx",
+};
+
+/** Fills update-cover-letter's required options and ticks nothing optional. */
+export const updateLetterRequiredScript: PromptScript = {
+  [promptFor(updateCoverLetterTool, "id")]:
+    "3f2b8c1e-5d4a-4e7b-9a6c-1d2e3f4a5b6c",
+  [promptFor(updateCoverLetterTool, "letter")]: "cv.md",
+  [CliLabel.OptionalFlags]: [],
 };
 
 /** Fills encode-cv's one required option and ticks nothing optional. */

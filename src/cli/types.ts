@@ -19,6 +19,8 @@
  *   check that path prompts validate against.
  */
 
+import type { z } from "zod";
+
 /** Menu groups. Names what a tool does or where it writes, never a vendor. */
 export enum Platform {
   Site = "Site",
@@ -157,6 +159,8 @@ export interface PathOption extends BaseOption {
 
 export interface ValueOption extends BaseOption {
   kind: OptionKind.Text | OptionKind.List;
+  /** Checked at the prompt and in argv. */
+  schema?: z.ZodType<string>;
 }
 
 /** A value picked from a fixed list: a select in the menu, checked in argv. */

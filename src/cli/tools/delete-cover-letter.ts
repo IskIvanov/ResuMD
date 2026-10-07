@@ -7,6 +7,7 @@
  */
 
 import { runDeleteCoverLetter } from "../../cover-letter/run.ts";
+import { CoverLetterIdSchema } from "../../cover-letter/schema.ts";
 import { apiConfigProblem } from "../../rx-resume/config.ts";
 import { defineTool } from "../define-tool.ts";
 import { OptionKind, Platform } from "../types.ts";
@@ -31,6 +32,7 @@ export const deleteCoverLetterTool = defineTool({
     [Option.Id]: {
       message: DeleteLetterLabel.LetterId,
       kind: OptionKind.Text,
+      schema: CoverLetterIdSchema,
       required: true,
     },
   },

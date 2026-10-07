@@ -9,12 +9,13 @@ import { extname, resolve } from "path";
 import { z } from "zod";
 import {
   CliLabel,
+  OptionDescriptor,
+  OptionKind,
   type FileExtension,
   type PathContext,
   type PathRule,
   type Validator,
 } from "./types.ts";
-
 /**
  * Builds the schema for one path option. Checks, in order: not empty, has an
  * extension, the extension is allowed, and — when the rule requires it — the
@@ -53,6 +54,21 @@ export function pathSchema(
       return fail(`${CliLabel.FileNotFound}: ${path}`);
     }
   });
+}
+
+export function answerSchema(
+  option: OptionDescriptor,
+  pathContext: PathContext,
+): z.ZodType<string> {
+  switch (option.kind) {
+    case OptionKind.Path:
+      return pathSchema(option.path, pathContext);
+    case OptionKind.Text:
+    case OptionKind.List:
+      return option.schema ?? z.string();
+    default:
+      return z.string();
+  }
 }
 
 /**

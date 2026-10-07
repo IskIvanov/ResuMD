@@ -8,6 +8,7 @@
  */
 
 import { runUpdateCoverLetter } from "../../cover-letter/run.ts";
+import { CoverLetterIdSchema } from "../../cover-letter/schema.ts";
 import { apiConfigProblem } from "../../rx-resume/config.ts";
 import { CoverLetterTemplate } from "../../rx-resume/types.ts";
 import { camelCaseKeys } from "../../utils/record.ts";
@@ -46,6 +47,7 @@ export const updateCoverLetterTool = defineTool({
     [Option.Id]: {
       message: UpdateLetterLabel.LetterId,
       kind: OptionKind.Text,
+      schema: CoverLetterIdSchema,
       required: true,
     },
     [Option.Letter]: {

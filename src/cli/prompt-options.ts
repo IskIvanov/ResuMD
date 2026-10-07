@@ -5,7 +5,7 @@
  * first, then a checkbox of optional flags, then a prompt for each one ticked.
  */
 
-import { pathSchema, toValidator } from "./schema.ts";
+import { answerSchema, toValidator } from "./schema.ts";
 import {
   CliLabel,
   OptionKind,
@@ -23,19 +23,18 @@ const rejectBlankAnswer: Validator = (answer) => {
   return CliLabel.ValueRequired;
 };
 
-/**
- * The validator for a typed answer: a path option checks its path rule, a
- * required option rejects a blank answer, and any other option takes anything.
- */
+/** Accepts any answer. */
+const acceptAnyAnswer: Validator = () => true;
+
+/** Checks a typed answer: its schema, else not blank if required. */
 function answerValidator(
   option: OptionDescriptor,
   pathContext: PathContext,
-): Validator | undefined {
-  if (option.kind === OptionKind.Path) {
-    return toValidator(pathSchema(option.path, pathContext));
-  }
+): Validator {
+  const schema = answerSchema(option, pathContext);
+  if (schema) return toValidator(schema);
   if (option.required) return rejectBlankAnswer;
-  return undefined;
+  return acceptAnyAnswer;
 }
 
 /** A select entry that shows one of a choice option's values as itself. */

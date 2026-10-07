@@ -30,3 +30,13 @@ export const ParsedCoverLetterSchema = z.object({
   /** `## Letter`, a blank line, then `## Closing`. */
   content: requiredText.max(CoverLetterLimit.ContentMax),
 });
+
+/** Messages reported for a cover-letter id that is not accepted. */
+export const CoverLetterIdMessage = {
+  NotUuid: "Field must accept a valid UUID",
+};
+
+/** The id Reactive Resume gives a cover letter: a UUID. */
+export const CoverLetterIdSchema = z.uuid({
+  message: CoverLetterIdMessage.NotUuid,
+});

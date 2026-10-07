@@ -7,9 +7,11 @@ import {
   generateRequiredScript,
   pathContext,
   promptFor,
+  updateLetterRequiredScript,
 } from "./mocks.ts";
 import { generateCoverLetterTool } from "./tools/generate-cover-letter.ts";
 import { generateTool } from "./tools/generate-rx-resume.ts";
+import { updateCoverLetterTool } from "./tools/update-cover-letter.ts";
 import { CliLabel } from "./types.ts";
 
 describe("promptOptions", () => {
@@ -79,5 +81,23 @@ describe("promptOptions", () => {
       })),
     });
     expect(argv).toEqual(expect.arrayContaining(["--template", "onyx"]));
+  });
+
+  it("accepts an id that is a UUID", async () => {
+    const id = "3f2b8c1e-5d4a-4e7b-9a6c-1d2e3f4a5b6c";
+    const prompter = createFakePrompter({
+      ...updateLetterRequiredScript,
+      [promptFor(updateCoverLetterTool, "id")]: id,
+    });
+
+    const argv = await promptOptions(
+      updateCoverLetterTool.options,
+      prompter,
+      pathContext,
+    );
+
+    console.log(argv);
+
+    expect(argv).toEqual(expect.arrayContaining(["--id", id]));
   });
 });
