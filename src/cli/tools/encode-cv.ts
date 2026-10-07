@@ -48,7 +48,7 @@ export const encodeTool = defineTool({
       message: EncodeLabel.Out,
       kind: OptionKind.Path,
       required: false,
-      default: (given) => `${given[Option.Cv] ?? ""}${OUT_SUFFIX}`,
+      default: (answers) => `${answers[Option.Cv] ?? ""}${OUT_SUFFIX}`,
       path: { extensions: [FileExtension.Text], mustExist: false },
     },
   },

@@ -6,6 +6,7 @@
  * key nor the instance URLs appear in code, on the command line or in git.
  */
 
+import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
 import type { ApiConfig, Env } from "./types.ts";
 
 /** Variables the Reactive Resume tools need from `.env`. */
@@ -19,6 +20,7 @@ export enum EnvVar {
 export const ENV_FILE = ".env";
 const ENV_EXAMPLE_FILE = ".env.example";
 const BUILDER_PATH = "/builder";
+const LETTER_DASHBOARD_PATH = "/dashboard";
 
 /**
  * Resolves the API key and the instance URLs from an environment.
@@ -79,6 +81,26 @@ export function apiConfigProblem(env: Env): string | undefined {
  * // "https://rxresu.me/builder/abc"
  */
 export function resolveBuilderUrl(appUrl: string, resumeId: string): string {
-  const origin = appUrl.replace(/\/+$/, "");
-  return `${origin}${BUILDER_PATH}/${encodeURIComponent(resumeId)}`;
+  return itemPath(`${trimTrailingSlashes(appUrl)}${BUILDER_PATH}`, resumeId);
+}
+
+/**
+ * Builds the link to a cover letter on the dashboard.
+ *
+ * @param appUrl - URL of the web app, with or without a trailing slash.
+ * @param coverId - The cover letter's id.
+ * @returns The letter's dashboard URL, with the id URL-encoded.
+ *
+ * @example
+ * resolveLetterDashboardUrl("https://rxresu.me", "asd-134-sdf-v");
+ * // "https://rxresu.me/dashboard/asd-134-sdf-v"
+ */
+export function resolveLetterDashboardUrl(
+  appUrl: string,
+  coverId: string,
+): string {
+  return itemPath(
+    `${trimTrailingSlashes(appUrl)}${LETTER_DASHBOARD_PATH}`,
+    coverId,
+  );
 }

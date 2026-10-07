@@ -2,7 +2,9 @@
 
 Linear:
 [BAC-60](https://linear.app/ivanovdev/issue/BAC-60/create-and-update-cover-letter)
-· Status: **plan, ready for review**, nothing implemented yet.
+· Status: **implemented**. See [Implementation notes](#implementation-notes)
+for where the code differs from or adds to the plan. Risk 3 below is
+resolved; the others are still open.
 
 ## Goal
 
@@ -18,8 +20,9 @@ same way `Resume.md` drives a resume. Three new tools are added under the
 
 ## Non-goals
 
-- A link to the letter's editor. For now the tools print the dashboard's letter
-  list, and the editor link will come in a later ticket.
+- A link to the letter's editor. For now the tools print the letter's
+  dashboard link, `<appUrl>/dashboard/<id>`, and the editor link will come in
+  a later ticket.
 - The API's other cover-letter endpoints (versions, export, import, AI draft,
   duplicate, style refresh).
 - Writing the sender's details into the letter. They come from the linked
@@ -137,20 +140,34 @@ bun run cli delete-cover-letter --id <letterId>
 - They're appended to `TOOLS` after `deleteTool`, in the order generate,
   update, delete.
 
+In use:
+
+- `--resume-id` links the letter to a resume, which gives it the sender's
+  details and design. Keep that resume up to date from `Resume.md` with
+  `update-rx-resume`.
+- `--template` picks one of the 17 templates, and the letter stops following
+  the resume's design. Leave it out to keep the resume's design.
+- Update is refused if the letter was edited after it was read; run it again.
+  It's also refused, before anything is sent, for a letter that isn't
+  `freeform` (see risk 3 below).
+- Delete is permanent: the letter is moved to Trash, then purged. If the purge
+  fails, the error says the letter is in Trash, where it can still be
+  restored.
+
 ### Output
 
 ```
 ✓ Created cover letter "Acme — Frontend" (id clx…, revision 1, template onyx)
-  letters: https://rxresu.me/dashboard?type=letter
+  letter: https://rxresu.me/dashboard/clx…
 ✓ Updated cover letter "Acme — Frontend" (id clx…, revision 4)
-  letters: https://rxresu.me/dashboard?type=letter
+  letter: https://rxresu.me/dashboard/clx…
 ✓ Permanently deleted cover letter clx…
 ```
 
 `, template <name>` is printed only when `--template` was given, so it's
 visible that the letter no longer follows the resume's design. The origin
 comes from `RXRESUME_APP_URL` (already in `.env.example`), so a local instance
-works without code changes. Only the `/dashboard?type=letter` path is in code.
+works without code changes. Only the `/dashboard/<id>` path is in code.
 
 ## Changes by file
 
@@ -174,7 +191,7 @@ works without code changes. Only the `/dashboard?type=letter` path is in code.
   `CoverLetter` and `CoverLetterTemplate`.
 - Adds five methods to `RxResumeClient` (below).
 
-**`client.ts`**: new methods on `createRxResumeClient`, reusing the private
+**`client.ts`**: new methods on the `RxResumeApiClient` class, reusing the private
 `request`, `HttpMethod` and `RxResumeApiError`:
 
 | Method | Request |
@@ -189,8 +206,8 @@ Paths are module constants, following `RESUMES_PATH`. `request` already
 sends a JSON body on any method, which the trash call needs.
 
 **`config.ts`**
-- Adds `resolveLetterDashboardUrl(appUrl)`, which returns
-  `<appUrl>/dashboard?type=letter` and sits next to `resolveBuilderUrl`.
+- Adds `resolveLetterDashboardUrl(appUrl, coverId)`, which returns
+  `<appUrl>/dashboard/<id>` and sits next to `resolveBuilderUrl`.
 
 ### `src/sync-resume/parser.ts`
 
@@ -288,13 +305,63 @@ Each step is a red test, then the code, then `bunx vitest run` and
    company fields. In `freeform`, `--company` is probably stored but not
    printed. That's acceptable, since the company is in `## Contact`, but it
    hasn't been checked against a real letter.
-3. **Updating a `structured` letter.** `PUT` can't change `layout`. If
-   `update-cover-letter` targets a letter made in the app in `structured`
-   layout, its greeting and sign-off will appear twice. One option is for
-   update to read `layout` from the `GET` and refuse to update a `structured`
-   letter with a clear error. Should it?
+3. **Updating a `structured` letter.** Resolved. `PUT` can't change `layout`,
+   so a letter made in the app in `structured` layout would print its
+   greeting and sign-off twice. Update reads `layout` from the `GET` and
+   refuses any letter that isn't `freeform` with a `CoverLetterError`
+   (`NOT_FREEFORM`), before the `PUT` is sent.
 4. **Time zone.** `letterDate` uses the machine's local date, which is right
    for a letter signed today. It's recorded here so a reviewer can object.
 5. **Partial delete.** If the purge fails after the trash succeeds, the letter
    is left in Trash. That's recoverable, and the error says so, so there's no
    rollback.
+6. **Hard-wrapped paragraphs.** Line breaks are kept, so a `.md` wrapped at 80
+   columns (e.g. by Prettier, as `Resume.md` is) sends its breaks mid-sentence.
+   `Resume.md` avoids this by joining wrapped lines (`unwrapLines`). The
+   fixture keeps each paragraph on one line. Should the letter join wrapped
+   lines too, keeping only the breaks in `## Contact` and `## Closing`?
+
+## Implementation notes
+
+- **Two-step validation.** `ParsedCoverLetterSchema` (`recipient`, `content`)
+  can't name a missing section, so the parser first checks
+  `CoverLetterSectionsSchema` (`contact`, `letter`, `closing`) and gets
+  `closing: required`. It then checks `ParsedCoverLetterSchema` for the API's
+  length limits.
+- **Shared error format.** `sync-resume/schema.ts` gains
+  `parseOrThrow(schema, value, heading)`, which `validateParsedResume` now
+  uses, and exports `requiredText`. The parser reports
+  `Invalid cover letter:` and the bodies `Invalid cover letter request:`, each
+  followed by one `path: message` line per failure.
+- **Update validates after the read.** The update body needs the revision, so
+  `build(revision)` runs after the `GET`. A too-long `--name` still fails
+  before the `PUT`. A create fails before any request.
+- **Fixtures.** `src/rx-resume/mocks.ts` holds the cover-letter bodies,
+  response and invalid-field cases, shared by the rx-resume tests and
+  `cover-letter/mocks.ts`. The fake client records its calls without
+  `vi.fn()`, as the CLI design doc asks.
+- **Response schema.** `CoverLetterSchema.letterDate` is nullable, as in the
+  API. The bodies don't accept `null`, since the tools always send a date.
+- **Dashboard link.** The tools link to the letter itself,
+  `<appUrl>/dashboard/<id>`, under `letter:`, instead of the letter list
+  (`/dashboard?type=letter`) the plan described.
+- **Output.** `, template <name>` is printed on update too when `--template`
+  is given.
+- **Removed.** The empty `src/cover-letter/index.ts`. As in the other domain
+  folders, `run.ts` is the entry point.
+- **Tests added beyond the plan.** `cli/registry.test.ts` (step 8), plus a
+  type-level check that a choice reaches `run` as the union of its values.
+- **Review follow-ups.**
+  - Update refuses a letter that isn't `freeform` (risk 3).
+  - Failures the flows own are `CoverLetterError`s (`cover-letter/errors.ts`)
+    with a typed `reason`: `NOT_FREEFORM`, or `LEFT_IN_TRASH` when the purge
+    fails. Both extend `ReasonedError` in `src/utils/error.ts`, like the CLI's
+    `CliError`.
+  - The client is the `RxResumeApiClient` class, which implements the
+    `RxResumeClient` interface. Its path helpers use `itemPath` and
+    `trimTrailingSlashes` from `src/utils/url.ts`.
+  - `CoverLetterFields` types each flag by the API field it's sent as, e.g.
+    `company?: UpdateCoverLetterBody["recipientCompany"]`.
+  - The tool files pass `camelCaseKeys(values)` to the runs, so each
+    kebab-case flag has to match its option field at compile time.
+  - The README links here instead of repeating the usage.

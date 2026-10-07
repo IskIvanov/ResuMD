@@ -13,7 +13,7 @@ import { readFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { parseResume } from "../sync-resume/parser.ts";
 import { applyResumeData } from "../rx-resume/apply-data.ts";
-import { createRxResumeClient } from "../rx-resume/client.ts";
+import { RxResumeApiClient } from "../rx-resume/client.ts";
 import { resolveApiConfig, resolveBuilderUrl } from "../rx-resume/config.ts";
 import { patchResumeData } from "../rx-resume/patch.ts";
 import { toResumeData } from "../rx-resume/resume-data.ts";
@@ -40,7 +40,7 @@ export async function runUpdate(
   const config = resolveApiConfig(env);
   const data = toResumeData(parseResume(readFileSync(options.resume, "utf-8")));
 
-  const client = createRxResumeClient({
+  const client = new RxResumeApiClient({
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     fetch: globalThis.fetch,

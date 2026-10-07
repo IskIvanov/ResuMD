@@ -11,10 +11,9 @@ import {
   ParsedResumeSchema,
   ParsedSkillGroupSchema,
   ResumeJsonSchema,
-  ValidationMessage,
-  formatIssuePath,
   validateParsedResume,
 } from "./schema.ts";
+import { ValidationMessage } from "../utils/schema.ts";
 import type {
   ParsedContact,
   ParsedEduItem,
@@ -74,22 +73,6 @@ const resume: ParsedResume = {
   interests: [],
   references: [],
 };
-
-// ─── formatIssuePath ──────────────────────────────────────────────────────────
-
-describe("formatIssuePath", () => {
-  it("joins keys with dots and wraps indices in brackets", () => {
-    expect(formatIssuePath(["jobs", 2, "role"])).toBe("jobs[2].role");
-  });
-
-  it("formats a top-level key as-is", () => {
-    expect(formatIssuePath(["summary"])).toBe("summary");
-  });
-
-  it("formats an empty path as an empty string", () => {
-    expect(formatIssuePath([])).toBe("");
-  });
-});
 
 // ─── Item schemas ─────────────────────────────────────────────────────────────
 

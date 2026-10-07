@@ -9,10 +9,11 @@
  */
 
 import { formatCommand } from "./command.ts";
-import { PromptCancelledError } from "./errors.ts";
+import { isCliError } from "./errors.ts";
 import { buildMenu, type MenuValue } from "./menu.ts";
 import { promptOptions } from "./prompt-options.ts";
 import {
+  CliErrorCode,
   CliLabel,
   ExitCode,
   MenuAction,
@@ -105,7 +106,7 @@ export async function runCli(deps: CliDeps): Promise<ExitCode> {
     }
     return await menuLoop(deps);
   } catch (error) {
-    if (error instanceof PromptCancelledError) {
+    if (isCliError(error, CliErrorCode.PromptCancelled)) {
       deps.logError(CliLabel.Cancelled);
       return ExitCode.Cancelled;
     }

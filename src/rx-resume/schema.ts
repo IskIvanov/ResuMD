@@ -1,10 +1,11 @@
 /**
  * schema.ts
  *
- * Zod schemas for the Reactive Resume v5 API: the resume `data` object and the
- * bodies of `POST /resumes` and `PUT /resumes/{id}`. They are the source of
- * truth for the types in types.ts, which are inferred from them. Only the
- * parts that Resume.md feeds are declared in full; see
+ * Zod schemas for the Reactive Resume v5 API: the resume `data` object, the
+ * bodies of `POST /resumes` and `PUT /resumes/{id}`, and the cover-letter
+ * bodies and response. They are the source of truth for the types in
+ * types.ts, which are inferred from them. Only the parts that Resume.md and
+ * the cover-letter `.md` feed are declared in full; see
  * https://rxresu.me/api/openapi/spec.json for the complete schema.
  *
  * API responses are not validated against these schemas yet. Blocks the tools
@@ -263,4 +264,104 @@ export const ResumeSchema = z.object({
   hasPassword: z.boolean(),
   updatedAt: z.string(),
   data: ResumeDataSchema,
+});
+
+// ─── Cover letters ────────────────────────────────────────────────────────────
+
+/** Templates a letter can use; setting one unlinks the resume's design. */
+export const CoverLetterTemplate = {
+  Azurill: "azurill",
+  Bronzor: "bronzor",
+  Chikorita: "chikorita",
+  Ditgar: "ditgar",
+  Ditto: "ditto",
+  Gengar: "gengar",
+  Glalie: "glalie",
+  Kakuna: "kakuna",
+  Lapras: "lapras",
+  Leafish: "leafish",
+  Meowth: "meowth",
+  Onyx: "onyx",
+  Pikachu: "pikachu",
+  Porygon: "porygon",
+  Rhyhorn: "rhyhorn",
+  Scizor: "scizor",
+  Smeargle: "smeargle",
+} as const;
+
+/**
+ * `structured` builds a greeting and sign-off from the recipient fields;
+ * `freeform` prints the recipient block and body as written.
+ */
+export const CoverLetterLayout = {
+  Structured: "structured",
+  Freeform: "freeform",
+} as const;
+
+/** The API's length limits on a letter's text fields, in characters. */
+export const CoverLetterLimit = {
+  NameMax: 100,
+  RecipientMax: 20_000,
+  ContentMax: 100_000,
+  RecipientCompanyMax: 200,
+} as const;
+
+export const CoverLetterTemplateSchema = z.enum(CoverLetterTemplate);
+
+export const CoverLetterLayoutSchema = z.enum(CoverLetterLayout);
+
+/** Body of `POST /cover-letters`. Only `name` is required by the API. */
+export const CreateCoverLetterBodySchema = z.object({
+  name: z.string().min(1).max(CoverLetterLimit.NameMax),
+  /** Plain text: the block above the greeting. */
+  recipient: z.string().max(CoverLetterLimit.RecipientMax).optional(),
+  /** Plain text, not HTML. */
+  content: z.string().max(CoverLetterLimit.ContentMax).optional(),
+  /** Links the sender's details and the design to this resume. */
+  resumeId: z.string().min(1).optional(),
+  applicationId: z.string().min(1).optional(),
+  recipientCompany: z
+    .string()
+    .max(CoverLetterLimit.RecipientCompanyMax)
+    .optional(),
+  template: CoverLetterTemplateSchema.optional(),
+  layout: CoverLetterLayoutSchema.optional(),
+  /** `YYYY-MM-DD`. */
+  letterDate: z.iso.date().optional(),
+});
+
+/**
+ * Body of `PUT /cover-letters/{id}`. Every field is optional except
+ * `expectedRevision`, and the layout can't be changed.
+ */
+export const UpdateCoverLetterBodySchema = CreateCoverLetterBodySchema.omit({
+  layout: true,
+})
+  .partial()
+  .extend({
+    /** The revision last read; a newer one rejects the update. */
+    expectedRevision: z.int().min(1),
+  });
+
+/**
+ * Response of the cover-letter endpoints. Only the fields the tools read are
+ * declared; every other field is carried through untouched.
+ */
+export const CoverLetterSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  revision: z.int().min(1),
+  recipient: z.string(),
+  content: z.string(),
+  layout: CoverLetterLayoutSchema,
+  recipientCompany: z.string(),
+  letterDate: z.iso.date().nullable(),
+  /** The sender's details come live from the linked resume. */
+  senderLinked: z.boolean(),
+  /** The design comes live from the linked resume. */
+  designLinked: z.boolean(),
+  /** A locked letter can't be edited or moved to Trash. */
+  isLocked: z.boolean(),
+  /** The sender's details as printed; other style settings untyped. */
+  style: z.looseObject({ basics: BasicsSchema }),
 });

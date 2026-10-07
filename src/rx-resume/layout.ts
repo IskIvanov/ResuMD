@@ -6,6 +6,7 @@
  * ids per page and column.
  */
 
+import type { ValueOf } from "../utils/type.ts";
 import type { Layout, ResumeData } from "./types.ts";
 
 /** Ids of the built-in sections, as used in `metadata.layout`. */
@@ -24,7 +25,7 @@ export const SectionId = {
   Volunteer: "volunteer",
   References: "references",
 } as const;
-export type SectionId = (typeof SectionId)[keyof typeof SectionId];
+export type SectionId = ValueOf<typeof SectionId>;
 
 /** The order generated resumes use; unlisted sections follow these. */
 export const SECTION_ORDER: readonly SectionId[] = [

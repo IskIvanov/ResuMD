@@ -5,6 +5,7 @@ import {
   EnvVar,
   resolveApiConfig,
   resolveBuilderUrl,
+  resolveLetterDashboardUrl,
 } from "./config.ts";
 
 const env = {
@@ -63,6 +64,32 @@ describe("resolveBuilderUrl", () => {
   it("URL-encodes the resume id", () => {
     expect(resolveBuilderUrl("https://rx.example", "a/b")).toBe(
       "https://rx.example/builder/a%2Fb",
+    );
+  });
+});
+
+describe("resolveLetterDashboardUrl", () => {
+  it("links to the cover letter on the dashboard", () => {
+    expect(resolveLetterDashboardUrl("https://rx.example", "letter-1")).toBe(
+      "https://rx.example/dashboard/letter-1",
+    );
+  });
+
+  it("ignores a trailing slash on the app URL", () => {
+    expect(resolveLetterDashboardUrl("https://rx.example/", "letter-1")).toBe(
+      "https://rx.example/dashboard/letter-1",
+    );
+  });
+
+  it("keeps a local origin with its port", () => {
+    expect(resolveLetterDashboardUrl("http://localhost:3000", "letter-1")).toBe(
+      "http://localhost:3000/dashboard/letter-1",
+    );
+  });
+
+  it("URL-encodes the letter id", () => {
+    expect(resolveLetterDashboardUrl("https://rx.example", "a/b")).toBe(
+      "https://rx.example/dashboard/a%2Fb",
     );
   });
 });

@@ -41,15 +41,19 @@ any flags. More platforms and providers will be added over time, so:
 
 ## Architecture
 
-The code is split into two layers:
+The code is split into two layers, on top of shared utilities:
 
 - **Domain:** what a tool does. Typed inputs, no argv, no `process`.
 - **CLI:** how a tool is used from a terminal. One file per tool declares its
   options and calls the domain; a shared engine prompts, parses and runs.
+- **Utils:** generic helpers with no knowledge of resumes, letters or the CLI
+  (strings, records, Markdown, Zod). Helpers move here from the domain folders
+  over time, so those folders hold only business logic.
 
 The CLI depends on the domain. **Domain folders never import from `src/cli/`.**
 Deleting `src/cli/` removes every terminal entry point, but the domain code
-still compiles and its tests still pass.
+still compiles and its tests still pass. Both layers may import from
+`src/utils/`; **`src/utils/` imports from neither.**
 
 ```
 src/
@@ -57,13 +61,18 @@ src/
 │   ├── parser.ts, merger.ts, render-json.ts, schema.ts, types.ts
 │   └── run.ts                    runSync(paths: SyncPaths, cwd: string): Promise<void>
 ├── generate-rx-resume/           domain
-│   ├── generate.ts, slugify.ts, types.ts
+│   ├── generate.ts, types.ts
 │   └── run.ts                    runGenerate(options: GenerateOptions, env: Env): Promise<void>
 ├── update-rx-resume/             domain
 │   ├── types.ts
 │   └── run.ts                    runUpdate(options: UpdateOptions, env: Env): Promise<void>
-├── rx-resume/                    Reactive Resume adapter: client, config (incl. apiConfigProblem), schema,
-│                                 patch (patchResumeData: get → patch → put, shared by generate and update)
+├── rx-resume/                    Reactive Resume adapter: RxResumeApiClient (resumes and cover letters), config
+│                                 (incl. apiConfigProblem), schema, patch (patchResumeData: get → patch → put)
+├── cover-letter/                 domain
+│   ├── parser.ts, body.ts, schema.ts, types.ts   parseCoverLetter, toCreateBody, toUpdateBody
+│   ├── generate.ts, update.ts, delete.ts         create; get → put at the revision; get → trash → purge
+│   ├── errors.ts                 CoverLetterError (NOT_FREEFORM, LEFT_IN_TRASH)
+│   └── run.ts                    runGenerateCoverLetter, runUpdateCoverLetter, runDeleteCoverLetter
 ├── cv-base64/                    domain, vendor-neutral
 │   ├── codec.ts, schema.ts, types.ts   encodeBase64, decodeBase64 (strict), encodeVerified (round trip)
 │   └── run.ts                    runEncode(options, cwd), runDecode(options, cwd)
@@ -72,33 +81,46 @@ src/
 ├── apply-job/                    domain
 │   ├── payload.ts, types.ts      buildApplicationPayload(applicant, cv, mode)
 │   └── run.ts                    runApply(options: ApplyOptions, env: Env): Promise<void>
+├── utils/                        generic helpers, no domain or CLI imports
+│   ├── string.ts                 slugify, splitList, kebabToCamel (+ KebabToCamel type)
+│   ├── record.ts                 omitUndefined, pickNonEmptyStrings, fillDefaults, camelCaseKeys
+│   ├── markdown.ts               splitSections
+│   ├── schema.ts                 ValidationMessage, requiredText, formatIssuePath, parseOrThrow
+│   ├── url.ts                    trimTrailingSlashes, itemPath
+│   ├── error.ts                  ReasonedError, the base of every error the tools own
+│   └── type.ts                   ValueOf
 └── cli/
     ├── types.ts                  ToolSpec, ToolDefinition, OptionSpec, OptionValues, Prompter, enums
-    ├── define-tool.ts            defineTool(spec) → ToolDefinition; parseToolArgs, the one argv parser
-    ├── errors.ts                 PromptCancelledError
+    ├── define-tool.ts            defineTool(spec) → ToolDefinition with a typed parse, the one argv parser
+    ├── errors.ts                 CliError (one class, a typed reason per CliErrorCode), isCliError
     ├── schema.ts                 pathSchema
     ├── command.ts                formats the equivalent direct command
     ├── prompt-options.ts         required → checkbox → nested prompts → argv
     ├── menu.ts                   builds the menu choices from the registry
     ├── run-cli.ts                orchestrator: a tool by id, or the menu; returns an exit code
     ├── registry.ts               TOOLS: readonly ToolDefinition[]
-    ├── mocks.ts                  fixtures for the engine tests
+    ├── mocks.ts                  fixtures for the CLI tests, built on the registered tools
     ├── index.ts                  `bun run cli`: wires @inquirer/prompts, argv, process.env, existsSync
     └── tools/
         ├── sync-resume.ts        options + run: (paths, { cwd }) => runSync(paths, cwd)
         ├── generate-rx-resume.ts options + run: (options, { env }) => runGenerate(options, env)
         ├── update-rx-resume.ts   options + run: (options, { env }) => runUpdate(options, env)
         ├── delete-rx-resume.ts   options + run: client.deleteResume(id), no domain folder
+        ├── generate-cover-letter.ts, update-cover-letter.ts, delete-cover-letter.ts
+        │                         options + run: (values, { env }) => run…CoverLetter(camelCaseKeys(values), env)
         ├── encode-cv.ts          options + run: (options, { cwd }) => runEncode(options, cwd)
         ├── decode-cv.ts          options + run: (options, { cwd }) => runDecode(options, cwd)
-        └── apply-job.ts          options + run: (values, { env }) => runApply(…, env)
+        └── apply-job.ts          options + run: (values, { env }) => runApply(camelCaseKeys(values), env)
 ```
 
 Rules:
 
 - A tool declares each option once, keyed by flag, in its `defineTool` call.
-  `parseToolArgs` is the only place that turns argv into values. The menu and
-  the direct command both go through it, so the two modes can't drift apart.
+  The tool's `parse` is the only place that turns argv into values. The menu
+  and the direct command both go through it, so the two modes can't drift
+  apart.
+- The CLI throws only `CliError`, with a typed reason, never a bare `Error`.
+  The message is worded in `errors.ts` from the reason.
 - A domain `run.ts` takes typed options, throws errors, and never reads argv or
   calls `process.exit`. A tool that only calls one API endpoint needs no domain
   folder.
@@ -110,14 +132,14 @@ Data flow for one run:
 bun run cli:               menu → prompt-options (answers → argv) → command (print) → confirm ─┐
 bun run cli <id> [flags]:  process.argv ────────────────────────────────────────────────────────┤
                                                                                                 ▼
-          tool.run(argv, { cwd, env }) → parseToolArgs(argv) → typed values → spec.run(values, { cwd, env })
+          tool.run(argv, { cwd, env }) → tool.parse(argv, cwd) → typed values → spec.run(values, { cwd, env })
 ```
 
 ## Types
 
 ```ts
 enum Platform { Site = "Site", ReactiveResume = "Reactive Resume", JobApplication = "Job Application" } // where a tool writes
-enum OptionKind { Path = "path", Text = "text", List = "list" }
+enum OptionKind { Path = "path", Text = "text", List = "list", Choice = "choice" }
 enum FileExtension { Markdown = ".md", Json = ".json", Pdf = ".pdf", Docx = ".docx", Text = ".txt" }
 enum ExitCode { Success = 0, Failure = 1, Cancelled = 130 }
 
@@ -126,7 +148,7 @@ interface PathRule {
   mustExist: boolean;
 }
 
-type DefaultFn = (given: Answers) => string; // sees the values before it
+type DefaultFn = (answers: Answers) => string; // sees the answers before it
 
 interface BaseOption {
   message: string; // prompt text
@@ -136,11 +158,13 @@ interface BaseOption {
 // A path option always carries its rule, so the compiler enforces it.
 interface PathOption extends BaseOption { kind: OptionKind.Path; path: PathRule }
 interface ValueOption extends BaseOption { kind: OptionKind.Text | OptionKind.List }
-type OptionSpec = PathOption | ValueOption;
+interface ChoiceOption extends BaseOption { kind: OptionKind.Choice; choices: readonly string[] }
+type OptionSpec = PathOption | ValueOption | ChoiceOption;
 type OptionSpecs = Readonly<Record<string, OptionSpec>>; // keyed by flag, in prompt order
 
-// What run receives: a List is string[], others string; `| undefined` unless
-// the option is required, has a default, or is a List ([] when absent).
+// What run receives: a List is string[], a Choice the union of its choices,
+// others string; `| undefined` unless the option is required, has a default,
+// or is a List ([] when absent).
 type OptionValues<TOptions extends OptionSpecs> = { … };
 
 interface RunContext { cwd: string; env: Env }
@@ -157,24 +181,44 @@ interface ToolSpec<TOptions extends OptionSpecs> {
 }
 
 // What defineTool returns, and all the menu and run-cli ever see
-interface ToolDefinition {
+interface ToolDefinition<TValues extends ResolvedValues = ResolvedValues> {
   id, title, description, platform, preflight;
   command: string; // "bun run cli <id>", used in the printed command
   usage: string; // built from the options
   options: readonly OptionDescriptor[]; // OptionSpec & { flag }
-  run: (argv: string[], context: RunContext) => Promise<void>; // parseToolArgs → spec.run
+  parse(argv: readonly string[], cwd: string): TValues; // argv → typed values, no run
+  run(argv: readonly string[], context: RunContext): Promise<void>; // parse → spec.run
 }
+
+// The one error the CLI throws: a reason per code, worded in errors.ts
+type CliErrorReason =
+  | { code: CliErrorCode.MissingOption; flag; placeholder; usage }
+  | { code: CliErrorCode.InvalidChoice; flag; choices }
+  | { code: CliErrorCode.UnderivableDefault; flag; source }
+  | { code: CliErrorCode.PromptCancelled };
+class CliError<TReason extends CliErrorReason> extends ReasonedError<TReason> {}
 ```
 
 `defineTool` has a `const` type parameter, so option kinds and `required: true`
-are inferred as literals and `run`'s values are typed without annotations. Its
-one `as` cast is in `parseToolArgs`, which builds the values object key by key.
+are inferred as literals and `run`'s values are typed without annotations. It
+returns `ToolDefinition<OptionValues<TOptions>>`, so a tool's `parse` is typed
+too; the registry erases that to `ToolDefinition`. Its one `as` cast is in
+`parseToolArgs`, which builds the values object key by key.
+
+`parse` works in three steps, each with its own data:
+
+1. **answers:** the flags given on argv, then each missing option's default
+   (`fillDefaults`, in declaration order, each seeing the answers before it).
+2. **checks:** every required option has an answer, every choice a valid one;
+   otherwise a `CliError` (`MISSING_OPTION`, `INVALID_CHOICE`).
+3. **values:** each answer converted for its kind: absolute paths, split
+   lists, the choice's union.
 
 `Prompter` uses the CLI's own types, including its own separator choice. Only
 `src/cli/index.ts` imports `@inquirer/prompts`. It adapts the library to
 `Prompter`, mapping separator choices to `new Separator()` and rethrowing
-`ExitPromptError` as a CLI-owned `PromptCancelledError`. `run-cli.ts` never
-imports the library.
+`ExitPromptError` as a CLI-owned `CliError` with code `PROMPT_CANCELLED`.
+`run-cli.ts` never imports the library.
 
 UI strings (`"Run it?"`, `"Exit"`, `"Cancelled."`, and so on) live in one
 `CliLabel` enum in `types.ts`. Fixed sets are plain `enum`s, not `const enum`:
@@ -225,17 +269,18 @@ A tool whose `preflight(env)` returns a reason is shown with that reason as
 
 Per kind:
 
-| Kind   | Prompt  | Validation              | Argv value                |
-| ------ | ------- | ----------------------- | ------------------------- |
-| `Path` | `input` | `pathSchema`, see below | as typed                  |
-| `Text` | `input` | non-empty when required | trimmed text              |
-| `List` | `input` | none                    | comma-separated, as typed |
+| Kind     | Prompt   | Validation                    | Argv value                |
+| -------- | -------- | ----------------------------- | ------------------------- |
+| `Path`   | `input`  | `pathSchema`, see below       | as typed                  |
+| `Text`   | `input`  | non-empty when required       | trimmed text              |
+| `List`   | `input`  | none                          | comma-separated, as typed |
+| `Choice` | `select` | none: a select can't be wrong | the picked value          |
 
-A future tool with a fixed set of values (e.g. a target language) adds
-`OptionKind.Choice` with a `choices` field, mapped to `select`. That's one new
-case in `prompt-options.ts`, added with the first tool that needs it.
-`apply-job`'s `--mode` is plain `Text` instead: with two values, its domain
-checks it (`parseApplyMode`).
+A `Choice` declares its values in `choices`, and `run` receives their union,
+not `string`. In flag mode, `parseToolArgs` rejects any other value with
+`--template must be one of azurill, …`. The cover-letter tools' `--template`
+is the first one. `apply-job`'s `--mode` is plain `Text` instead: with two
+values, its domain checks it (`parseApplyMode`).
 
 ### 4. Path schema (interactive only)
 
@@ -256,19 +301,21 @@ it from the same `cwd`, exactly as in direct mode. The prompt's `validate` runs
 
 Rules per tool:
 
-| Tool               | Option       | Extensions           | mustExist | Required |
-| ------------------ | ------------ | -------------------- | --------- | -------- |
-| sync               | `--cv`       | `.md`                | yes       | yes      |
-| sync               | `--resume`   | `.md`                | yes       | yes      |
-| sync               | `--json`     | `.json`              | no        | no       |
-| sync               | `--template` | `.json`              | yes       | no       |
-| generate-rx-resume | `--resume`   | `.md`                | yes       | yes      |
-| update-rx-resume   | `--resume`   | `.md`                | yes       | yes      |
-| encode-cv          | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
-| encode-cv          | `--out`      | `.txt`               | no        | no       |
-| decode-cv          | `--base64`   | `.txt`               | yes       | yes      |
-| decode-cv          | `--out`      | `.pdf` `.docx` `.md` | no        | yes      |
-| apply-job          | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
+| Tool                  | Option       | Extensions           | mustExist | Required |
+| --------------------- | ------------ | -------------------- | --------- | -------- |
+| sync                  | `--cv`       | `.md`                | yes       | yes      |
+| sync                  | `--resume`   | `.md`                | yes       | yes      |
+| sync                  | `--json`     | `.json`              | no        | no       |
+| sync                  | `--template` | `.json`              | yes       | no       |
+| generate-rx-resume    | `--resume`   | `.md`                | yes       | yes      |
+| update-rx-resume      | `--resume`   | `.md`                | yes       | yes      |
+| generate-cover-letter | `--letter`   | `.md`                | yes       | yes      |
+| update-cover-letter   | `--letter`   | `.md`                | yes       | yes      |
+| encode-cv             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
+| encode-cv             | `--out`      | `.txt`               | no        | no       |
+| decode-cv             | `--base64`   | `.txt`               | yes       | yes      |
+| decode-cv             | `--out`      | `.pdf` `.docx` `.md` | no        | yes      |
+| apply-job             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
 
 Generate's other options: `--name` (`Text`, required), `--slug` (`Text`,
 optional, default `slugify(name)`) and `--tags` (`List`, optional). Sync's
@@ -276,7 +323,9 @@ defaults for `--json` and `--template` are `DefaultPath` resolved from the
 package root. Update and delete each take `--id` (`Text`, required). Encode's
 `--out` defaults to `<cv>.base64.txt`. Apply's other options are `--vacancy` and
 one `Text` per applicant field, all required, then `--mode` (`Text`, required,
-`test` or `live`).
+`test` or `live`). The cover-letter tools take `--name`, `--resume-id`,
+`--application-id`, `--company` (`Text`) and `--template` (`Choice` of the 17
+template names); see [cover-letter.md](cover-letter.md#cli).
 
 ### 5. Confirm
 
@@ -302,8 +351,8 @@ bun run cli generate-rx-resume --resume resume/Resume.md --name "Jane Doe"
 
 ### Preflight: Reactive Resume tools
 
-`generate-rx-resume`, `update-rx-resume` and `delete-rx-resume` use
-`apiConfigProblem(env)` from `src/rx-resume/config.ts`. It calls
+`generate-rx-resume`, `update-rx-resume`, `delete-rx-resume` and the three
+cover-letter tools use `apiConfigProblem(env)` from `src/rx-resume/config.ts`. It calls
 `resolveApiConfig(env)` and returns the error's message when it throws, or
 `undefined` when it doesn't. Bun loads `.env` from the package root, because
 `bun run cli` runs there.
@@ -385,34 +434,41 @@ Per AGENTS.md: write each test before its implementation (red → green), and ke
 tests next to their modules. **Cover base cases only**: one happy path and the
 main failure for each unit. Don't build exhaustive edge-case matrices.
 
-- One `mocks.ts` per folder: `src/cli/mocks.ts` for the CLI engine (fake
-  prompter, stub options and tools, env objects). They hold typed constants and
-  small factories only: no assertions and no `vi.fn()` setup. Tests import from
-  them and never declare fixtures inline.
+- One `mocks.ts` per folder: `src/cli/mocks.ts` for the CLI tests (fake
+  prompter, env objects, prompt scripts and expected usage lines for the
+  registered tools). They hold typed constants and small factories only: no
+  assertions and no `vi.fn()` setup. Tests import from them and never declare
+  fixtures inline.
+- CLI tests run the real tools from the registry, never tools built for the
+  test. Where a test must not do a tool's work, `withRecordedRuns(tool)` keeps
+  its declaration and records its argv instead.
 - The fake prompter answers from a script keyed by prompt message, and throws on
   any unscripted prompt.
 - There are no real-terminal tests. The domain `run.ts` files get no new unit
   tests, because their logic is already covered by the parser, merger and
   generate tests.
-- Tool files get no unit tests of their own: their parsing is covered once by
-  `define-tool.test.ts`, and their work by the domain tests.
+- Tool files get no test files of their own. `registry.test.ts` checks every
+  registered tool (usage line, menu placement, preflight, missing flags
+  rejected before any work), `define-tool.test.ts` covers parsing through
+  real tools, and the domain tests cover their work.
 
-| Test file                                       | Base cases                                                                                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                                                   |
-| `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                                                     |
-| `cli/prompt-options.test.ts`                    | required only; one optional flag ticked                                                                                         |
-| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                                                              |
-| `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; usage; run gets typed values                                    |
-| `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id                                       |
-| `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                                                                |
-| `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                                                                |
-| `cv-base64/codec.test.ts`                       | encode; decode; data URL, bad character and empty rejected; round trip passes and fails                                         |
-| `careers-api/schema.test.ts`                    | valid payload; one failure per field rule; every failure listed; Dutch phone formats; request size at and over the limit        |
-| `careers-api/config.test.ts`                    | reads the URL; missing or empty throws; `careersConfigProblem`                                                                  |
-| `careers-api/client.test.ts`                    | POST body and headers; slug encoded; 200 tested; 201 applied; raw response kept; 404 meaning and full response; 429 Retry-After |
-| `careers-api/response.test.ts`                  | JSON body pretty-printed; other text as received; empty body marked; `parseJson`                                                |
-| `apply-job/payload.test.ts`                     | fields mapped; live sends `test: false`; extension case; every invalid field listed; mode                                       |
+| Test file                                       | Base cases                                                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                                                         |
+| `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                                                           |
+| `cli/prompt-options.test.ts`                    | required only; one optional flag ticked; choice offered in a select                                                                   |
+| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                                                                    |
+| `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; choice parsed and typed; invalid choice; usage; run parses first      |
+| `cli/registry.test.ts`                          | every tool: menu layout, usage line, disabled until `.env` has its settings, missing flags rejected; cover-letter tools in order      |
+| `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id                                             |
+| `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                                                                      |
+| `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                                                                      |
+| `cv-base64/codec.test.ts`                       | encode; decode; data URL, bad character and empty rejected; round trip passes and fails                                               |
+| `careers-api/schema.test.ts`                    | valid payload; one failure per field rule; every failure listed; Dutch phone formats; request size at and over the limit              |
+| `careers-api/config.test.ts`                    | reads the URL; missing or empty throws; `careersConfigProblem`                                                                        |
+| `careers-api/client.test.ts`                    | POST body and headers; slug encoded; 200 tested; 201 applied; raw response kept; 404 meaning and full response; 429 Retry-After       |
+| `careers-api/response.test.ts`                  | JSON body pretty-printed; other text as received; empty body marked; `parseJson`                                                      |
+| `apply-job/payload.test.ts`                     | fields mapped; live sends `test: false`; extension case; every invalid field listed; mode                                             |
 
 ## Delivery
 

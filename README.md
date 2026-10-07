@@ -5,15 +5,18 @@ else it has to live: a personal website, a CV builder or an application form.
 
 ## What's included
 
-| Tool                 | What it does                                                                                                                                                                                              |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sync-resume`        | Parses `Resume.md` and merges the text into a site CV (Markdown with YAML frontmatter). It then patches a [Reactive Resume](https://rxresu.me) JSON export, which you can re-import into Reactive Resume. |
-| `generate-rx-resume` | Parses `Resume.md` and creates a new resume in [Reactive Resume](https://rxresu.me) through its API, filled with your personal details, summary and every section of the resume.                          |
-| `update-rx-resume`   | Parses `Resume.md` and rewrites an existing resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints. Layout, template and picture are kept.            |
-| `delete-rx-resume`   | Permanently deletes a resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints.                                                                         |
-| `encode-cv`          | Encodes a CV (`.pdf`, `.docx` or `.md`) as bare base64 and checks that it decodes back to the same bytes.                                                                                                 |
-| `decode-cv`          | Decodes a base64 text file back into a CV, so you can open it and see exactly what an API receives.                                                                                                       |
-| `apply-careers-api`  | Validates a job application and sends it to the Careers API, as a test call that saves nothing or for real.                                                                                               |
+| Tool                    | What it does                                                                                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync-resume`           | Parses `Resume.md` and merges the text into a site CV (Markdown with YAML frontmatter). It then patches a [Reactive Resume](https://rxresu.me) JSON export, which you can re-import into Reactive Resume. |
+| `generate-rx-resume`    | Parses `Resume.md` and creates a new resume in [Reactive Resume](https://rxresu.me) through its API, filled with your personal details, summary and every section of the resume.                          |
+| `update-rx-resume`      | Parses `Resume.md` and rewrites an existing resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints. Layout, template and picture are kept.            |
+| `delete-rx-resume`      | Permanently deletes a resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints.                                                                         |
+| `generate-cover-letter` | Parses a cover-letter `.md` and creates a cover letter in [Reactive Resume](https://rxresu.me) through its API, linked to a resume for the sender's details and design.                                   |
+| `update-cover-letter`   | Parses a cover-letter `.md` and rewrites an existing cover letter in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-cover-letter` prints.                                 |
+| `delete-cover-letter`   | Permanently deletes a cover letter in [Reactive Resume](https://rxresu.me) through its API: moves it to Trash, then purges it.                                                                            |
+| `encode-cv`             | Encodes a CV (`.pdf`, `.docx` or `.md`) as bare base64 and checks that it decodes back to the same bytes.                                                                                                 |
+| `decode-cv`             | Decodes a base64 text file back into a CV, so you can open it and see exactly what an API receives.                                                                                                       |
+| `apply-careers-api`     | Validates a job application and sends it to the Careers API, as a test call that saves nothing or for real.                                                                                               |
 
 Run any tool from an interactive menu (`bun run cli`) or directly with
 `bun run cli <tool> [flags]`.
@@ -50,6 +53,9 @@ Before running, it prints the matching direct command and asks to confirm:
   Generate resume — create a new resume in Reactive Resume via its API
   Update resume — rewrite an existing resume in Reactive Resume from Resume.md
   Delete resume — permanently delete a resume in Reactive Resume via its API
+  Generate cover letter — create a cover letter in Reactive Resume from a .md
+  Update cover letter — rewrite an existing cover letter in Reactive Resume from a .md
+  Delete cover letter — permanently delete a cover letter in Reactive Resume via its API
  ── Careers API ──
   Encode CV — encode a CV as base64 and check it decodes back
   Decode CV — decode base64 text back into a CV to open and check
@@ -61,6 +67,8 @@ Before running, it prints the matching direct command and asks to confirm:
   shows each default.
 - Paths are checked as you type. An unsupported extension (`Resume.cp`) or a
   missing file is rejected with a message.
+- An option with a fixed set of values, such as `--template`, is picked from a
+  list.
 - A tool that can't run is listed as unavailable, with the reason. For example,
   `generate-rx-resume` is unavailable until `.env` has the Reactive Resume
   settings.
@@ -79,6 +87,14 @@ replaced:
 
 Entries in `Resume.md` with no match in the target are skipped with a warning.
 Nothing gets added or removed.
+
+### Cover letters
+
+`generate-cover-letter`, `update-cover-letter` and `delete-cover-letter` manage
+a Reactive Resume cover letter from one hand-edited `.md`, the way `Resume.md`
+drives a resume: the `.md` holds the letter's text, and flags carry the rest.
+The `.md` format, the flags and what each tool prints are in
+[docs/cover-letter.md](docs/cover-letter.md).
 
 ## Resume data
 
@@ -120,8 +136,8 @@ Each folder in `src/` keeps its Zod schemas in `schema.ts` and its types in
 `types.ts`. Data shapes are inferred from the schemas with `z.infer`; declare a
 type by hand only when it is not data, such as CLI options or the API client.
 
-Tests use the synthetic fixtures in `src/sync-resume/fixtures/`, never the real
-resume.
+Tests use the synthetic fixtures in `src/sync-resume/fixtures/` and
+`src/cover-letter/fixtures/`, never a real resume or letter.
 
 ### Layout
 

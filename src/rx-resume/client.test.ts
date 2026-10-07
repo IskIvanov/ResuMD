@@ -1,9 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
+import { ApiKeyHeader, RxResumeApiClient, RxResumeApiError } from "./client.ts";
 import {
-  ApiKeyHeader,
-  createRxResumeClient,
-  RxResumeApiError,
-} from "./client.ts";
+  coverLetter,
+  createCoverLetterBody,
+  LETTER_ID,
+  LETTER_REVISION,
+  updateCoverLetterBody,
+} from "./mocks.ts";
 import type { FetchFn, Resume, ResumeData } from "./types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -34,7 +37,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 /** Builds a client around a fetch stub that always returns `response`. */
 function setup(response: Response, baseUrl = BASE_URL) {
   const fetch = vi.fn<FetchFn>().mockResolvedValue(response);
-  const client = createRxResumeClient({ baseUrl, apiKey: API_KEY, fetch });
+  const client = new RxResumeApiClient({ baseUrl, apiKey: API_KEY, fetch });
   return { client, fetch };
 }
 
@@ -113,6 +116,82 @@ describe("updateResume", () => {
     expect(request.url).toBe(`${BASE_URL}/resumes/resume-1`);
     expect(request.method).toBe("PUT");
     expect(request.body).toEqual({ name: "Renamed" });
+  });
+});
+
+// ─── Cover letters ────────────────────────────────────────────────────────────
+
+describe("createCoverLetter", () => {
+  it("POSTs the body to /cover-letters and returns the letter", async () => {
+    const { client, fetch } = setup(jsonResponse(coverLetter));
+    await expect(
+      client.createCoverLetter(createCoverLetterBody),
+    ).resolves.toEqual(coverLetter);
+
+    const request = firstRequest(fetch);
+    expect(request.url).toBe(`${BASE_URL}/cover-letters`);
+    expect(request.method).toBe("POST");
+    expect(request.headers.get(ApiKeyHeader)).toBe(API_KEY);
+    expect(request.body).toEqual(createCoverLetterBody);
+  });
+});
+
+describe("getCoverLetter", () => {
+  it("GETs /cover-letters/{id} and returns the letter", async () => {
+    const { client, fetch } = setup(jsonResponse(coverLetter));
+    await expect(client.getCoverLetter(LETTER_ID)).resolves.toEqual(
+      coverLetter,
+    );
+
+    const request = firstRequest(fetch);
+    expect(request.url).toBe(`${BASE_URL}/cover-letters/${LETTER_ID}`);
+    expect(request.method).toBe("GET");
+    expect(request.headers.get(ApiKeyHeader)).toBe(API_KEY);
+    expect(request.body).toBeUndefined();
+  });
+});
+
+describe("updateCoverLetter", () => {
+  it("PUTs the body to /cover-letters/{id} and returns the letter", async () => {
+    const { client, fetch } = setup(jsonResponse(coverLetter));
+    await expect(
+      client.updateCoverLetter(LETTER_ID, updateCoverLetterBody),
+    ).resolves.toEqual(coverLetter);
+
+    const request = firstRequest(fetch);
+    expect(request.url).toBe(`${BASE_URL}/cover-letters/${LETTER_ID}`);
+    expect(request.method).toBe("PUT");
+    expect(request.headers.get(ApiKeyHeader)).toBe(API_KEY);
+    expect(request.body).toEqual(updateCoverLetterBody);
+  });
+});
+
+describe("trashCoverLetter", () => {
+  it("DELETEs /cover-letters/{id} with the expected revision", async () => {
+    const { client, fetch } = setup(new Response(null, { status: 200 }));
+    await expect(
+      client.trashCoverLetter(LETTER_ID, LETTER_REVISION),
+    ).resolves.toBeUndefined();
+
+    const request = firstRequest(fetch);
+    expect(request.url).toBe(`${BASE_URL}/cover-letters/${LETTER_ID}`);
+    expect(request.method).toBe("DELETE");
+    expect(request.headers.get(ApiKeyHeader)).toBe(API_KEY);
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(request.body).toEqual({ expectedRevision: LETTER_REVISION });
+  });
+});
+
+describe("purgeCoverLetter", () => {
+  it("DELETEs /documents/letter/{id} without a body", async () => {
+    const { client, fetch } = setup(new Response(null, { status: 200 }));
+    await expect(client.removeCoverLetter("a/b")).resolves.toBeUndefined();
+
+    const request = firstRequest(fetch);
+    expect(request.url).toBe(`${BASE_URL}/documents/letter/a%2Fb`);
+    expect(request.method).toBe("DELETE");
+    expect(request.headers.get(ApiKeyHeader)).toBe(API_KEY);
+    expect(request.body).toBeUndefined();
   });
 });
 

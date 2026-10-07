@@ -1,26 +1,30 @@
 /**
  * mocks.ts
  *
- * Every fixture the CLI engine tests use: a scripted fake prompter, stub
- * options and tools, and environments. Typed constants and small factories
- * only.
+ * Every fixture the CLI tests use: a scripted fake prompter, environments,
+ * prompt scripts for the registered tools and what each tool should show.
+ * Tests run the real tools from the registry; the one double,
+ * withRecordedRuns, keeps a tool's declaration and only replaces its work.
+ * Typed constants and small factories only.
  */
 
 import { resolve } from "path";
-import { defineTool, toOptionDescriptors } from "./define-tool.ts";
-import { PromptCancelledError } from "./errors.ts";
+import { EnvVar as CareersEnvVar } from "../careers-api/config.ts";
+import { EnvVar as RxResumeEnvVar } from "../rx-resume/config.ts";
+import { CliError } from "./errors.ts";
 import type { CliDeps } from "./run-cli.ts";
+import { encodeTool } from "./tools/encode-cv.ts";
+import { generateCoverLetterTool } from "./tools/generate-cover-letter.ts";
+import { generateTool } from "./tools/generate-rx-resume.ts";
 import {
+  CliErrorCode,
   CliLabel,
   FileExtension,
-  OptionKind,
+  MenuAction,
   Platform,
   type Choice,
   type Env,
   type MenuItem,
-  type OptionDescriptor,
-  type OptionSpecs,
-  type OptionValues,
   type PathContext,
   type PathRule,
   type Prompter,
@@ -50,6 +54,22 @@ export const markdownRule: PathRule = {
 
 export const emptyEnv: Env = {};
 
+/** The Reactive Resume settings from `.env`. */
+export const rxResumeEnv: Env = {
+  [RxResumeEnvVar.ApiKey]: "key",
+  [RxResumeEnvVar.BaseUrl]: "https://rx.example/api/openapi",
+  [RxResumeEnvVar.AppUrl]: "https://rx.example",
+};
+
+/** The Careers API settings from `.env`. */
+export const careersEnv: Env = {
+  [CareersEnvVar.ApiUrl]: "https://careers.example/api",
+};
+
+/** Every setting any tool needs, so every preflight passes. */
+export const fullEnv: Env = { ...rxResumeEnv, ...careersEnv };
+
+/** Runs a tool from CWD with no settings, so an API tool fails before a request. */
 export const runContext: RunContext = { cwd: CWD, env: emptyEnv };
 
 // ─── Prompter ─────────────────────────────────────────────────────────────────
@@ -109,145 +129,138 @@ export function createFakePrompter(script: PromptScript): Prompter {
 /** A Prompter whose every prompt is cancelled, as if Ctrl+C was pressed. */
 export function createCancellingPrompter(): Prompter {
   const cancel = async (): Promise<never> => {
-    throw new PromptCancelledError();
+    throw new CliError({ code: CliErrorCode.PromptCancelled });
   };
   return { select: cancel, input: cancel, checkbox: cancel, confirm: cancel };
 }
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
-export enum StubFlag {
-  Resume = "resume",
-  Name = "name",
-  Slug = "slug",
-  Tags = "tags",
+/**
+ * The prompt message of one of a tool's options, so a script answers the
+ * tool's real prompts.
+ *
+ * @example
+ * promptFor(encodeTool, "cv"); // "Path to the CV (.pdf, .docx or .md)"
+ */
+export function promptFor(tool: ToolDefinition, flag: string): string {
+  const option = tool.options.find((candidate) => candidate.flag === flag);
+  if (!option) throw new Error(`${tool.id} has no --${flag}`);
+  return option.message;
 }
 
-export enum StubMessage {
-  Resume = "Path to Resume.md",
-  Name = "Resume name",
-  Slug = "URL slug",
-  Tags = "Tags",
-}
-
-/** One option of each kind; the slug defaults to the lowercased name. */
-export const stubSpecs = {
-  [StubFlag.Resume]: {
-    message: StubMessage.Resume,
-    kind: OptionKind.Path,
-    required: true,
-    path: { extensions: [FileExtension.Markdown], mustExist: true },
-  },
-  [StubFlag.Name]: {
-    message: StubMessage.Name,
-    kind: OptionKind.Text,
-    required: true,
-  },
-  [StubFlag.Slug]: {
-    message: StubMessage.Slug,
-    kind: OptionKind.Text,
-    required: false,
-    default: (given) => (given[StubFlag.Name] ?? "").toLowerCase(),
-  },
-  [StubFlag.Tags]: {
-    message: StubMessage.Tags,
-    kind: OptionKind.List,
-    required: false,
-  },
-} as const satisfies OptionSpecs;
-
-export const stubOptions: readonly OptionDescriptor[] =
-  toOptionDescriptors(stubSpecs);
-
-/** The usage line defineTool builds for stubSpecs under the id "stub". */
-export const STUB_USAGE =
-  "Usage: bun run cli stub --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]";
-
-/** A stub tool plus the argv of every call to its run. */
-export interface StubTool {
+/** A registered tool whose run records its argv instead of doing the work. */
+export interface RecordedTool {
   tool: ToolDefinition;
   calls: string[][];
 }
 
 /**
- * Builds a stub tool that records its runs.
+ * Keeps a tool's id, options and usage, and replaces only its run, so a test
+ * can drive the real tool through the CLI without touching files or APIs.
  *
  * @example
- * const { tool, calls } = createStubTool({ platform: Platform.ReactiveResume });
+ * const { tool, calls } = withRecordedRuns(encodeTool);
  */
-export function createStubTool(
-  overrides: Partial<ToolDefinition> = {},
-): StubTool {
+export function withRecordedRuns(tool: ToolDefinition): RecordedTool {
   const calls: string[][] = [];
-  const tool: ToolDefinition = {
-    id: "stub",
-    title: "Stub tool",
-    description: "does nothing",
-    platform: Platform.Site,
-    command: "bun run stub",
-    usage: "Usage: stub --resume <path> --name <name> [--slug <slug>]",
-    options: stubOptions,
-    run: async (argv) => {
-      calls.push(argv);
+  return {
+    tool: {
+      ...tool,
+      run: async (argv) => {
+        calls.push([...argv]);
+      },
     },
-    ...overrides,
+    calls,
   };
-  return { tool, calls };
 }
 
-/** A defineTool-built stub plus what each of its runs received. */
-export interface DefinedStub {
-  tool: ToolDefinition;
-  runs: { values: OptionValues<typeof stubSpecs>; context: RunContext }[];
-}
+/** generate-cover-letter's required flags; the letter needn't exist to parse. */
+export const GENERATE_LETTER_ARGV: readonly string[] = [
+  "--letter",
+  "letter.md",
+  "--name",
+  "Acme — Frontend",
+  "--resume-id",
+  "resume-1",
+];
 
-/**
- * Builds a stub tool with defineTool that records its parsed runs.
- *
- * @example
- * const { tool, runs } = createDefinedStub();
- */
-export function createDefinedStub(): DefinedStub {
-  const runs: DefinedStub["runs"] = [];
-  const tool = defineTool({
-    id: "stub",
-    title: "Stub tool",
-    description: "does nothing",
-    platform: Platform.Site,
-    options: stubSpecs,
-    run: async (values, context) => {
-      runs.push({ values, context });
-    },
-  });
-  return { tool, runs };
-}
-
-/** Answers that fill every required stub option and tick nothing optional. */
-export const stubRequiredScript: PromptScript = {
-  [StubMessage.Resume]: "resume/Resume.md",
-  [StubMessage.Name]: "Jane Doe",
+/** Fills generate-rx-resume's required options and ticks nothing optional. */
+export const generateRequiredScript: PromptScript = {
+  [promptFor(generateTool, "resume")]: "resume/Resume.md",
+  [promptFor(generateTool, "name")]: "Jane Doe",
   [CliLabel.OptionalFlags]: [],
 };
 
-/** A Site tool and a Reactive Resume tool whose preflight always fails. */
-export const siteTool: ToolDefinition = createStubTool({
-  id: "site",
-  title: "Site tool",
-}).tool;
+/** Fills generate-cover-letter's required options and ticks --template. */
+export const generateLetterTemplateScript: PromptScript = {
+  [promptFor(generateCoverLetterTool, "letter")]: "cv.md",
+  [promptFor(generateCoverLetterTool, "name")]: "Acme — Frontend",
+  [promptFor(generateCoverLetterTool, "resume-id")]: "resume-1",
+  [CliLabel.OptionalFlags]: ["template"],
+  [promptFor(generateCoverLetterTool, "template")]: "onyx",
+};
 
-export const builderTool: ToolDefinition = createStubTool({
-  id: "builder",
-  title: "Builder tool",
-  platform: Platform.ReactiveResume,
-  preflight: () => "Missing API_KEY.",
-}).tool;
+/** Fills encode-cv's one required option and ticks nothing optional. */
+export const encodeRequiredScript: PromptScript = {
+  [promptFor(encodeTool, "cv")]: "cv.md",
+  [CliLabel.OptionalFlags]: [],
+};
 
-/** Picks the stub tool, fills its required options and confirms the run. */
-export const runStubScript: PromptScript = {
-  [CliLabel.PickTool]: "Stub tool",
-  ...stubRequiredScript,
+/** Picks encode-cv from the menu, fills its required option and runs it. */
+export const runEncodeScript: PromptScript = {
+  [CliLabel.PickTool]: encodeTool.title,
+  ...encodeRequiredScript,
   [CliLabel.RunIt]: true,
 };
+
+/** The cover-letter tools, in menu order. */
+export const COVER_LETTER_TOOL_IDS = [
+  "generate-cover-letter",
+  "update-cover-letter",
+  "delete-cover-letter",
+] as const;
+
+/** Tools with no settings to check, so they're never disabled. */
+export const ALWAYS_AVAILABLE_TOOL_IDS: readonly string[] = [
+  "encode-cv",
+  "decode-cv",
+];
+
+/** Every tool's usage line, as `bun run cli` prints it, keyed by tool id. */
+export const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
+  "generate-rx-resume":
+    "Usage: bun run cli generate-rx-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
+  "update-rx-resume":
+    "Usage: bun run cli update-rx-resume --id <id> --resume <path>",
+  "delete-rx-resume": "Usage: bun run cli delete-rx-resume --id <id>",
+  "generate-cover-letter":
+    "Usage: bun run cli generate-cover-letter --letter <path> --name <name> --resume-id <resume-id> [--application-id <application-id>] [--company <company>] [--template <template>]",
+  "update-cover-letter":
+    "Usage: bun run cli update-cover-letter --id <id> --letter <path> [--name <name>] [--company <company>] [--resume-id <resume-id>] [--application-id <application-id>] [--template <template>]",
+  "delete-cover-letter": "Usage: bun run cli delete-cover-letter --id <id>",
+  "encode-cv": "Usage: bun run cli encode-cv --cv <path> [--out <path>]",
+  "decode-cv": "Usage: bun run cli decode-cv --base64 <path> --out <path>",
+  "apply-job":
+    "Usage: bun run cli apply-job --vacancy <vacancy> --first-name <first-name> --last-name <last-name> --email <email> --telephone <telephone> --motivation <motivation> --linkedin-url <linkedin-url> --github-url <github-url> --cv <path> --mode <mode>",
+};
+
+/**
+ * The menu built from every tool, one entry per line: a platform heading, a
+ * tool id, or Exit.
+ */
+export const MENU_LAYOUT: readonly string[] = [
+  `── ${Platform.ReactiveResume} ──`,
+  "generate-rx-resume",
+  "update-rx-resume",
+  "delete-rx-resume",
+  ...COVER_LETTER_TOOL_IDS,
+  `── ${Platform.JobApplication} ──`,
+  "encode-cv",
+  "decode-cv",
+  "apply-job",
+  MenuAction.Exit,
+];
 
 // ─── runCli harness ───────────────────────────────────────────────────────────
 

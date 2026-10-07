@@ -8,6 +8,7 @@
 
 import { runApply } from "../../apply-job/run.ts";
 import { careersConfigProblem } from "../../careers-api/config.ts";
+import { camelCaseKeys } from "../../utils/record.ts";
 import { defineTool } from "../define-tool.ts";
 import {
   FileExtension,
@@ -76,20 +77,6 @@ export const applyTool = defineTool({
     [Option.Mode]: { message: ApplyLabel.Mode, ...REQUIRED_TEXT },
   },
   preflight: careersConfigProblem,
-  run: (values, { env }) =>
-    runApply(
-      {
-        vacancy: values[Option.Vacancy],
-        firstName: values[Option.FirstName],
-        lastName: values[Option.LastName],
-        email: values[Option.Email],
-        telephone: values[Option.Telephone],
-        motivation: values[Option.Motivation],
-        linkedinUrl: values[Option.LinkedIn],
-        githubUrl: values[Option.GitHub],
-        cv: values[Option.Cv],
-        mode: values[Option.Mode],
-      },
-      env,
-    ),
+  // Each kebab-case flag is the camelCase option field of the same name.
+  run: (values, { env }) => runApply(camelCaseKeys(values), env),
 });

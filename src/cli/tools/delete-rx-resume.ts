@@ -6,7 +6,7 @@
  * and rejects a locked resume.
  */
 
-import { createRxResumeClient } from "../../rx-resume/client.ts";
+import { RxResumeApiClient } from "../../rx-resume/client.ts";
 import { apiConfigProblem, resolveApiConfig } from "../../rx-resume/config.ts";
 import type { Env, RxResumeClientConfig } from "../../rx-resume/types.ts";
 import { defineTool } from "../define-tool.ts";
@@ -38,7 +38,7 @@ const runDeleteClient = async (id: string, env: Env): Promise<void> => {
     ...resolveApiConfig(env),
     fetch: globalThis.fetch,
   };
-  const client = createRxResumeClient(config);
+  const client = new RxResumeApiClient(config);
   await client.deleteResume(id);
   console.log(`${DeleteLabel.Deleted} ${id}`);
 };

@@ -7,6 +7,8 @@
  * Run via: bun run resume:sync
  */
 
+import { splitSections } from "../utils/markdown.ts";
+import type { ValueOf } from "../utils/type.ts";
 import { validateParsedResume } from "./schema.ts";
 import type {
   ParsedCertification,
@@ -48,7 +50,7 @@ const SectionHeading = {
   Interests: "Interests",
   References: "References",
 } as const;
-type SectionHeading = (typeof SectionHeading)[keyof typeof SectionHeading];
+type SectionHeading = ValueOf<typeof SectionHeading>;
 
 /** Line prefixes that always open a new logical line (bullet, heading, rule). */
 const BLOCK_START_PREFIXES = ["- ", "#", "---"] as const;
@@ -78,22 +80,6 @@ const WEBSITE_REGEX = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i;
 const REFERENCES_NOTE_REGEX = /^References\b/i;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Splits a Resume.md string into a map of `## Heading` → body.
- * Prepends a newline so the first heading is always found by /\n## /.
- */
-function splitSections(md: string): Record<string, string> {
-  const sections: Record<string, string> = {};
-  const parts = ("\n" + md).split(/\n## /);
-  for (const part of parts.slice(1)) {
-    const newlineIdx = part.indexOf("\n");
-    const heading = part.slice(0, newlineIdx).trim();
-    const body = part.slice(newlineIdx + 1);
-    sections[heading] = body;
-  }
-  return sections;
-}
 
 /**
  * Joins hard-wrapped markdown lines (e.g. Prettier's 80-char wrap) into

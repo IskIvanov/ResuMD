@@ -12,7 +12,7 @@
 
 import { z } from "zod";
 import { Base64Schema } from "../cv-base64/schema.ts";
-import { formatIssuePath } from "../sync-resume/schema.ts";
+import { parseOrThrow } from "../utils/schema.ts";
 import type { ApplicationPayload } from "./types.ts";
 
 /** CV formats the API accepts, spelled as it expects them: no leading dot. */
@@ -178,13 +178,7 @@ export const ApplicationPayloadSchema = z
 export function validateApplicationPayload(
   payload: unknown,
 ): ApplicationPayload {
-  const result = ApplicationPayloadSchema.safeParse(payload);
-  if (result.success) return result.data;
-
-  const failures = result.error.issues.map(
-    (issue) => `  ${formatIssuePath(issue.path)}: ${issue.message}`,
-  );
-  throw new Error([ERROR_HEADING, ...failures].join("\n"));
+  return parseOrThrow(ApplicationPayloadSchema, payload, ERROR_HEADING);
 }
 
 // ─── Reply ────────────────────────────────────────────────────────────────────

@@ -10,25 +10,14 @@
  */
 
 import { z } from "zod";
+import {
+  parseOrThrow,
+  requiredText,
+  ValidationMessage,
+} from "../utils/schema.ts";
 import type { ParsedResume } from "./types.ts";
 
-// ─── Validation messages ──────────────────────────────────────────────────────
-
-/** Messages reported for a parsed Resume.md that misses required content. */
-export const ValidationMessage = {
-  Required: "required",
-  Empty: "needs at least one entry",
-} as const;
-
 const ERROR_HEADING = "Invalid Resume.md:";
-
-/** A string that must be present and non-empty. */
-const requiredText = z
-  .string({
-    error: (issue) =>
-      issue.input === undefined ? ValidationMessage.Required : undefined,
-  })
-  .min(1, ValidationMessage.Required);
 
 // ─── Parsed Resume.md ─────────────────────────────────────────────────────────
 
@@ -114,23 +103,6 @@ export const ParsedResumeSchema = z.object({
 });
 
 /**
- * Formats a Zod issue path the way it is written in code.
- *
- * @param path - Object keys and array indices, outermost first.
- * @returns The path with keys joined by dots and indices in brackets.
- *
- * @example
- * formatIssuePath(["jobs", 2, "role"]); // "jobs[2].role"
- */
-export function formatIssuePath(path: readonly PropertyKey[]): string {
-  return path.reduce<string>((formatted, segment) => {
-    if (typeof segment === "number") return `${formatted}[${segment}]`;
-    const key = String(segment);
-    return formatted ? `${formatted}.${key}` : key;
-  }, "");
-}
-
-/**
  * Checks parser output against ParsedResumeSchema.
  *
  * @param resume - The object assembled by the section parsers.
@@ -144,13 +116,7 @@ export function formatIssuePath(path: readonly PropertyKey[]): string {
  * //   jobs: needs at least one entry
  */
 export function validateParsedResume(resume: unknown): ParsedResume {
-  const result = ParsedResumeSchema.safeParse(resume);
-  if (result.success) return result.data;
-
-  const failures = result.error.issues.map(
-    (issue) => `  ${formatIssuePath(issue.path)}: ${issue.message}`,
-  );
-  throw new Error([ERROR_HEADING, ...failures].join("\n"));
+  return parseOrThrow(ParsedResumeSchema, resume, ERROR_HEADING);
 }
 
 // ─── Site CV frontmatter ──────────────────────────────────────────────────────

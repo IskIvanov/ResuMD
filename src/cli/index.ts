@@ -11,10 +11,15 @@
 
 import { existsSync } from "fs";
 import { checkbox, confirm, input, select, Separator } from "@inquirer/prompts";
-import { PromptCancelledError } from "./errors.ts";
+import { CliError } from "./errors.ts";
 import { TOOLS } from "./registry.ts";
 import { runCli } from "./run-cli.ts";
-import type { Choice, MenuItem, Prompter } from "./types.ts";
+import {
+  CliErrorCode,
+  type Choice,
+  type MenuItem,
+  type Prompter,
+} from "./types.ts";
 
 /** Error names the prompt library uses. Its README checks Ctrl+C by name. */
 enum InquirerError {
@@ -27,7 +32,7 @@ async function cancellable<TValue>(prompt: Promise<TValue>): Promise<TValue> {
     return await prompt;
   } catch (error) {
     if (error instanceof Error && error.name === InquirerError.Exit) {
-      throw new PromptCancelledError();
+      throw new CliError({ code: CliErrorCode.PromptCancelled });
     }
     throw error;
   }

@@ -7,6 +7,7 @@
  */
 
 import type { z } from "zod";
+import type { ValueOf } from "../utils/type.ts";
 import type {
   ApplicationPayloadSchema,
   ApplicationResponseSchema,
@@ -29,7 +30,7 @@ export const ApplyOutcome = {
   /** 201: the application was accepted. */
   Applied: "applied",
 } as const;
-export type ApplyOutcome = (typeof ApplyOutcome)[keyof typeof ApplyOutcome];
+export type ApplyOutcome = ValueOf<typeof ApplyOutcome>;
 
 /** A response as the API sent it, for printing in full. */
 export interface ApiResponse {

@@ -12,7 +12,7 @@ import { readFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { parseResume } from "../sync-resume/parser.ts";
 import { toResumeData } from "../rx-resume/resume-data.ts";
-import { createRxResumeClient } from "../rx-resume/client.ts";
+import { RxResumeApiClient } from "../rx-resume/client.ts";
 import { resolveApiConfig, resolveBuilderUrl } from "../rx-resume/config.ts";
 import type { Env } from "../rx-resume/types.ts";
 import { generateResume } from "./generate.ts";
@@ -40,7 +40,7 @@ export async function runGenerate(
   const config = resolveApiConfig(env);
   const data = toResumeData(parseResume(readFileSync(options.resume, UTF8)));
 
-  const client = createRxResumeClient({
+  const client = new RxResumeApiClient({
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     fetch: globalThis.fetch,

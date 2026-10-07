@@ -6,10 +6,11 @@
  */
 
 import { runGenerate } from "../../generate-rx-resume/run.ts";
-import { slugify } from "../../generate-rx-resume/slugify.ts";
+import { slugify } from "../../utils/string.ts";
 import { apiConfigProblem } from "../../rx-resume/config.ts";
 import { defineTool } from "../define-tool.ts";
-import { FileExtension, OptionKind, Platform } from "../types.ts";
+import { CliError } from "../errors.ts";
+import { CliErrorCode, FileExtension, OptionKind, Platform } from "../types.ts";
 
 const Option = {
   Resume: "resume",
@@ -26,7 +27,6 @@ enum GenerateLabel {
   Name = "Name of the new resume",
   Slug = "URL slug (must be unused)",
   Tags = "Tags, comma-separated",
-  NoSlug = "Cannot derive a slug from",
 }
 
 export const generateTool = defineTool({
@@ -50,7 +50,7 @@ export const generateTool = defineTool({
       message: GenerateLabel.Slug,
       kind: OptionKind.Text,
       required: false,
-      default: (given) => slugify(given[Option.Name] ?? ""),
+      default: (answers) => slugify(answers[Option.Name] ?? ""),
     },
     [Option.Tags]: {
       message: GenerateLabel.Tags,
@@ -61,9 +61,11 @@ export const generateTool = defineTool({
   preflight: apiConfigProblem,
   run: async (options, { env }) => {
     if (!options.slug) {
-      throw new Error(
-        `${GenerateLabel.NoSlug} "${options.name}"; pass --${Option.Slug}`,
-      );
+      throw new CliError({
+        code: CliErrorCode.UnderivableDefault,
+        flag: Option.Slug,
+        source: options.name,
+      });
     }
     await runGenerate(options, env);
   },

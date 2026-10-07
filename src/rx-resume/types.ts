@@ -12,6 +12,10 @@ import type {
   BasicsSchema,
   BasicsCustomFieldSchema,
   CertificationItemSchema,
+  CoverLetterLayoutSchema,
+  CoverLetterSchema,
+  CoverLetterTemplateSchema,
+  CreateCoverLetterBodySchema,
   CreateResumeBodySchema,
   EducationItemSchema,
   ExperienceItemSchema,
@@ -30,11 +34,17 @@ import type {
   SkillItemSchema,
   SkillsSectionSchema,
   SummarySchema,
+  UpdateCoverLetterBodySchema,
   UpdateResumeBodySchema,
   WebsiteSchema,
 } from "./schema.ts";
 
-export { SkillKeywordLayout, SkillLayout } from "./schema.ts";
+export {
+  CoverLetterLayout,
+  CoverLetterTemplate,
+  SkillKeywordLayout,
+  SkillLayout,
+} from "./schema.ts";
 
 // ─── API shapes ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +78,11 @@ export type ResumeData = z.infer<typeof ResumeDataSchema>;
 export type CreateResumeBody = z.infer<typeof CreateResumeBodySchema>;
 export type UpdateResumeBody = z.infer<typeof UpdateResumeBodySchema>;
 export type Resume = z.infer<typeof ResumeSchema>;
+export type CoverLetterTemplate = z.infer<typeof CoverLetterTemplateSchema>;
+export type CoverLetterLayout = z.infer<typeof CoverLetterLayoutSchema>;
+export type CreateCoverLetterBody = z.infer<typeof CreateCoverLetterBodySchema>;
+export type UpdateCoverLetterBody = z.infer<typeof UpdateCoverLetterBodySchema>;
+export type CoverLetter = z.infer<typeof CoverLetterSchema>;
 
 // ─── Parsed subset ────────────────────────────────────────────────────────────
 //
@@ -162,6 +177,25 @@ export interface RxResumeClient {
   updateResume(id: string, body: UpdateResumeBody): Promise<Resume>;
   /** `DELETE /resumes/{id}`; permanent, and rejected for a locked resume. */
   deleteResume(id: string): Promise<void>;
+  /** `POST /cover-letters`; resolves to the new letter. */
+  createCoverLetter(body: CreateCoverLetterBody): Promise<CoverLetter>;
+  /** `GET /cover-letters/{id}`. */
+  getCoverLetter(id: string): Promise<CoverLetter>;
+  /**
+   * `PUT /cover-letters/{id}`; resolves to the updated letter. Rejected when
+   * `expectedRevision` is no longer the letter's revision.
+   */
+  updateCoverLetter(
+    id: string,
+    body: UpdateCoverLetterBody,
+  ): Promise<CoverLetter>;
+  /**
+   * `DELETE /cover-letters/{id}`; moves the letter to Trash. Rejected for a
+   * locked letter or a stale revision.
+   */
+  trashCoverLetter(id: string, expectedRevision: number): Promise<void>;
+  /** `DELETE /documents/letter/{id}`; permanent, only for a letter in Trash. */
+  removeCoverLetter(id: string): Promise<void>;
 }
 
 /** The client methods patchResumeData calls. */
@@ -174,6 +208,14 @@ export type ResumeDataPatch = (data: ResumeData) => ResumeData;
 export interface ApiErrorBody {
   code?: unknown;
   message?: unknown;
+}
+
+export enum ErrorMessages {
+  UnexpectedResponse = "Unexpected response from the API",
+  InvalidId = "Invalid id provided",
+  MissingApiKey = "Missing API key",
+  RxResumeApiError = "Reactive Resume API error",
+  MissingBody = "Missing request body",
 }
 
 /** Environment variables, usually `process.env` after Bun has loaded `.env`. */

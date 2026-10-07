@@ -1,20 +1,32 @@
 /**
  * define-tool.ts
  *
- * Turns a tool's declared options into everything both ways of running it
- * need: the menu's option list, the usage line and one argv parser. A tool
- * declares each option once and its run receives typed values, so the menu
- * and the direct command can't drift apart.
+ * Turns a tool's specs into everything both ways of running it need: the
+ * menu's option list, the usage line and one argv parser. A tool declares
+ * each option once and its run receives typed values, so the menu and the
+ * direct command can't drift apart.
+ *
+ * Parsing argv takes three steps, each with its own data (the terms are
+ * defined in types.ts):
+ * 1. answers: the flags given on argv, then each missing one's default.
+ * 2. checks: every required option has an answer, every choice a valid one.
+ * 3. values: each answer converted for its kind, as run receives it.
  */
 
 import { resolve } from "path";
 import { parseArgs } from "util";
+import { fillDefaults, pickNonEmptyStrings } from "../utils/record.ts";
+import { splitList } from "../utils/string.ts";
+import { CliError } from "./errors.ts";
 import {
+  type Answers,
+  CliErrorCode,
   CliLabel,
   OptionKind,
   type OptionDescriptor,
   type OptionSpecs,
   type OptionValues,
+  type ResolvedValue,
   type ToolDefinition,
   type ToolSpec,
 } from "./types.ts";
@@ -28,18 +40,21 @@ const STRING_FLAG = { type: "string" } as const;
 /**
  * Lists a tool's options with their flags, in declaration order.
  *
- * @param options - The options keyed by flag.
- * @returns One descriptor per option.
+ * @param specs - The tool's specs, keyed by flag.
+ * @returns One option per spec, with its flag.
  *
  * @example
  * toOptionDescriptors({ id: { kind: OptionKind.Text, required: true, message: "Id" } });
  * // [{ flag: "id", kind: "text", required: true, message: "Id" }]
  */
-export function toOptionDescriptors(options: OptionSpecs): OptionDescriptor[] {
-  return Object.entries(options).map(([flag, option]) => ({ ...option, flag }));
+export function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
+  return Object.entries(specs).map(([flag, spec]) => ({ ...spec, flag }));
 }
 
-/** The value hint shown after a flag in the usage line and errors. */
+/**
+ * The value hint shown after a flag in the usage line and errors. A choice
+ * shows `<flag>`, like text; its values are listed when one is rejected.
+ */
 function placeholder(option: OptionDescriptor): string {
   if (option.kind === OptionKind.Path) return CliLabel.PathPlaceholder;
   if (option.kind === OptionKind.List) return CliLabel.ListPlaceholder;
@@ -53,88 +68,106 @@ function formatUsage(
 ): string {
   const flags = options.map((option) => {
     const flag = `--${option.flag} ${placeholder(option)}`;
-    return option.required ? flag : `[${flag}]`;
+    if (option.required) return flag;
+    return `[${flag}]`;
   });
   return [CliLabel.Usage, command, ...flags].join(" ");
 }
 
-/** Splits a comma-separated list, dropping empty entries. */
-function splitList(value: string | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-/** Converts a string value into what run receives for the option's kind. */
-function toValue(
-  option: OptionDescriptor,
-  value: string | undefined,
-  cwd: string,
-): string | string[] | undefined {
-  if (option.kind === OptionKind.List) return splitList(value);
-  if (value === undefined) return undefined;
-  return option.kind === OptionKind.Path ? resolve(cwd, value) : value;
+/** Step 1: the answers given on argv, then each missing option's default. */
+function collectAnswers(
+  options: readonly OptionDescriptor[],
+  argv: readonly string[],
+): Answers {
+  const { values: flags } = parseArgs({
+    args: [...argv],
+    options: Object.fromEntries(options.map(({ flag }) => [flag, STRING_FLAG])),
+    strict: true,
+  });
+  return fillDefaults(
+    pickNonEmptyStrings(flags),
+    options.map((option) => [option.flag, option.default]),
+  );
 }
 
 /**
- * Parses argv against a tool's options.
+ * Step 2: throws a CliError when an answer breaks its option's rules: a
+ * required option without one, or a choice outside its choices.
+ */
+function assertValidAnswer(
+  option: OptionDescriptor,
+  answer: string | undefined,
+  usage: string,
+): void {
+  if (!answer && option.required) {
+    throw new CliError({
+      code: CliErrorCode.MissingOption,
+      flag: option.flag,
+      placeholder: placeholder(option),
+      usage,
+    });
+  }
+  if (answer === undefined || option.kind !== OptionKind.Choice) return;
+  if (option.choices.includes(answer)) return;
+  throw new CliError({
+    code: CliErrorCode.InvalidChoice,
+    flag: option.flag,
+    choices: option.choices,
+  });
+}
+
+/** Step 3: converts an answer into the value run receives for its kind. */
+function toValue(
+  option: OptionDescriptor,
+  answer: string | undefined,
+  cwd: string,
+): ResolvedValue {
+  if (option.kind === OptionKind.List) return splitList(answer);
+  if (answer === undefined) return undefined;
+  if (option.kind === OptionKind.Path) return resolve(cwd, answer);
+  return answer;
+}
+
+/**
+ * Parses argv against a tool's specs.
  *
- * @param options - The tool's options keyed by flag.
+ * @param specs - The tool's specs, keyed by flag.
  * @param argv - Flags and values, without the tool id.
  * @param cwd - Base directory for relative paths.
- * @param usage - Appended to a missing-flag error.
+ * @param usage - Printed under a missing-option error.
  * @returns The typed values: paths absolute, lists split on commas, defaults
- *   applied in declaration order (each sees the values before it).
- * @throws If a required flag is missing or an unknown flag is passed.
- *
- * @example
- * parseToolArgs(options, ["--resume", "Resume.md", "--tags", "a,b"], "/cv", usage);
- * // { resume: "/cv/Resume.md", tags: ["a", "b"] }
+ *   applied in declaration order (each sees the answers before it).
+ * @throws A CliError if a required option has no answer or a choice is given
+ *   a value outside its choices, and parseArgs' error for an unknown flag.
  */
-export function parseToolArgs<TOptions extends OptionSpecs>(
-  options: TOptions,
-  argv: string[],
+function parseToolArgs<TOptions extends OptionSpecs>(
+  specs: TOptions,
+  argv: readonly string[],
   cwd: string,
   usage: string,
 ): OptionValues<TOptions> {
-  const descriptors = toOptionDescriptors(options);
-  const { values: parsed } = parseArgs({
-    args: argv,
-    options: Object.fromEntries(
-      descriptors.map(({ flag }) => [flag, STRING_FLAG]),
-    ),
-    strict: true,
-  });
-
-  const given: Record<string, string> = {};
-  for (const [flag, value] of Object.entries(parsed)) {
-    if (typeof value === "string" && value) given[flag] = value;
+  const options = toOptionDescriptors(specs);
+  const answers = collectAnswers(options, argv);
+  for (const option of options) {
+    assertValidAnswer(option, answers[option.flag], usage);
   }
-
-  const values: Record<string, string | string[] | undefined> = {};
-  for (const option of descriptors) {
-    const value = given[option.flag] ?? option.default?.(given);
-    if (!value && option.required) {
-      throw new Error(
-        `--${option.flag} ${placeholder(option)} ${CliLabel.IsRequired}\n${usage}`,
-      );
-    }
-    if (value !== undefined) given[option.flag] = value;
-    values[option.flag] = toValue(option, value, cwd);
-  }
-  // Built key by key from `options` with each kind's value, so it matches
-  // OptionValues; TypeScript can't follow that through the loop.
+  const values = Object.fromEntries(
+    options.map((option) => [
+      option.flag,
+      toValue(option, answers[option.flag], cwd),
+    ]),
+  );
+  // Built key by key from `specs` with each kind's value, so it matches
+  // OptionValues; TypeScript can't follow that through Object.fromEntries.
   return values as OptionValues<TOptions>;
 }
 
 /**
  * Turns what a tool file declares into what the menu and direct command run.
  *
- * @param spec - The tool's id, menu text, options and typed run.
- * @returns The tool, with its command, usage line, option list and an argv
- *   `run` that parses with parseToolArgs before calling `spec.run`.
+ * @param spec - The tool's id, menu text, specs and typed run.
+ * @returns The tool, with its command, usage line, option list, a typed
+ *   `parse`, and an argv `run` that parses before calling `spec.run`.
  *
  * @example
  * export const deleteTool = defineTool({
@@ -143,13 +176,18 @@ export function parseToolArgs<TOptions extends OptionSpecs>(
  *   run: async ({ id }, { env }) => { … },
  *   …
  * });
+ * deleteTool.parse(["--id", "r1"], cwd); // { id: "r1" }
  */
 export function defineTool<const TOptions extends OptionSpecs>(
   spec: ToolSpec<TOptions>,
-): ToolDefinition {
+): ToolDefinition<OptionValues<TOptions>> {
   const command = `${CLI_COMMAND} ${spec.id}`;
   const options = toOptionDescriptors(spec.options);
   const usage = formatUsage(command, options);
+  const parse = (
+    argv: readonly string[],
+    cwd: string,
+  ): OptionValues<TOptions> => parseToolArgs(spec.options, argv, cwd, usage);
 
   return {
     id: spec.id,
@@ -160,7 +198,8 @@ export function defineTool<const TOptions extends OptionSpecs>(
     usage,
     options,
     preflight: spec.preflight,
-    run: (argv, context) =>
-      spec.run(parseToolArgs(spec.options, argv, context.cwd, usage), context),
+    parse,
+    run: async (argv, runContext) =>
+      spec.run(parse(argv, runContext.cwd), runContext),
   };
 }

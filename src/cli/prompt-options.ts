@@ -17,73 +17,110 @@ import {
   type Validator,
 } from "./types.ts";
 
-/** Rejects an empty value. */
-const requireValue: Validator = (value) =>
-  value.trim() ? true : CliLabel.ValueRequired;
+/** Rejects a blank answer. */
+const rejectBlankAnswer: Validator = (answer) => {
+  if (answer.trim()) return true;
+  return CliLabel.ValueRequired;
+};
 
-/** Picks the validator for an option: the path schema, or non-empty text. */
-function validatorFor(
+/**
+ * The validator for a typed answer: a path option checks its path rule, a
+ * required option rejects a blank answer, and any other option takes anything.
+ */
+function answerValidator(
   option: OptionDescriptor,
-  context: PathContext,
+  pathContext: PathContext,
 ): Validator | undefined {
   if (option.kind === OptionKind.Path) {
-    return toValidator(pathSchema(option.path, context));
+    return toValidator(pathSchema(option.path, pathContext));
   }
-  return option.required ? requireValue : undefined;
+  if (option.required) return rejectBlankAnswer;
+  return undefined;
 }
 
-/** Builds the checkbox entry for an optional flag, with its default shown. */
-function toOptionalChoice(
+/** A select entry that shows one of a choice option's values as itself. */
+function toChoiceEntry(choice: string): Choice<string> {
+  return { name: choice, value: choice };
+}
+
+/** The checkbox entry for an optional flag, showing its default if it has one. */
+function toOptionalFlagEntry(
   option: OptionDescriptor,
   answers: Answers,
 ): Choice<string> {
-  const hint = option.default?.(answers);
-  const name = hint
-    ? `--${option.flag} (${CliLabel.Default}: ${hint})`
-    : `--${option.flag}`;
-  return { name, value: option.flag };
+  const flag = `--${option.flag}`;
+  const defaultAnswer = option.default?.(answers);
+  if (!defaultAnswer) return { name: flag, value: option.flag };
+  return {
+    name: `${flag} (${CliLabel.Default}: ${defaultAnswer})`,
+    value: option.flag,
+  };
+}
+
+/**
+ * Asks for one option's answer. A choice is picked from a select, which
+ * can't produce an invalid value; every other kind is typed and validated.
+ */
+async function askForAnswer(
+  option: OptionDescriptor,
+  prompter: Prompter,
+  pathContext: PathContext,
+): Promise<string> {
+  if (option.kind === OptionKind.Choice) {
+    return prompter.select({
+      message: option.message,
+      choices: option.choices.map(toChoiceEntry),
+    });
+  }
+  return prompter.input({
+    message: option.message,
+    validate: answerValidator(option, pathContext),
+  });
 }
 
 /**
  * Prompts for a tool's options and returns the matching argv.
  *
- * @param options - The tool's option descriptors.
+ * @param options - The tool's options, each with its flag.
  * @param prompter - Where the prompts are shown.
- * @param context - Base directory and existence check for path options.
- * @returns Flags and values in option order; unticked optional flags are left
- *   out, so the tool applies its own defaults. Values are passed as typed: the
- *   tool resolves relative paths from the same working directory.
+ * @param pathContext - Base directory and existence check for path options.
+ * @returns Flags and answers in option order; unticked optional flags are
+ *   left out, so the tool applies its own defaults. Answers are passed as
+ *   typed: the tool resolves relative paths from the same working directory.
  *
  * @example
- * await promptOptions(syncTool.options, prompter, context);
- * // ["--cv", "cv.md", "--resume", "resume/Resume.md"]
+ * await promptOptions(encodeTool.options, prompter, pathContext);
+ * // ["--cv", "cv.md"]
  */
 export async function promptOptions(
   options: readonly OptionDescriptor[],
   prompter: Prompter,
-  context: PathContext,
+  pathContext: PathContext,
 ): Promise<string[]> {
   const answers: Record<string, string> = {};
-  const ask = async (option: OptionDescriptor): Promise<void> => {
-    const value = await prompter.input({
-      message: option.message,
-      validate: validatorFor(option, context),
-    });
-    answers[option.flag] = value.trim();
+  const recordAnswer = async (option: OptionDescriptor): Promise<void> => {
+    const answer = await askForAnswer(option, prompter, pathContext);
+    answers[option.flag] = answer.trim();
   };
 
-  for (const option of options.filter((option) => option.required)) {
-    await ask(option);
+  const requiredOptions = options.filter((option) => option.required);
+  for (const option of requiredOptions) {
+    await recordAnswer(option);
   }
 
-  const optional = options.filter((option) => !option.required);
-  if (optional.length > 0) {
-    const ticked = await prompter.checkbox({
+  const optionalOptions = options.filter((option) => !option.required);
+  if (optionalOptions.length > 0) {
+    const tickedFlags = await prompter.checkbox({
       message: CliLabel.OptionalFlags,
-      choices: optional.map((option) => toOptionalChoice(option, answers)),
+      choices: optionalOptions.map((option) =>
+        toOptionalFlagEntry(option, answers),
+      ),
     });
-    for (const option of optional.filter((o) => ticked.includes(o.flag))) {
-      await ask(option);
+    const tickedOptions = optionalOptions.filter((option) =>
+      tickedFlags.includes(option.flag),
+    );
+    for (const option of tickedOptions) {
+      await recordAnswer(option);
     }
   }
 

@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
+  coverLetter,
+  createCoverLetterBody,
+  invalidLetterFieldCases,
+  updateCoverLetterBody,
+} from "./mocks.ts";
+import {
+  CoverLetterSchema,
+  CreateCoverLetterBodySchema,
   CreateResumeBodySchema,
   ExperienceItemSchema,
   ResumeDataSchema,
   ResumeSchema,
   SkillsSectionSchema,
+  UpdateCoverLetterBodySchema,
   UpdateResumeBodySchema,
 } from "./schema.ts";
 import {
@@ -177,5 +186,57 @@ describe("ResumeSchema", () => {
   it("rejects a response without data", () => {
     const { data: _data, ...withoutData } = resume;
     expect(ResumeSchema.safeParse(withoutData).success).toBe(false);
+  });
+});
+
+// ─── Cover letters ────────────────────────────────────────────────────────────
+
+describe.each([
+  {
+    name: "CreateCoverLetterBodySchema",
+    schema: CreateCoverLetterBodySchema,
+    body: createCoverLetterBody,
+  },
+  {
+    name: "UpdateCoverLetterBodySchema",
+    schema: UpdateCoverLetterBodySchema,
+    body: updateCoverLetterBody,
+  },
+])("$name", ({ schema, body }) => {
+  it("accepts the fixture body", () => {
+    expect(schema.parse(body)).toEqual(body);
+  });
+
+  it.each(invalidLetterFieldCases)("rejects $rule", ({ field }) => {
+    expect(schema.safeParse({ ...body, ...field }).success).toBe(false);
+  });
+});
+
+describe("UpdateCoverLetterBodySchema", () => {
+  it("rejects a body without expectedRevision", () => {
+    const { expectedRevision: _revision, ...withoutRevision } =
+      updateCoverLetterBody;
+    const result = UpdateCoverLetterBodySchema.safeParse(withoutRevision);
+    expect(result.success).toBe(false);
+  });
+
+  it("drops layout, which PUT doesn't take", () => {
+    const parsed = UpdateCoverLetterBodySchema.parse({
+      ...updateCoverLetterBody,
+      layout: "freeform",
+    });
+    expect(parsed).not.toHaveProperty("layout");
+  });
+});
+
+describe("CoverLetterSchema", () => {
+  it("accepts a cover letter response and keeps fields it doesn't declare", () => {
+    const response = { ...coverLetter, createdAt: "2026-10-06T00:00:00Z" };
+    expect(CoverLetterSchema.parse(response)).toEqual(response);
+  });
+
+  it("rejects a response without a revision", () => {
+    const { revision: _revision, ...withoutRevision } = coverLetter;
+    expect(CoverLetterSchema.safeParse(withoutRevision).success).toBe(false);
   });
 });

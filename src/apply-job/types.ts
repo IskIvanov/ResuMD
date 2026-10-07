@@ -5,6 +5,8 @@
  * are inferred from the Zod schemas in ../careers-api/schema.ts.
  */
 
+import type { ValueOf } from "../utils/type.ts";
+
 /** Whether an application is only checked by the API, or really sent. */
 export const ApplyMode = {
   /** `test: true`: the API validates and replies, but saves nothing. */
@@ -12,7 +14,7 @@ export const ApplyMode = {
   /** `test: false`: the application goes to the recruiter. */
   Live: "live",
 } as const;
-export type ApplyMode = (typeof ApplyMode)[keyof typeof ApplyMode];
+export type ApplyMode = ValueOf<typeof ApplyMode>;
 
 /** The applicant's details as typed at the CLI. */
 export interface ApplicantDetails {
