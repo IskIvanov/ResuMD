@@ -128,8 +128,6 @@ export class RxResumeApiClient implements RxResumeClient {
 
     const response = await this.fetch(url, options);
 
-    console.log(await response.clone().text());
-
     if (!response.ok) throw await toApiError(response);
     // DELETE replies with an empty body, which response.json() rejects.
     const text = await response.text();
