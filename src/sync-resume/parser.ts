@@ -259,12 +259,13 @@ export function parseContact(md: string): ParsedContact {
 }
 
 /**
- * Extracts the summary paragraph from a Resume.md string.
+ * Extracts the summary from a Resume.md string as one line: hard-wrapped
+ * lines and paragraphs up to the first rule are joined with spaces.
  * Returns an empty string if the `## Summary` section is missing.
  */
 export function parseSummary(md: string): string {
   const body = splitSections(md)[SectionHeading.Summary];
-  return body ? body.split(/\n---/)[0].trim() : "";
+  return body ? unwrapLines(body.split(/\n---/)[0]).join(" ") : "";
 }
 
 /**
@@ -389,13 +390,14 @@ export function parseLanguages(md: string): ParsedLanguage[] {
 
 /**
  * Extracts the interests from a Resume.md string.
- * Reads the `A · B · C` line of the section, up to the first rule.
+ * Reads the `A · B · C` line of the section, up to the first rule; a
+ * hard-wrapped line is joined first.
  */
 export function parseInterests(md: string): string[] {
   const body = splitSections(md)[SectionHeading.Interests];
   if (!body) return [];
-  return body
-    .split(/\n---/)[0]
+  return unwrapLines(body.split(/\n---/)[0])
+    .join(" ")
     .split(INTEREST_SEPARATOR)
     .map((s) => s.trim())
     .filter(Boolean);
@@ -428,6 +430,7 @@ export function parseReferences(md: string): string[] {
  *   stack, a whole required section, …); the error names each path, e.g.
  *   `jobs[2].role: required`.
  */
+// todo; add a custom section for additional
 export function parseResume(resume_data: string): ParsedResume {
   const ParsedResumeSchema: ParsedResume = {
     contact: parseContact(resume_data),

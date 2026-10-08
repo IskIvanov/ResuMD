@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { ParsedContactSchema } from "./schema.ts";
+import { readFileSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import type { ParsedResume } from "./types.ts";
 import {
   parseContact,
   parseSummary,
@@ -16,6 +19,11 @@ import {
 } from "./parser.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+const RESUME_FIXTURE = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "fixtures/Resume.md"),
+  "utf-8",
+);
 
 const SUMMARY_FIXTURE = `
 ## Summary
@@ -142,6 +150,24 @@ describe("parseSummary", () => {
   it("returns an empty string if ## Summary is missing", () => {
     expect(parseSummary("## Experience\n\nsome content")).toBe("");
   });
+
+  it("joins hard-wrapped lines and paragraphs into one line", () => {
+    const summary = [
+      "## Summary",
+      "",
+      "Senior engineer with 9+ years shipping products, from API design to",
+      "the interface people use every day.",
+      "",
+      "Based in Amsterdam.",
+      "",
+      "---",
+      "",
+      "## Experience",
+    ].join("\n");
+    expect(parseSummary(summary)).toBe(
+      "Senior engineer with 9+ years shipping products, from API design to the interface people use every day. Based in Amsterdam.",
+    );
+  });
 });
 
 // ─── parseExperience ──────────────────────────────────────────────────────────
@@ -182,7 +208,7 @@ describe("parseExperience", () => {
     expect(jobs[0].stack).toBe("React, TypeScript, GraphQL");
   });
 
-  it("handles job with no context paragraph", () => {
+  it("finds the bullets of a job without a context paragraph", () => {
     const jobs = parseExperience(EXPERIENCE_FIXTURE);
     expect(jobs[1].bullets).toEqual(["Owned the returns micro-frontend."]);
   });
@@ -391,11 +417,7 @@ describe("parseContact", () => {
 
   it("leaves email empty when the email is malformed", () => {
     const header = HEADER_FIXTURE.replace("jane.doe@example.com", "jane.doe@");
-    const contact = parseContact(header);
-    expect(contact.email).toBe("");
-    expect(() => ParsedContactSchema.parse(contact)).toThrow(
-      "invalid email format",
-    );
+    expect(parseContact(header).email).toBe("");
   });
 
   it("leaves phone empty when the phone has invalid characters", () => {
@@ -564,6 +586,14 @@ describe("parseInterests", () => {
   it("returns an empty list when the section is missing", () => {
     expect(parseInterests(SKILLS_FIXTURE)).toEqual([]);
   });
+
+  it("keeps an interest whole when the line is hard-wrapped inside it", () => {
+    expect(
+      parseInterests(
+        "## Interests\n\nCycling · Long Distance\nHiking · Travel",
+      ),
+    ).toEqual(["Cycling", "Long Distance Hiking", "Travel"]);
+  });
 });
 
 // ─── parseReferences ──────────────────────────────────────────────────────────
@@ -606,6 +636,86 @@ describe("parseResume", () => {
     return Object.values(sections).join("\n\n---\n\n");
   }
 
+  it("parses the fixture resume into its full structure", () => {
+    const expected: ParsedResume = {
+      contact: {
+        name: "Jane Doe",
+        headline: "Software Engineer",
+        email: "jane.doe@example.com",
+        phone: "",
+        location: "City, Country",
+        website: "example.com",
+        profiles: [
+          { label: "LinkedIn", url: "https://linkedin.com/in/jane-doe" },
+          { label: "GitHub", url: "https://github.com/jane-doe" },
+        ],
+      },
+      summary:
+        "Software engineer with a focus on building reliable products end-to-end, from API design to the interface people use every day.",
+      jobs: [
+        {
+          company: "Example Corp",
+          location: "City",
+          role: "Senior Software Engineer",
+          period: "01/2020 – Present",
+          context: "",
+          bullets: [
+            "Led the migration of a legacy dashboard to a typed component library, cutting release time in half.",
+            "Designed the public REST API used by partner integrations.",
+          ],
+          stack: "TypeScript, React, Node.js",
+          website: "",
+        },
+      ],
+      skillGroups: [
+        { heading: "Languages", items: ["TypeScript", "Python", "SQL"] },
+        { heading: "Frontend", items: ["React", "Vue.js"] },
+      ],
+      eduItems: [
+        {
+          school: "Example University",
+          location: "City",
+          degree: "Bachelor's degree, Computer Science",
+          period: "2012 – 2016",
+          context: "Graduated with honours.",
+          bullets: [
+            "(link) Degree course",
+            "Thesis: Distributed Task Scheduling",
+          ],
+        },
+      ],
+      projects: [
+        {
+          title: "Example Project",
+          context:
+            "A small example project that shows how the resume tools fit together.",
+          stack: "TypeScript, Bun",
+          links: [
+            {
+              label: "GitHub",
+              url: "https://github.com/example/example-project",
+            },
+            { label: "Demo", url: "https://example.com/demo" },
+          ],
+        },
+      ],
+      certifications: [
+        {
+          title: "Example Certification",
+          issuer: "Example Issuer",
+          credentialIds: ["EX-0001"],
+        },
+      ],
+      languages: [
+        { language: "English", fluency: "Native" },
+        { language: "Dutch", fluency: "Conversational" },
+      ],
+      interests: ["Cycling", "Travel"],
+      references: ["References available upon request"],
+    };
+    expect(parseResume(RESUME_FIXTURE)).toEqual(expected);
+  });
+
   it("parses every section of a full resume", () => {
     const parsed = parseResume(buildResume());
 
@@ -623,7 +733,9 @@ describe("parseResume", () => {
 
   it("throws if the email in the header is invalid", () => {
     const header = HEADER_FIXTURE.replace("jane.doe@example.com", "jane.doe@");
-    expect(() => parseResume(buildResume({ header }))).toThrow("contact.email");
+    expect(() => parseResume(buildResume({ header }))).toThrow(
+      "contact.email: invalid email format",
+    );
   });
 
   it("throws if ## Summary is missing", () => {
