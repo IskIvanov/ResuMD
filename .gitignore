@@ -5,6 +5,9 @@ node_modules/
 !README.md
 !src/**/fixtures/*.md
 !docs/**/*.md
+!AGENTS.md
+!CLAUDE.md
+!.claude/skills/**/*.md
 *RxResumeCollection
 *.agents
 skills-lock.json
