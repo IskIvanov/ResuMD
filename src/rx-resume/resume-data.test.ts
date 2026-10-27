@@ -22,7 +22,7 @@ import type {
   ParsedProject,
   ParsedResume,
   ParsedSkillGroup,
-} from "../sync-resume/parser.ts";
+} from "../sync-resume/types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

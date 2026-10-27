@@ -6,7 +6,7 @@ import {
   merge,
 } from "./merger.ts";
 import type { CvData } from "./types.ts";
-import type { ParsedJob } from "./parser.ts";
+import type { ParsedJob } from "./types.ts";
 
 // ─── CvData fixture ───────────────────────────────────────────────────────────
 
