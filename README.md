@@ -1,7 +1,7 @@
 # resume-tools
 
 Keep one `Resume.md` as the source of truth for your CV, and sync it everywhere
-else it has to live: a personal website, a CV builder or an application form.
+else it has to live: a personal website or a CV builder.
 
 ## What's included
 
@@ -14,9 +14,6 @@ else it has to live: a personal website, a CV builder or an application form.
 | `generate-cover-letter` | Parses a cover-letter `.md` and creates a cover letter in [Reactive Resume](https://rxresu.me) through its API, linked to a resume for the sender's details and design.                                   |
 | `update-cover-letter`   | Parses a cover-letter `.md` and rewrites an existing cover letter in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-cover-letter` prints.                                 |
 | `delete-cover-letter`   | Permanently deletes a cover letter in [Reactive Resume](https://rxresu.me) through its API: moves it to Trash, then purges it.                                                                            |
-| `encode-cv`             | Encodes a CV (`.pdf`, `.docx` or `.md`) as bare base64 and checks that it decodes back to the same bytes.                                                                                                 |
-| `decode-cv`             | Decodes a base64 text file back into a CV, so you can open it and see exactly what an API receives.                                                                                                       |
-| `apply-careers-api`     | Validates a job application and sends it to the Careers API, as a test call that saves nothing or for real.                                                                                               |
 
 Run any tool from an interactive menu (`bun run cli`) or directly with
 `bun run cli <tool> [flags]`.
@@ -56,10 +53,6 @@ Before running, it prints the matching direct command and asks to confirm:
   Generate cover letter — create a cover letter in Reactive Resume from a .md
   Update cover letter — rewrite an existing cover letter in Reactive Resume from a .md
   Delete cover letter — permanently delete a cover letter in Reactive Resume via its API
- ── Careers API ──
-  Encode CV — encode a CV as base64 and check it decodes back
-  Decode CV — decode base64 text back into a CV to open and check
-  Apply — validate an application and send it to the careers APIs
   Exit
 ```
 

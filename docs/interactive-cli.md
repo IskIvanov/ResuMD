@@ -73,14 +73,6 @@ src/
 │   ├── generate.ts, update.ts, delete.ts         create; get → put at the revision; get → trash → purge
 │   ├── errors.ts                 CoverLetterError (NOT_FREEFORM, LEFT_IN_TRASH)
 │   └── run.ts                    runGenerateCoverLetter, runUpdateCoverLetter, runDeleteCoverLetter
-├── cv-base64/                    domain, vendor-neutral
-│   ├── codec.ts, schema.ts, types.ts   encodeBase64, decodeBase64 (strict), encodeVerified (round trip)
-│   └── run.ts                    runEncode(options, cwd), runDecode(options, cwd)
-├── careers-api/                  careers API adapter: client, config (incl. careersConfigProblem),
-│                                 schema (ApplicationPayloadSchema, validateApplicationPayload)
-├── apply-job/                    domain
-│   ├── payload.ts, types.ts      buildApplicationPayload(applicant, cv, mode)
-│   └── run.ts                    runApply(options: ApplyOptions, env: Env): Promise<void>
 ├── utils/                        generic helpers, no domain or CLI imports
 │   ├── string.ts                 slugify, splitList, kebabToCamel (+ KebabToCamel type)
 │   ├── record.ts                 omitUndefined, pickNonEmptyStrings, fillDefaults, camelCaseKeys
@@ -106,11 +98,8 @@ src/
         ├── generate-rx-resume.ts options + run: (options, { env }) => runGenerate(options, env)
         ├── update-rx-resume.ts   options + run: (options, { env }) => runUpdate(options, env)
         ├── delete-rx-resume.ts   options + run: client.deleteResume(id), no domain folder
-        ├── generate-cover-letter.ts, update-cover-letter.ts, delete-cover-letter.ts
-        │                         options + run: (values, { env }) => run…CoverLetter(camelCaseKeys(values), env)
-        ├── encode-cv.ts          options + run: (options, { cwd }) => runEncode(options, cwd)
-        ├── decode-cv.ts          options + run: (options, { cwd }) => runDecode(options, cwd)
-        └── apply-job.ts          options + run: (values, { env }) => runApply(camelCaseKeys(values), env)
+        └── generate-cover-letter.ts, update-cover-letter.ts, delete-cover-letter.ts
+                                  options + run: (values, { env }) => run…CoverLetter(camelCaseKeys(values), env)
 ```
 
 Rules:
@@ -138,9 +127,9 @@ bun run cli <id> [flags]:  process.argv ─────────────�
 ## Types
 
 ```ts
-enum Platform { Site = "Site", ReactiveResume = "Reactive Resume", JobApplication = "Job Application" } // where a tool writes
+enum Platform { Site = "Site", ReactiveResume = "Reactive Resume" } // where a tool writes
 enum OptionKind { Path = "path", Text = "text", List = "list", Choice = "choice" }
-enum FileExtension { Markdown = ".md", Json = ".json", Pdf = ".pdf", Docx = ".docx", Text = ".txt" }
+enum FileExtension { Markdown = ".md", Json = ".json" }
 enum ExitCode { Success = 0, Failure = 1, Cancelled = 130 }
 
 interface PathRule {
@@ -279,8 +268,7 @@ Per kind:
 A `Choice` declares its values in `choices`, and `run` receives their union,
 not `string`. In flag mode, `parseToolArgs` rejects any other value with
 `--template must be one of azurill, …`. The cover-letter tools' `--template`
-is the first one. `apply-job`'s `--mode` is plain `Text` instead: with two
-values, its domain checks it (`parseApplyMode`).
+is the first one.
 
 ### 4. Path schema (interactive only)
 
@@ -311,21 +299,14 @@ Rules per tool:
 | update-rx-resume      | `--resume`   | `.md`                | yes       | yes      |
 | generate-cover-letter | `--letter`   | `.md`                | yes       | yes      |
 | update-cover-letter   | `--letter`   | `.md`                | yes       | yes      |
-| encode-cv             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
-| encode-cv             | `--out`      | `.txt`               | no        | no       |
-| decode-cv             | `--base64`   | `.txt`               | yes       | yes      |
-| decode-cv             | `--out`      | `.pdf` `.docx` `.md` | no        | yes      |
-| apply-job             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
 
 Generate's other options: `--name` (`Text`, required), `--slug` (`Text`,
 optional, default `slugify(name)`) and `--tags` (`List`, optional). Sync's
 defaults for `--json` and `--template` are `DefaultPath` resolved from the
-package root. Update and delete each take `--id` (`Text`, required). Encode's
-`--out` defaults to `<cv>.base64.txt`. Apply's other options are `--vacancy` and
-one `Text` per applicant field, all required, then `--mode` (`Text`, required,
-`test` or `live`). The cover-letter tools take `--name`, `--resume-id`,
-`--application-id`, `--company` (`Text`) and `--template` (`Choice` of the 17
-template names); see [cover-letter.md](cover-letter.md#cli).
+package root. Update and delete each take `--id` (`Text`, required). The
+cover-letter tools take `--name`, `--resume-id`, `--application-id`,
+`--company` (`Text`) and `--template` (`Choice` of the 17 template names); see
+[cover-letter.md](cover-letter.md#cli).
 
 ### 5. Confirm
 
@@ -356,12 +337,6 @@ cover-letter tools use `apiConfigProblem(env)` from `src/rx-resume/config.ts`. I
 `resolveApiConfig(env)` and returns the error's message when it throws, or
 `undefined` when it doesn't. Bun loads `.env` from the package root, because
 `bun run cli` runs there.
-
-### Preflight: job applications
-
-`apply-job` uses `careersConfigProblem(env)` from `src/careers-api/config.ts`,
-which needs `CAREERS_API_URL`. `encode-cv` and `decode-cv` need no settings and
-are always available.
 
 ## Providers
 
@@ -457,18 +432,12 @@ main failure for each unit. Don't build exhaustive edge-case matrices.
 | `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                                                         |
 | `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                                                           |
 | `cli/prompt-options.test.ts`                    | required only; one optional flag ticked; choice offered in a select                                                                   |
-| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                                                                    |
+| `cli/menu.test.ts`                              | one separator per platform; disabled reason; `Exit` entry                                                                             |
 | `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; choice parsed and typed; invalid choice; usage; run parses first      |
 | `cli/registry.test.ts`                          | every tool: menu layout, usage line, disabled until `.env` has its settings, missing flags rejected; cover-letter tools in order      |
 | `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id                                             |
 | `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                                                                      |
 | `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                                                                      |
-| `cv-base64/codec.test.ts`                       | encode; decode; data URL, bad character and empty rejected; round trip passes and fails                                               |
-| `careers-api/schema.test.ts`                    | valid payload; one failure per field rule; every failure listed; Dutch phone formats; request size at and over the limit              |
-| `careers-api/config.test.ts`                    | reads the URL; missing or empty throws; `careersConfigProblem`                                                                        |
-| `careers-api/client.test.ts`                    | POST body and headers; slug encoded; 200 tested; 201 applied; raw response kept; 404 meaning and full response; 429 Retry-After       |
-| `careers-api/response.test.ts`                  | JSON body pretty-printed; other text as received; empty body marked; `parseJson`                                                      |
-| `apply-job/payload.test.ts`                     | fields mapped; live sends `test: false`; extension case; every invalid field listed; mode                                             |
 
 ## Delivery
 

@@ -5,11 +5,8 @@
  * defineTool result from src/cli/tools/<tool>.ts.
  */
 
-import { applyTool } from "./tools/apply-job.ts";
-import { decodeTool } from "./tools/decode-cv.ts";
 import { deleteCoverLetterTool } from "./tools/delete-cover-letter.ts";
 import { deleteTool } from "./tools/delete-rx-resume.ts";
-import { encodeTool } from "./tools/encode-cv.ts";
 import { generateCoverLetterTool } from "./tools/generate-cover-letter.ts";
 import { generateTool } from "./tools/generate-rx-resume.ts";
 import { updateCoverLetterTool } from "./tools/update-cover-letter.ts";
@@ -23,7 +20,4 @@ export const TOOLS: readonly ToolDefinition[] = [
   generateCoverLetterTool,
   updateCoverLetterTool,
   deleteCoverLetterTool,
-  encodeTool,
-  decodeTool,
-  applyTool,
 ];

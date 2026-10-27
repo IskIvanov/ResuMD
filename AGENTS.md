@@ -6,9 +6,9 @@ and [docs/interactive-cli.md](docs/interactive-cli.md) for the CLI design.
 ## What this is
 
 A Bun + TypeScript (ESM, strict) CLI that keeps one hand-edited `Resume.md` as
-the source of truth and syncs it elsewhere: a site CV, Reactive Resume (via
-JSON or its API), and a careers-API job application. A cover-letter `.md`
-drives a Reactive Resume cover letter the same way.
+the source of truth and syncs it elsewhere: a site CV and Reactive Resume (via
+JSON or its API). A cover-letter `.md` drives a Reactive Resume cover letter
+the same way.
 
 This folder is a standalone private repo (`IskIvanov/Resume-Tools`) cloned into
 `packages/resume-tools/` of the Portfolio repo, which gitignores it. Run `git`
@@ -69,9 +69,6 @@ from another, move it to `src/utils/` and update its callers (no re-exports).
 | `generate-rx-resume/` | create → fetch defaults → update flow                                                                                                                                                                                     |
 | `update-rx-resume/`   | rewrite an existing resume by id (keeps layout, template, picture)                                                                                                                                                        |
 | `cover-letter/`       | `parser.ts` (cover-letter `.md` → recipient + content), `body.ts` (create/update bodies), `generate.ts`, `update.ts` (GET → PUT with `expectedRevision`), `delete.ts` (trash → purge), `errors.ts`, `run.ts`                         |
-| `cv-base64/`          | encode/decode a CV (`.pdf`/`.docx`/`.md`) as bare base64 with round-trip check                                                                                                                                            |
-| `apply-job/`          | build/validate application payload, send in `test` or `live` mode                                                                                                                                                         |
-| `careers-api/`        | careers API client, config, response formatting                                                                                                                                                                           |
 | `utils/`              | `string.ts` (`slugify`, `splitList`, `kebabToCamel`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`, `camelCaseKeys`), `markdown.ts` (`splitSections`), `schema.ts` (`ValidationMessage`, `requiredText`, `idText`, `formatIssuePath`, `parseOrThrow`), `url.ts` (`trimTrailingSlashes`, `itemPath`), `error.ts` (`ReasonedError`), `type.ts` (`ValueOf`) |
 
 Data flow: `Resume.md` → `parseResume` (Zod-validated; errors name paths like
@@ -88,8 +85,8 @@ Gotchas:
   `TOOLS`, although the README lists it.
 - `delete-rx-resume` has no domain folder; it calls the API in the tool file.
 - `.env` (see `.env.example`): `RXRESUME_API_KEY`, `RXRESUME_API_URL`,
-  `RXRESUME_APP_URL`, `CAREERS_API_URL`. Bun loads it; config modules take an
-  injected `env` object.
+  `RXRESUME_APP_URL`. Bun loads it; config modules take an injected `env`
+  object.
 - `.gitignore` blocks every `*.md` except `README.md`, fixtures, `docs/`,
   `CLAUDE.md` and `.claude/skills/`.
 - Gitignored personal data: `resume/RxResume/Resume.json`, `*.base64.txt`,
