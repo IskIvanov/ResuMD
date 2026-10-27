@@ -18,6 +18,9 @@ import {
 import type { ParsedResume } from "./types.ts";
 
 const ERROR_HEADING = "Invalid Resume.md:";
+/** Most references a job may list. */
+const MAX_REFERENCES = 2;
+const TOO_MANY_REFERENCES = `at most ${MAX_REFERENCES} entries`;
 
 // ─── Parsed Resume.md ─────────────────────────────────────────────────────────
 
@@ -31,7 +34,7 @@ export const ParsedLinkSchema = z.object({
 export const ParsedContactSchema = z.object({
   name: z.string(),
   headline: z.string(),
-  email: z.email("invalid email format"),
+  email: z.email(ValidationMessage.InvalidEmail),
   phone: z.string().regex(/^\+?[0-9\s\-()]*$/, "invalid phone number format"),
   location: z.string(),
   /** As written in Resume.md, with or without a protocol. */
@@ -50,6 +53,16 @@ export const ParsedJobSchema = z.object({
   stack: requiredText,
   /** Company URL from a bare `https://…` line, or an empty string. */
   website: z.string(),
+  /** Reference emails from a `**Reference:** a, b` line; absent without one. */
+  references: z
+    .array(z.email(ValidationMessage.InvalidEmail))
+    .min(1, ValidationMessage.Empty)
+    .max(MAX_REFERENCES, TOO_MANY_REFERENCES)
+    .refine(
+      (references) => new Set(references).size === references.length,
+      ValidationMessage.Duplicate,
+    )
+    .optional(),
 });
 
 export const ParsedSkillGroupSchema = z.object({

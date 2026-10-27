@@ -14,4 +14,10 @@
     "[jsonc]": {
         "editor.defaultFormatter": "biomejs.biome"
     },
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    }
 }

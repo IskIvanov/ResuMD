@@ -50,6 +50,8 @@ Acme Corp builds widgets.
 
 **Tech Stack:** React, TypeScript, GraphQL
 
+**Reference:** manager@acme.example, lead@acme.example
+
 ---
 
 ### Beta Inc — Utrecht
@@ -63,6 +65,29 @@ Acme Corp builds widgets.
 ---
 
 ## Technical Skills
+`.trim();
+
+const PLAIN_REFERENCE_EXPERIENCE_FIXTURE = `
+## Experience
+
+### Acme Corp — Amsterdam
+
+**Senior Engineer** | 01/2023 – Present
+
+**Tech Stack:** React, TypeScript
+
+Reference: manager@acme.example, lead@acme.example
+`.trim();
+
+const UNSPACED_REFERENCE_EXPERIENCE_FIXTURE = `
+## Experience
+
+### Acme Corp — Amsterdam
+
+**Senior Engineer** | 01/2023 – Present
+
+**Tech Stack:** React, TypeScript
+**Reference:** manager@acme.example, lead@acme.example
 `.trim();
 
 const NO_ROLE_EXPERIENCE_FIXTURE = `
@@ -206,6 +231,60 @@ describe("parseExperience", () => {
   it('extracts stack (strips "**Tech Stack:** " prefix)', () => {
     const jobs = parseExperience(EXPERIENCE_FIXTURE);
     expect(jobs[0].stack).toBe("React, TypeScript, GraphQL");
+  });
+
+  it('splits the "**Reference:**" line into its references on ","', () => {
+    const jobs = parseExperience(EXPERIENCE_FIXTURE);
+    expect(jobs[0].references).toEqual([
+      "manager@acme.example",
+      "lead@acme.example",
+    ]);
+  });
+
+  it('reads a "Reference:" line written without bold', () => {
+    const jobs = parseExperience(PLAIN_REFERENCE_EXPERIENCE_FIXTURE);
+    expect(jobs[0].references).toEqual([
+      "manager@acme.example",
+      "lead@acme.example",
+    ]);
+  });
+
+  it('does not take a plain "Reference:" line as the context', () => {
+    const jobs = parseExperience(PLAIN_REFERENCE_EXPERIENCE_FIXTURE);
+    expect(jobs[0].context).toBe("");
+  });
+
+  it.each([
+    "**Reference**: manager@acme.example, lead@acme.example",
+    "**References:** manager@acme.example, lead@acme.example",
+    "References: manager@acme.example, lead@acme.example",
+    "reference: manager@acme.example, lead@acme.example",
+  ])("reads the references, not the context, from %j", (line) => {
+    const [job] = parseExperience(
+      PLAIN_REFERENCE_EXPERIENCE_FIXTURE.replace(
+        "Reference: manager@acme.example, lead@acme.example",
+        line,
+      ),
+    );
+    expect(job.references).toEqual([
+      "manager@acme.example",
+      "lead@acme.example",
+    ]);
+    expect(job.context).toBe("");
+  });
+
+  it("reads a reference line written right under the tech stack", () => {
+    const [job] = parseExperience(UNSPACED_REFERENCE_EXPERIENCE_FIXTURE);
+    expect(job.stack).toBe("React, TypeScript");
+    expect(job.references).toEqual([
+      "manager@acme.example",
+      "lead@acme.example",
+    ]);
+  });
+
+  it("leaves the references undefined when a job has no reference line", () => {
+    const jobs = parseExperience(EXPERIENCE_FIXTURE);
+    expect(jobs[1]).not.toHaveProperty("references");
   });
 
   it("finds the bullets of a job without a context paragraph", () => {
@@ -614,6 +693,12 @@ describe("parseReferences", () => {
   it("returns an empty list when there are no references", () => {
     expect(parseReferences(SKILLS_FIXTURE)).toEqual([]);
   });
+
+  it("ignores a job's References line without a heading", () => {
+    expect(
+      parseReferences("### Engineer\n\nReferences: manager@acme.example"),
+    ).toEqual([]);
+  });
 });
 
 // ─── parseResume ──────────────────────────────────────────────────────────────
@@ -735,6 +820,46 @@ describe("parseResume", () => {
     const header = HEADER_FIXTURE.replace("jane.doe@example.com", "jane.doe@");
     expect(() => parseResume(buildResume({ header }))).toThrow(
       "contact.email: invalid email format",
+    );
+  });
+
+  it("throws if a job's reference is not an email", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "lead@acme.example",
+      "Jane Lead",
+    );
+    expect(() => parseResume(buildResume({ experience }))).toThrow(
+      "jobs[0].references[1]: invalid email format",
+    );
+  });
+
+  it("throws if a job's reference line is empty", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "manager@acme.example, lead@acme.example",
+      "",
+    );
+    expect(() => parseResume(buildResume({ experience }))).toThrow(
+      "jobs[0].references: needs at least one entry",
+    );
+  });
+
+  it("throws if a job lists the same reference twice", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "lead@acme.example",
+      "manager@acme.example",
+    );
+    expect(() => parseResume(buildResume({ experience }))).toThrow(
+      "jobs[0].references: has duplicate entries",
+    );
+  });
+
+  it("throws if a job has more than two references", () => {
+    const experience = EXPERIENCE_FIXTURE.replace(
+      "lead@acme.example",
+      "lead@acme.example, cto@acme.example",
+    );
+    expect(() => parseResume(buildResume({ experience }))).toThrow(
+      "jobs[0].references: at most 2 entries",
     );
   });
 

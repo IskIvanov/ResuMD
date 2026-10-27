@@ -178,6 +178,19 @@ describe("toExperienceItem", () => {
     );
   });
 
+  it("ends the description with the bold-labelled references", () => {
+    const item = toExperienceItem({
+      ...job,
+      references: ["manager@acme.example", "lead@acme.example"],
+    });
+    expect(item.description).toBe(
+      "<p>Acme Corp builds widgets.</p>" +
+        "<p>• Built X</p><p>• Improved Y by 30%</p>" +
+        "<p><strong>Tech Stack:</strong> React, TypeScript</p>" +
+        "<p><strong>Reference:</strong> manager@acme.example, lead@acme.example</p>",
+    );
+  });
+
   it("maps the company URL to the website", () => {
     expect(toExperienceItem(job).website).toEqual({
       url: "https://acme.example/",

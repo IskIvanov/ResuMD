@@ -7,10 +7,12 @@
 
 import { z } from "zod";
 
-/** Messages reported for a value that misses required content. */
+/** Messages reported for a value that is missing, repeated or malformed. */
 export const ValidationMessage = {
   Required: "required",
   Empty: "needs at least one entry",
+  Duplicate: "has duplicate entries",
+  InvalidEmail: "invalid email format",
 } as const;
 
 /** A string that must be present and non-empty. */

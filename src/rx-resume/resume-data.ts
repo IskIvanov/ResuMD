@@ -52,6 +52,9 @@ const NetworkIcon: Record<string, string> = {
 const DEFAULT_LINK_ICON = "link";
 /** Separates the extra project links appended to a description. */
 const LINK_SEPARATOR = " | ";
+/** Labels the bold line of references under a job. */
+const REFERENCE_LABEL = "Reference:";
+const REFERENCE_SEPARATOR = ", ";
 
 // ─── Basics and summary ───────────────────────────────────────────────────────
 
@@ -137,15 +140,22 @@ export function renderSummaryHtml(summary: string): string {
  *
  * @param job - A job parsed from `## Experience`.
  * @returns The company, position, location, period and HTML description
- *   (context + bullets + tech stack), plus the website when the job has a URL.
+ *   (context + bullets + tech stack, then a bold `Reference: a, b` line
+ *   when the job has contacts), plus the website when the job has a URL.
  */
 export function toExperienceItem(job: ParsedJob): ParsedExperienceItem {
+  let description = renderExperienceDescriptionHtml(job);
+  if (job.references?.length) {
+    const references = job.references.join(REFERENCE_SEPARATOR);
+    description += `<p><strong>${REFERENCE_LABEL}</strong> ${references}</p>`;
+  }
+
   return {
     company: job.company,
     position: job.role,
     location: job.location,
     period: job.period,
-    description: renderExperienceDescriptionHtml(job),
+    description,
     ...(job.website && {
       website: { url: job.website, label: "", inlineLink: false },
     }),

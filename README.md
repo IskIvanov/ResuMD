@@ -121,7 +121,14 @@ fails if any of these is missing, and the error names each path, for example
 - a skill group's heading and items
 
 Locations, context paragraphs, bullets, links and the other sections are
-optional.
+optional. A job may add a `**Reference:** a@example.com, b@example.com` line
+with one or two contacts at that employer. The label may be bold or plain, in
+any case, singular or plural (`References:`, `**Reference**:`). Each entry must
+be a distinct email, for example `jobs[0].references[1]: invalid email
+format`. `generate-rx-resume` and `update-rx-resume` add them as a bold
+`Reference: a@example.com, b@example.com` line at the end of the job's
+description. The site CV has no references, so the JSON written from it has
+none either.
 
 ## Development
 

@@ -8,6 +8,7 @@
  */
 
 import { splitSections } from "../utils/markdown.ts";
+import { splitList } from "../utils/string.ts";
 import type { ValueOf } from "../utils/type.ts";
 import { validateParsedResume } from "./schema.ts";
 import type {
@@ -70,6 +71,13 @@ const TITLE_LINE_REGEX = /^\*\*(.+?)\*\* \| (.+)$/;
 const BOLD_LINE_REGEX = /^\*\*(.+)\*\*$/;
 /** Matches a line opening with bold text; group 1 is it, 2 the remainder. */
 const BOLD_PREFIX_REGEX = /^\*\*(.+?)\*\*\s*(.*)$/;
+/**
+ * Matches a `Reference: a, b` line in any case, singular or plural, plain or
+ * bold with the colon inside or outside (`**Reference:**`, `**References**:`);
+ * group 1 is the list.
+ */
+const REFERENCE_LINE_REGEX =
+  /^(?:\*\*references?(?::\*\*|\*\*:)|references?:)\s*(.*)$/i;
 const URL_LINE_REGEX = /^https?:\/\/\S+$/;
 /** Matches `[label](http(s)://url)`; group 1 is the label, 2 the URL. */
 const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
@@ -83,9 +91,10 @@ const REFERENCES_NOTE_REGEX = /^References\b/i;
 
 /**
  * Joins hard-wrapped markdown lines (e.g. Prettier's 80-char wrap) into
- * logical lines. Blank lines and lines starting with a block marker open a new
- * logical line; every other line — indented bullet continuations and plain
- * paragraph continuations alike — is appended to the previous one.
+ * logical lines. Blank lines, lines starting with a block marker and reference
+ * lines open a new logical line; every other line — indented bullet
+ * continuations and plain paragraph continuations alike — is appended to the
+ * previous one.
  */
 function unwrapLines(text: string): string[] {
   const logical: string[] = [];
@@ -93,7 +102,9 @@ function unwrapLines(text: string): string[] {
 
   for (const raw of text.split("\n")) {
     const line = raw.trim();
-    const startsBlock = BLOCK_START_PREFIXES.some((p) => raw.startsWith(p));
+    const startsBlock =
+      BLOCK_START_PREFIXES.some((p) => raw.startsWith(p)) ||
+      REFERENCE_LINE_REGEX.test(raw);
 
     if (line.length === 0 || startsBlock || current === null) {
       if (current !== null) logical.push(current);
@@ -158,6 +169,18 @@ function extractStack(lines: string[]): string {
   return stackLine ? stackLine.slice(TECH_STACK_PREFIX.length).trim() : "";
 }
 
+/**
+ * The references of a block's `Reference: a, b` line, bold or plain, or
+ * undefined without one.
+ */
+function extractReferences(lines: string[]): string[] | undefined {
+  for (const line of lines) {
+    const match = REFERENCE_LINE_REGEX.exec(line);
+    if (match) return splitList(match[1]);
+  }
+  return undefined;
+}
+
 /** True for a line made up only of markdown links and `|` separators. */
 function isLinkLine(line: string): boolean {
   const rest = line.replace(MARKDOWN_LINK_REGEX, "");
@@ -165,14 +188,15 @@ function isLinkLine(line: string): boolean {
 }
 
 /**
- * True for a plain paragraph: not a bullet, bold line, heading, bare URL or
- * line of links.
+ * True for a plain paragraph: not a bullet, bold line, heading, reference
+ * line, bare URL or line of links.
  */
 function isParagraph(line: string): boolean {
   return (
     !line.startsWith(BULLET_PREFIX) &&
     !line.startsWith("**") &&
     !line.startsWith("#") &&
+    !REFERENCE_LINE_REGEX.test(line) &&
     !URL_LINE_REGEX.test(line) &&
     !isLinkLine(line)
   );
@@ -277,6 +301,7 @@ export function parseExperience(md: string): ParsedJob[] {
     const titleIdx = lines.findIndex((l) => TITLE_LINE_REGEX.test(l));
     const titleMatch =
       titleIdx >= 0 ? TITLE_LINE_REGEX.exec(lines[titleIdx]) : null;
+    const references = extractReferences(lines);
 
     return {
       company: extractName(lines[0]),
@@ -287,6 +312,7 @@ export function parseExperience(md: string): ParsedJob[] {
       bullets: extractBullets(lines),
       stack: extractStack(lines),
       website: lines.find((l) => URL_LINE_REGEX.test(l)) ?? "",
+      ...(references !== undefined && { references }),
     };
   });
 }
@@ -415,7 +441,9 @@ export function parseReferences(md: string): string[] {
       l.startsWith(BULLET_PREFIX) ? l.slice(BULLET_PREFIX.length).trim() : l,
     );
   }
-  return unwrapLines(md).filter((l) => REFERENCES_NOTE_REGEX.test(l));
+  return unwrapLines(md).filter(
+    (l) => REFERENCES_NOTE_REGEX.test(l) && !REFERENCE_LINE_REGEX.test(l),
+  );
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
