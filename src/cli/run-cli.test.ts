@@ -3,28 +3,27 @@ import { runCli } from "./run-cli.ts";
 import {
   createCancellingPrompter,
   createCliHarness,
-  fullEnv,
-  runGenerateScript,
+  runEncodeScript,
   withRecordedRuns,
 } from "./mocks.ts";
 import { deleteCoverLetterTool } from "./tools/delete-cover-letter.ts";
-import { generateTool } from "./tools/generate-rx-resume.ts";
+import { encodeTool } from "./tools/encode-cv.ts";
 import { CliLabel, ExitCode } from "./types.ts";
 
 describe("runCli", () => {
   it("prints each tool's usage and fails without a terminal", async () => {
     const { deps, errors } = createCliHarness(
-      [generateTool],
+      [encodeTool],
       {},
       { isTTY: false },
     );
 
     expect(await runCli(deps)).toBe(ExitCode.Failure);
-    expect(errors.join("\n")).toContain(generateTool.usage);
+    expect(errors.join("\n")).toContain(encodeTool.usage);
   });
 
   it("exits cleanly when Exit is picked", async () => {
-    const { tool, calls } = withRecordedRuns(generateTool);
+    const { tool, calls } = withRecordedRuns(encodeTool);
     const { deps } = createCliHarness([tool], {
       [CliLabel.PickTool]: CliLabel.Exit,
     });
@@ -34,18 +33,12 @@ describe("runCli", () => {
   });
 
   it("prints the command and runs the tool with the answers", async () => {
-    const { tool, calls } = withRecordedRuns(generateTool);
-    const { deps, output } = createCliHarness([tool], runGenerateScript, {
-      env: fullEnv,
-    });
+    const { tool, calls } = withRecordedRuns(encodeTool);
+    const { deps, output } = createCliHarness([tool], runEncodeScript);
 
     expect(await runCli(deps)).toBe(ExitCode.Success);
-    expect(output).toContain(
-      'bun run cli generate-rx-resume --resume resume/Resume.md --name "Jane Doe"',
-    );
-    expect(calls).toEqual([
-      ["--resume", "resume/Resume.md", "--name", "Jane Doe"],
-    ]);
+    expect(output).toContain("bun run cli encode-cv --cv cv.md");
+    expect(calls).toEqual([["--cv", "cv.md"]]);
   });
 
   it("prints the error and fails when the tool throws", async () => {
@@ -63,22 +56,19 @@ describe("runCli", () => {
   });
 
   it("runs the tool named by the first argument, without the menu", async () => {
-    const { tool, calls } = withRecordedRuns(generateTool);
+    const { tool, calls } = withRecordedRuns(encodeTool);
     const { deps } = createCliHarness(
       [tool],
       {},
-      {
-        argv: ["generate-rx-resume", "--resume", "cv.md", "--name", "Jane"],
-        isTTY: false,
-      },
+      { argv: ["encode-cv", "--cv", "cv.md"], isTTY: false },
     );
 
     expect(await runCli(deps)).toBe(ExitCode.Success);
-    expect(calls).toEqual([["--resume", "cv.md", "--name", "Jane"]]);
+    expect(calls).toEqual([["--cv", "cv.md"]]);
   });
 
   it("lists every tool's usage and fails for an unknown tool", async () => {
-    const { tool, calls } = withRecordedRuns(generateTool);
+    const { tool, calls } = withRecordedRuns(encodeTool);
     const { deps, errors } = createCliHarness([tool], {}, { argv: ["nope"] });
 
     expect(await runCli(deps)).toBe(ExitCode.Failure);
@@ -89,7 +79,7 @@ describe("runCli", () => {
 
   it("prints Cancelled and exits 130 on Ctrl+C", async () => {
     const { deps, errors } = createCliHarness(
-      [generateTool],
+      [encodeTool],
       {},
       { prompter: createCancellingPrompter() },
     );

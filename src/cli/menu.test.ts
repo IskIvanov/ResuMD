@@ -2,18 +2,19 @@ import { describe, it, expect } from "vitest";
 import { apiConfigProblem } from "../rx-resume/config.ts";
 import { buildMenu } from "./menu.ts";
 import { emptyEnv, fullEnv } from "./mocks.ts";
-import { deleteTool } from "./tools/delete-rx-resume.ts";
+import { applyTool } from "./tools/apply-job.ts";
 import { generateTool } from "./tools/generate-rx-resume.ts";
 import { CliLabel, MenuAction } from "./types.ts";
 
 describe("buildMenu", () => {
-  it("lists tools that share a platform under one separator", () => {
-    const menu = buildMenu([generateTool, deleteTool], fullEnv);
+  it("groups tools under a separator per platform, in Platform order", () => {
+    const menu = buildMenu([applyTool, generateTool], fullEnv);
 
-    expect(menu.slice(0, 3)).toEqual([
+    expect(menu.slice(0, 4)).toEqual([
       { separator: "── Reactive Resume ──" },
       expect.objectContaining({ value: generateTool }),
-      expect.objectContaining({ value: deleteTool }),
+      { separator: "── Job Application ──" },
+      expect.objectContaining({ value: applyTool }),
     ]);
   });
 

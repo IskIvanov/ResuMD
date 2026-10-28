@@ -9,9 +9,11 @@
  */
 
 import { resolve } from "path";
+import { EnvVar as CareersEnvVar } from "../careers-api/config.ts";
 import { EnvVar as RxResumeEnvVar } from "../rx-resume/config.ts";
 import { CliError } from "./errors.ts";
 import type { CliDeps } from "./run-cli.ts";
+import { encodeTool } from "./tools/encode-cv.ts";
 import { generateCoverLetterTool } from "./tools/generate-cover-letter.ts";
 import { generateTool } from "./tools/generate-rx-resume.ts";
 import { updateCoverLetterTool } from "./tools/update-cover-letter.ts";
@@ -60,8 +62,13 @@ export const rxResumeEnv: Env = {
   [RxResumeEnvVar.AppUrl]: "https://rx.example",
 };
 
+/** The Careers API settings from `.env`. */
+export const careersEnv: Env = {
+  [CareersEnvVar.ApiUrl]: "https://careers.example/api",
+};
+
 /** Every setting any tool needs, so every preflight passes. */
-export const fullEnv: Env = { ...rxResumeEnv };
+export const fullEnv: Env = { ...rxResumeEnv, ...careersEnv };
 
 /** Runs a tool from CWD with no settings, so an API tool fails before a request. */
 export const runContext: RunContext = { cwd: CWD, env: emptyEnv };
@@ -135,7 +142,7 @@ export function createCancellingPrompter(): Prompter {
  * tool's real prompts.
  *
  * @example
- * promptFor(generateTool, "resume"); // "Path to Resume.md"
+ * promptFor(encodeTool, "cv"); // "Path to the CV (.pdf, .docx or .md)"
  */
 export function promptFor(tool: ToolDefinition, flag: string): string {
   const option = tool.options.find((candidate) => candidate.flag === flag);
@@ -154,7 +161,7 @@ export interface RecordedTool {
  * can drive the real tool through the CLI without touching files or APIs.
  *
  * @example
- * const { tool, calls } = withRecordedRuns(generateTool);
+ * const { tool, calls } = withRecordedRuns(encodeTool);
  */
 export function withRecordedRuns(tool: ToolDefinition): RecordedTool {
   const calls: string[][] = [];
@@ -203,10 +210,16 @@ export const updateLetterRequiredScript: PromptScript = {
   [CliLabel.OptionalFlags]: [],
 };
 
-/** Picks generate-rx-resume, fills its required options and runs it. */
-export const runGenerateScript: PromptScript = {
-  [CliLabel.PickTool]: generateTool.title,
-  ...generateRequiredScript,
+/** Fills encode-cv's one required option and ticks nothing optional. */
+export const encodeRequiredScript: PromptScript = {
+  [promptFor(encodeTool, "cv")]: "cv.md",
+  [CliLabel.OptionalFlags]: [],
+};
+
+/** Picks encode-cv from the menu, fills its required option and runs it. */
+export const runEncodeScript: PromptScript = {
+  [CliLabel.PickTool]: encodeTool.title,
+  ...encodeRequiredScript,
   [CliLabel.RunIt]: true,
 };
 
@@ -216,6 +229,12 @@ export const COVER_LETTER_TOOL_IDS = [
   "update-cover-letter",
   "delete-cover-letter",
 ] as const;
+
+/** Tools with no settings to check, so they're never disabled. */
+export const ALWAYS_AVAILABLE_TOOL_IDS: readonly string[] = [
+  "encode-cv",
+  "decode-cv",
+];
 
 /** Every tool's usage line, as `bun run cli` prints it, keyed by tool id. */
 export const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
@@ -229,6 +248,10 @@ export const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
   "update-cover-letter":
     "Usage: bun run cli update-cover-letter --id <id> --letter <path> [--name <name>] [--company <company>] [--resume-id <resume-id>] [--application-id <application-id>] [--template <template>]",
   "delete-cover-letter": "Usage: bun run cli delete-cover-letter --id <id>",
+  "encode-cv": "Usage: bun run cli encode-cv --cv <path> [--out <path>]",
+  "decode-cv": "Usage: bun run cli decode-cv --base64 <path> --out <path>",
+  "apply-job":
+    "Usage: bun run cli apply-job --vacancy <vacancy> --first-name <first-name> --last-name <last-name> --email <email> --telephone <telephone> --motivation <motivation> --linkedin-url <linkedin-url> --github-url <github-url> --cv <path> --mode <mode>",
 };
 
 /**
@@ -241,6 +264,10 @@ export const MENU_LAYOUT: readonly string[] = [
   "update-rx-resume",
   "delete-rx-resume",
   ...COVER_LETTER_TOOL_IDS,
+  `── ${Platform.JobApplication} ──`,
+  "encode-cv",
+  "decode-cv",
+  "apply-job",
   MenuAction.Exit,
 ];
 

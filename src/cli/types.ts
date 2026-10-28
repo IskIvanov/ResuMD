@@ -25,6 +25,7 @@ import type { z } from "zod";
 export enum Platform {
   Site = "Site",
   ReactiveResume = "Reactive Resume",
+  JobApplication = "Job Application",
 }
 
 /** How an option is prompted for, validated and parsed. */
@@ -39,6 +40,9 @@ export enum OptionKind {
 export enum FileExtension {
   Markdown = ".md",
   Json = ".json",
+  Pdf = ".pdf",
+  Docx = ".docx",
+  Text = ".txt",
 }
 
 export enum ExitCode {
