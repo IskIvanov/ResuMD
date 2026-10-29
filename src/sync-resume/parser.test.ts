@@ -346,8 +346,8 @@ describe("parseResume", () => {
         },
       ],
       languages: [
-        { language: "English", fluency: "Native" },
-        { language: "Dutch", fluency: "Conversational" },
+        { language: "English", fluency: "Native", level: 0 },
+        { language: "Dutch", fluency: "Conversational", level: 0 },
       ],
       interests: ["Cycling", "Travel"],
       references: ["References available upon request"],
@@ -882,14 +882,47 @@ describe("parseResume", () => {
   describe("## Languages", () => {
     it('splits each bullet into language and fluency on " — "', () => {
       expect(parseWith().languages).toEqual([
-        { language: "English", fluency: "Full Professional Proficiency" },
-        { language: "Dutch", fluency: "Conversational (actively studying)" },
-        { language: "Esperanto", fluency: "" },
+        {
+          language: "English",
+          fluency: "Full Professional Proficiency",
+          level: 0,
+        },
+        {
+          language: "Dutch",
+          fluency: "Conversational (actively studying)",
+          level: 0,
+        },
+        { language: "Esperanto", fluency: "", level: 0 },
       ]);
     });
 
     it("returns an empty list when the section is missing", () => {
       expect(parseWith({ languages: "" }).languages).toEqual([]);
+    });
+
+    it("reads a numeric qualifier as the level", () => {
+      const languages = "## Languages\n\n- English — 5\n- Dutch — 3";
+      expect(parseWith({ languages }).languages).toEqual([
+        { language: "English", fluency: "", level: 5 },
+        { language: "Dutch", fluency: "", level: 3 },
+      ]);
+    });
+
+    it("reads a trailing (n/5) as the level after the fluency", () => {
+      const languages = [
+        "## Languages",
+        "",
+        "- English — Native (5/5)",
+        "- Dutch — Conversational (actively studying) (3/5)",
+      ].join("\n");
+      expect(parseWith({ languages }).languages).toEqual([
+        { language: "English", fluency: "Native", level: 5 },
+        {
+          language: "Dutch",
+          fluency: "Conversational (actively studying)",
+          level: 3,
+        },
+      ]);
     });
   });
 

@@ -18,6 +18,7 @@ import {
 } from "./apply-data.ts";
 import type {
   EducationItem,
+  LanguageItem,
   ParsedResumeData,
   ResumeData,
   Section,
@@ -144,7 +145,9 @@ const parsed: ParsedResumeData = {
         },
       ],
     },
-    languages: { items: [{ language: "English", fluency: "Native" }] },
+    languages: {
+      items: [{ language: "English", fluency: "Native", level: 0 }],
+    },
     interests: { items: [{ name: "Cycling" }] },
     references: { items: [{ name: "References available upon request" }] },
   },
@@ -443,14 +446,15 @@ describe("applyResumeData", () => {
 
 // ─── applyResumeData from Resume.md ───────────────────────────────────────────
 
+const RESUME_FIXTURE = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../sync-resume/fixtures/Resume.md",
+  ),
+  "utf-8",
+);
+
 describe("applyResumeData education from Resume.md", () => {
-  const RESUME_FIXTURE = readFileSync(
-    resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      "../sync-resume/fixtures/Resume.md",
-    ),
-    "utf-8",
-  );
   const EDUCATION_TITLE_LINE =
     "**Bachelor's degree, Computer Science** | 2012 – 2016";
 
@@ -500,6 +504,30 @@ describe("applyResumeData education from Resume.md", () => {
     expect(updatedEducation(titleLines)).toMatchObject({
       degree: "Master of Science, Honours",
       area: "Computer Science",
+    });
+  });
+});
+
+describe("applyResumeData languages from Resume.md", () => {
+  const LANGUAGE_LINE = "- English — Native";
+
+  /** Updates a fresh resume from the fixture with its first language replaced. */
+  function updatedLanguage(languageLine: string): LanguageItem {
+    const markdown = RESUME_FIXTURE.replace(LANGUAGE_LINE, languageLine);
+    const data = toResumeData(parseResume(markdown));
+    const { sections } = applyResumeData(
+      makeResumeData(),
+      data,
+      sequentialIds(),
+    );
+    return sections.languages.items[0];
+  }
+
+  it("sends the fluency and the level of a `Fluency (n/5)` bullet", () => {
+    expect(updatedLanguage("- English — Native (5/5)")).toMatchObject({
+      language: "English",
+      fluency: "Native",
+      level: 5,
     });
   });
 });

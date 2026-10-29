@@ -79,6 +79,7 @@ const certification: ParsedCertification = {
 const language: ParsedLanguage = {
   language: "English",
   fluency: "Full Professional Proficiency",
+  level: 0,
 };
 
 const parsed: ParsedResume = {

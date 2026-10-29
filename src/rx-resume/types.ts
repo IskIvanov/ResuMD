@@ -122,7 +122,10 @@ export type ParsedCertificationItem = Pick<
   "title" | "issuer" | "description"
 >;
 
-export type ParsedLanguageItem = Pick<LanguageItem, "language" | "fluency">;
+export type ParsedLanguageItem = Pick<
+  LanguageItem,
+  "language" | "fluency" | "level"
+>;
 
 export type ParsedInterestItem = Pick<InterestItem, "name">;
 

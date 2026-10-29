@@ -67,6 +67,12 @@ const SECTION_START = /\n## /;
 const ENTRY_START = /\n### /;
 /** Matches a `**Title** | dates` line; group 1 is the title, 2 the dates. */
 const TITLE_LINE_REGEX = /^\*\*(.+?)\*\* \| (.+)$/;
+/** Matches a language qualifier that is only a level: `English — 5`. */
+const LANGUAGE_LEVEL_REGEX = /^\d+$/;
+/** Matches `Fluency (n/5)`; group 1 is the fluency, 2 the level. */
+const LANGUAGE_RATED_REGEX = /^(.*?)\s*\((\d+)\/5\)$/;
+/** The level of a language bullet that gives none; hides the indicator. */
+const NO_LANGUAGE_LEVEL = 0;
 /** Matches a line that is only bold text; group 1 is the text. */
 const BOLD_LINE_REGEX = /^\*\*(.+)\*\*$/;
 /** Matches a line opening with bold text; group 1 is it, 2 the remainder. */
@@ -463,12 +469,25 @@ function readCertifications(lines: Line[]): ParsedCertification[] {
   });
 }
 
-/** Each `- Language — Fluency` bullet of `## Languages`. */
+/**
+ * Each `- Language — Fluency (n/5)` bullet of `## Languages`; the fluency and
+ * the level are each optional, and `- Language — n` gives a level alone.
+ */
 function readLanguages(lines: Line[]): ParsedLanguage[] {
   return bulletItems(lines).map((item) => {
     const { name, qualifier } = splitQualified(item);
-    return { language: name, fluency: qualifier };
+    return { language: name, ...splitFluency(qualifier) };
   });
+}
+
+/** Splits a language qualifier into its fluency and level; either may be absent. */
+function splitFluency(qualifier: string): { fluency: string; level: number } {
+  if (LANGUAGE_LEVEL_REGEX.test(qualifier)) {
+    return { fluency: "", level: Number(qualifier) };
+  }
+  const rated = LANGUAGE_RATED_REGEX.exec(qualifier);
+  if (rated) return { fluency: rated[1], level: Number(rated[2]) };
+  return { fluency: qualifier, level: NO_LANGUAGE_LEVEL };
 }
 
 /** The `A · B · C` line of `## Interests`, up to the first rule. */

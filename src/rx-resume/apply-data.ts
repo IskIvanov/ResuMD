@@ -152,15 +152,15 @@ export function toApiCertificationItem(
 /**
  * Completes a parsed language item into a full API item.
  *
- * @param item - The parsed language and fluency.
+ * @param item - The parsed language, fluency and level.
  * @param id - The id to give the new item.
- * @returns A visible item with no level indicator.
+ * @returns A visible item.
  */
 export function toApiLanguageItem(
   item: ParsedLanguageItem,
   id: string,
 ): LanguageItem {
-  return { id, hidden: false, level: 0, ...item };
+  return { id, hidden: false, ...item };
 }
 
 /**

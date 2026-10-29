@@ -248,10 +248,14 @@ export function toCertificationItem(
  * Maps a parsed language onto a Reactive Resume language item.
  *
  * @param language - A bullet parsed from `## Languages`.
- * @returns The language and its fluency text.
+ * @returns The language, its fluency text and its 0–5 level.
  */
 export function toLanguageItem(language: ParsedLanguage): ParsedLanguageItem {
-  return { language: language.language, fluency: language.fluency };
+  return {
+    language: language.language,
+    fluency: language.fluency,
+    level: language.level,
+  };
 }
 
 /**

@@ -98,6 +98,8 @@ export const ParsedCertificationSchema = z.object({
 export const ParsedLanguageSchema = z.object({
   language: z.string(),
   fluency: z.string(),
+  /** 0–5; 0 when the bullet gives no level. */
+  level: z.number(),
 });
 
 /**
