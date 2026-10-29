@@ -1,39 +1,42 @@
 import { describe, it, expect, expectTypeOf, vi } from "vitest";
 import { resolve } from "path";
-import { CoverLetterTemplate, EnvVar } from "../rx-resume/api/types.ts";
+import {
+  CoverLetterTemplate,
+  EnvironmentVariable,
+} from "../rx-resume/api/types.ts";
 import {
   deleteCoverLetterTool,
-  generateCoverLetterTool,
-  generateResumeTool,
+  createCoverLetterTool,
+  createResumeTool,
   RX_RESUME_TOOLS,
   updateCoverLetterTool,
   updateResumeTool,
 } from "../rx-resume/index.ts";
-import type { Env } from "../utils/types.ts";
+import type { EnvironmentVariables } from "../utils/types.ts";
 import { promptOptions } from "./prompt.ts";
 import { buildMenu, PromptCancelled, runCli } from "./run-cli.ts";
 import {
-  type CliDeps,
+  type CliDependencies,
   type Choice,
   ExitCode,
   MenuAction,
   type MenuValue,
-  type PathContext,
+  type PathLookup,
   type Prompter,
-  type RunContext,
+  type ToolDependencies,
   type ToolDefinition,
 } from "./types.ts";
 
 // ─── Paths and settings ───────────────────────────────────────────────────────
 
-const CWD = "/work/resume-tools";
+const WORKING_DIRECTORY = "/work/resume-tools";
 
-/** A file system holding only resume/Resume.md and cv.md, under CWD. */
-const pathContext: PathContext = {
-  cwd: CWD,
+/** A file system holding only resume/Resume.md and cv.md, under WORKING_DIRECTORY. */
+const pathLookup: PathLookup = {
+  workingDirectory: WORKING_DIRECTORY,
   exists: (absolutePath) =>
     ["resume/Resume.md", "cv.md"].some(
-      (file) => resolve(CWD, file) === absolutePath,
+      (file) => resolve(WORKING_DIRECTORY, file) === absolutePath,
     ),
 };
 
@@ -42,10 +45,10 @@ function unreachable(): never {
   throw new Error("A CLI test reached the outside world");
 }
 
-/** Runs a tool from CWD with no settings, so an API tool fails before a request. */
-const runContext: RunContext = {
-  cwd: CWD,
-  env: {},
+/** Runs a tool from WORKING_DIRECTORY with no settings, so an API tool fails before a request. */
+const toolDependencies: ToolDependencies = {
+  workingDirectory: WORKING_DIRECTORY,
+  environmentVariables: {},
   fetch: unreachable,
   newId: unreachable,
   today: unreachable,
@@ -56,10 +59,10 @@ const runContext: RunContext = {
 };
 
 /** Every setting any registered tool needs, so every preflight passes. */
-const fullEnv: Env = {
-  [EnvVar.ApiKey]: "key",
-  [EnvVar.BaseUrl]: "https://rx.example/api/openapi",
-  [EnvVar.AppUrl]: "https://rx.example",
+const allSettings: EnvironmentVariables = {
+  [EnvironmentVariable.ApiKey]: "key",
+  [EnvironmentVariable.ApiUrl]: "https://rx.example/api/openapi",
+  [EnvironmentVariable.AppUrl]: "https://rx.example",
 };
 
 // ─── Prompter ─────────────────────────────────────────────────────────────────
@@ -69,13 +72,13 @@ const PICK_TOOL = "Which tool do you want to run?";
 const OPTIONAL_FLAGS = "Set any optional flags?";
 const RUN_IT = "Run it?";
 
-/** Answers keyed by prompt message: select/input take text, checkbox a list, confirm a boolean. */
+/** Answers keyed by question: select/input take text, checkbox a list, confirm a boolean. */
 type PromptScript = Readonly<
   Record<string, string | readonly string[] | boolean>
 >;
 
 /**
- * A Prompter that answers from a script keyed by prompt message.
+ * A Prompter that answers from a script keyed by question.
  *
  * - select picks the first enabled choice whose name starts with the answer
  * - input runs the prompt's validator and throws if the answer is rejected
@@ -83,58 +86,60 @@ type PromptScript = Readonly<
  * - any prompt missing from the script throws
  */
 function createFakePrompter(script: PromptScript): Prompter {
-  const answer = (message: string): PromptScript[string] => {
-    if (!(message in script)) throw new Error(`Unscripted prompt: ${message}`);
-    return script[message];
+  const answer = (question: string): PromptScript[string] => {
+    if (!(question in script))
+      throw new Error(`Unscripted prompt: ${question}`);
+    return script[question];
   };
 
   return {
-    async select({ message, choices }) {
-      const text = String(answer(message));
+    async select({ question, choices }) {
+      const text = String(answer(question));
       const choice = choices.find(
-        (item) => item.name.startsWith(text) && !item.disabled,
+        (candidate) => candidate.name.startsWith(text) && !candidate.disabled,
       );
-      if (!choice) throw new Error(`No enabled choice "${text}" in ${message}`);
+      if (!choice)
+        throw new Error(`No enabled choice "${text}" in ${question}`);
       return choice.value;
     },
-    async input({ message, validate }) {
-      const text = String(answer(message));
+    async input({ question, validate }) {
+      const text = String(answer(question));
       const verdict = validate ? validate(text) : true;
       if (verdict !== true) throw new Error(`Rejected "${text}": ${verdict}`);
       return text;
     },
-    async checkbox({ message, choices }) {
-      const picked = answer(message);
-      const values = Array.isArray(picked) ? picked : [];
+    async checkbox({ question, choices }) {
+      const scriptedAnswer = answer(question);
+      const values = Array.isArray(scriptedAnswer) ? scriptedAnswer : [];
       return choices
         .filter((choice) => values.includes(String(choice.value)))
         .map((choice) => choice.value);
     },
-    async confirm({ message }) {
-      return answer(message) === true;
+    async confirm({ question }) {
+      return answer(question) === true;
     },
   };
 }
 
-/** The prompt message of one of a tool's options, so a script answers the tool's real prompts. */
+/** The question one of a tool'"'"'s options asks, so a script answers the tool'"'"'s real prompts. */
 function promptFor(tool: ToolDefinition, flag: string): string {
   const option = tool.options.find((candidate) => candidate.flag === flag);
   if (!option) throw new Error(`${tool.id} has no --${flag}`);
-  return option.message;
+  return option.question;
 }
 
-/** Fills generate-rx-resume's required options and ticks nothing optional. */
-const generateRequiredScript: PromptScript = {
-  [promptFor(generateResumeTool, "resume")]: "resume/Resume.md",
-  [promptFor(generateResumeTool, "name")]: "Jane Doe",
+/** Fills create-resume'"'"'s required options and ticks nothing optional. */
+const createRequiredScript: PromptScript = {
+  [promptFor(createResumeTool, "resume")]: "resume/Resume.md",
+  [promptFor(createResumeTool, "name")]: "Jane Doe",
   [OPTIONAL_FLAGS]: [],
 };
 
 /** A cover-letter id as Reactive Resume gives it: a UUID. */
 const LETTER_ID = "3f2b8c1e-5d4a-4e7b-9a6c-1d2e3f4a5b6c";
 
-/** generate-cover-letter's required flags; the letter needn't exist to parse. */
-const GENERATE_LETTER_ARGV: readonly string[] = [
+/** create-cover-letter'"'"'s required flags; the letter needn't exist to parse. */
+const CREATE_LETTER_ARGUMENTS: readonly string[] = [
   "--letter",
   "letter.md",
   "--name",
@@ -157,8 +162,8 @@ function withRecordedRuns(tool: ToolDefinition): {
   return {
     tool: {
       ...tool,
-      run: async (argv) => {
-        calls.push([...argv]);
+      run: async (toolArguments) => {
+        calls.push([...toolArguments]);
       },
     },
     calls,
@@ -179,35 +184,35 @@ function withFailingRun(tool: ToolDefinition, error: unknown): ToolDefinition {
 function createCliHarness(
   tools: readonly ToolDefinition[],
   script: PromptScript,
-  overrides: Partial<CliDeps> = {},
-): { deps: CliDeps; output: string[]; errors: string[] } {
+  overrides: Partial<CliDependencies> = {},
+): { dependencies: CliDependencies; output: string[]; errors: string[] } {
   const output: string[] = [];
   const errors: string[] = [];
-  const deps: CliDeps = {
-    ...runContext,
-    argv: [],
+  const dependencies: CliDependencies = {
+    ...toolDependencies,
+    commandLineArguments: [],
     tools,
     prompter: createFakePrompter(script),
-    isTTY: true,
-    exists: pathContext.exists,
+    isInteractiveTerminal: true,
+    exists: pathLookup.exists,
     log: (line) => output.push(line),
     logError: (line) => errors.push(line),
     ...overrides,
   };
-  return { deps, output, errors };
+  return { dependencies, output, errors };
 }
 
 // ─── parse ────────────────────────────────────────────────────────────────────
 
 describe("parse", () => {
-  it("resolves paths from cwd and fills defaults from earlier answers", () => {
+  it("resolves paths from the working directory and fills defaults from earlier answers", () => {
     expect(
-      generateResumeTool.parse(
+      createResumeTool.parse(
         ["--resume", "resume/Resume.md", "--name", "Jane Doe"],
-        CWD,
+        WORKING_DIRECTORY,
       ),
     ).toEqual({
-      resume: resolve(CWD, "resume/Resume.md"),
+      resume: resolve(WORKING_DIRECTORY, "resume/Resume.md"),
       name: "Jane Doe",
       slug: "jane-doe",
       tags: [],
@@ -215,7 +220,7 @@ describe("parse", () => {
   });
 
   it("keeps a given answer over its default and splits a list", () => {
-    const values = generateResumeTool.parse(
+    const values = createResumeTool.parse(
       [
         "--resume",
         "/abs/Resume.md",
@@ -224,40 +229,40 @@ describe("parse", () => {
         "--slug",
         "jd",
         "--tags",
-        "a, b,",
+        "cv, design,",
       ],
-      CWD,
+      WORKING_DIRECTORY,
     );
 
     expect(values).toMatchObject({
       resume: "/abs/Resume.md",
       slug: "jd",
-      tags: ["a", "b"],
+      tags: ["cv", "design"],
     });
   });
 
   it("throws with the usage when a required flag is missing", () => {
     const parseWithoutName = () =>
-      generateResumeTool.parse(["--resume", "r.md"], CWD);
+      createResumeTool.parse(["--resume", "resume.md"], WORKING_DIRECTORY);
 
     expect(parseWithoutName).toThrow(
-      `--name <name> is required\n${generateResumeTool.usage}`,
+      `--name <name> is required\n${createResumeTool.usage}`,
     );
   });
 
   it("throws on an unknown flag", () => {
     expect(() =>
-      generateResumeTool.parse(
-        ["--resume", "r.md", "--name", "Jane", "--nope", "x"],
-        CWD,
+      createResumeTool.parse(
+        ["--resume", "resume.md", "--name", "Jane", "--nope", "x"],
+        WORKING_DIRECTORY,
       ),
     ).toThrow();
   });
 
   it("parses a choice into one of its values, typed as their union", () => {
-    const values = generateCoverLetterTool.parse(
-      [...GENERATE_LETTER_ARGV, "--template", "onyx"],
-      CWD,
+    const values = createCoverLetterTool.parse(
+      [...CREATE_LETTER_ARGUMENTS, "--template", "onyx"],
+      WORKING_DIRECTORY,
     );
 
     expect(values.template).toBe(CoverLetterTemplate.Onyx);
@@ -268,9 +273,9 @@ describe("parse", () => {
 
   it("rejects a value that isn't one of the choices", () => {
     expect(() =>
-      generateCoverLetterTool.parse(
-        [...GENERATE_LETTER_ARGV, "--template", "charizard"],
-        CWD,
+      createCoverLetterTool.parse(
+        [...CREATE_LETTER_ARGUMENTS, "--template", "charizard"],
+        WORKING_DIRECTORY,
       ),
     ).toThrow(
       expect.objectContaining({
@@ -283,15 +288,15 @@ describe("parse", () => {
     expect(() =>
       updateCoverLetterTool.parse(
         ["--id", "letter-1", "--letter", "cv.md"],
-        CWD,
+        WORKING_DIRECTORY,
       ),
     ).toThrow("--id: Field must accept a valid UUID");
   });
 
-  it("runs the tool with the parsed values and the run context's env", async () => {
-    // The empty env stops the tool at its config check, before any request.
+  it("runs the tool with the parsed values and its environment variables", async () => {
+    // No settings stop the tool at its settings check, before any request.
     await expect(
-      generateCoverLetterTool.run(GENERATE_LETTER_ARGV, runContext),
+      createCoverLetterTool.run(CREATE_LETTER_ARGUMENTS, toolDependencies),
     ).rejects.toThrow("Missing RXRESUME_API_KEY");
   });
 });
@@ -299,16 +304,16 @@ describe("parse", () => {
 // ─── promptOptions ────────────────────────────────────────────────────────────
 
 describe("promptOptions", () => {
-  it("builds argv from the required options only", async () => {
-    const prompter = createFakePrompter(generateRequiredScript);
+  it("builds tool arguments from the required options only", async () => {
+    const prompter = createFakePrompter(createRequiredScript);
 
-    const argv = await promptOptions(
-      generateResumeTool.options,
+    const toolArguments = await promptOptions(
+      createResumeTool.options,
       prompter,
-      pathContext,
+      pathLookup,
     );
 
-    expect(argv).toEqual([
+    expect(toolArguments).toEqual([
       "--resume",
       "resume/Resume.md",
       "--name",
@@ -318,26 +323,26 @@ describe("promptOptions", () => {
 
   it("shows each optional flag's default and prompts for a ticked one", async () => {
     const prompter = createFakePrompter({
-      ...generateRequiredScript,
+      ...createRequiredScript,
       [OPTIONAL_FLAGS]: ["slug"],
-      [promptFor(generateResumeTool, "slug")]: "jane",
+      [promptFor(createResumeTool, "slug")]: "jane",
     });
     const checkbox = vi.spyOn(prompter, "checkbox");
 
-    const argv = await promptOptions(
-      generateResumeTool.options,
+    const toolArguments = await promptOptions(
+      createResumeTool.options,
       prompter,
-      pathContext,
+      pathLookup,
     );
 
     expect(checkbox).toHaveBeenCalledWith({
-      message: OPTIONAL_FLAGS,
+      question: OPTIONAL_FLAGS,
       choices: [
         { name: "--slug (default: jane-doe)", value: "slug" },
         { name: "--tags", value: "tags" },
       ],
     });
-    expect(argv).toEqual([
+    expect(toolArguments).toEqual([
       "--resume",
       "resume/Resume.md",
       "--name",
@@ -349,38 +354,40 @@ describe("promptOptions", () => {
 
   it("offers every choice of a choice option in a select", async () => {
     const prompter = createFakePrompter({
-      [promptFor(generateCoverLetterTool, "letter")]: "cv.md",
-      [promptFor(generateCoverLetterTool, "name")]: "Acme — Frontend",
-      [promptFor(generateCoverLetterTool, "resume-id")]: "resume-1",
+      [promptFor(createCoverLetterTool, "letter")]: "cv.md",
+      [promptFor(createCoverLetterTool, "name")]: "Acme — Frontend",
+      [promptFor(createCoverLetterTool, "resume-id")]: "resume-1",
       [OPTIONAL_FLAGS]: ["template"],
-      [promptFor(generateCoverLetterTool, "template")]: "onyx",
+      [promptFor(createCoverLetterTool, "template")]: "onyx",
     });
     const select = vi.spyOn(prompter, "select");
 
-    const argv = await promptOptions(
-      generateCoverLetterTool.options,
+    const toolArguments = await promptOptions(
+      createCoverLetterTool.options,
       prompter,
-      pathContext,
+      pathLookup,
     );
 
     expect(select).toHaveBeenCalledWith({
-      message: promptFor(generateCoverLetterTool, "template"),
+      question: promptFor(createCoverLetterTool, "template"),
       choices: Object.values(CoverLetterTemplate).map((template) => ({
         name: template,
         value: template,
       })),
     });
-    expect(argv).toEqual(expect.arrayContaining(["--template", "onyx"]));
+    expect(toolArguments).toEqual(
+      expect.arrayContaining(["--template", "onyx"]),
+    );
   });
 
   describe("checks a typed path", () => {
-    /** Answers update-rx-resume's prompts, with `path` for --resume. */
+    /** Answers update-resume'"'"'s prompts, with `path` for --resume. */
     function promptForResume(path: string): Promise<string[]> {
       const prompter = createFakePrompter({
         [promptFor(updateResumeTool, "id")]: "resume-1",
         [promptFor(updateResumeTool, "resume")]: path,
       });
-      return promptOptions(updateResumeTool.options, prompter, pathContext);
+      return promptOptions(updateResumeTool.options, prompter, pathLookup);
     }
 
     it("accepts an existing file with a supported extension", async () => {
@@ -412,7 +419,7 @@ describe("promptOptions", () => {
     });
 
     await expect(
-      promptOptions(updateResumeTool.options, prompter, pathContext),
+      promptOptions(updateResumeTool.options, prompter, pathLookup),
     ).rejects.toThrow('Rejected "  ": A value is required');
   });
 
@@ -424,13 +431,13 @@ describe("promptOptions", () => {
       [OPTIONAL_FLAGS]: [],
     });
 
-    const argv = await promptOptions(
+    const toolArguments = await promptOptions(
       updateCoverLetterTool.options,
       prompter,
-      pathContext,
+      pathLookup,
     );
 
-    expect(argv).toEqual(expect.arrayContaining(["--id", id]));
+    expect(toolArguments).toEqual(expect.arrayContaining(["--id", id]));
   });
 });
 
@@ -438,36 +445,38 @@ describe("promptOptions", () => {
 
 /** Every tool's usage line, as `bun run cli` prints it, keyed by tool id. */
 const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
-  "generate-rx-resume":
-    "Usage: bun run cli generate-rx-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
-  "update-rx-resume":
-    "Usage: bun run cli update-rx-resume --id <id> --resume <path>",
-  "delete-rx-resume": "Usage: bun run cli delete-rx-resume --id <id>",
-  "generate-cover-letter":
-    "Usage: bun run cli generate-cover-letter --letter <path> --name <name> --resume-id <resume-id> [--application-id <application-id>] [--company <company>] [--template <template>]",
+  "create-resume":
+    "Usage: bun run cli create-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
+  "update-resume": "Usage: bun run cli update-resume --id <id> --resume <path>",
+  "delete-resume": "Usage: bun run cli delete-resume --id <id>",
+  "create-cover-letter":
+    "Usage: bun run cli create-cover-letter --letter <path> --name <name> --resume-id <resume-id> [--application-id <application-id>] [--company <company>] [--template <template>]",
   "update-cover-letter":
     "Usage: bun run cli update-cover-letter --id <id> --letter <path> [--name <name>] [--company <company>] [--resume-id <resume-id>] [--application-id <application-id>] [--template <template>]",
   "delete-cover-letter": "Usage: bun run cli delete-cover-letter --id <id>",
 };
 
 /** A menu entry as one line: its tool's id, or its action. */
-function menuLine(item: Choice<MenuValue>): string {
-  if (typeof item.value === "string") return item.value;
-  return item.value.id;
+function menuLine(entry: Choice<MenuValue>): string {
+  if (typeof entry.value === "string") return entry.value;
+  return entry.value.id;
 }
 
 /** The tool's own menu entry. */
-function menuEntry(tool: ToolDefinition, env: Env): Choice<MenuValue> {
-  return buildMenu([tool], env)[0];
+function menuEntry(
+  tool: ToolDefinition,
+  environmentVariables: EnvironmentVariables,
+): Choice<MenuValue> {
+  return buildMenu([tool], environmentVariables)[0];
 }
 
 describe("RX_RESUME_TOOLS", () => {
   it("lists every tool in menu order, then Exit", () => {
-    expect(buildMenu(RX_RESUME_TOOLS, fullEnv).map(menuLine)).toEqual([
-      "generate-rx-resume",
-      "update-rx-resume",
-      "delete-rx-resume",
-      "generate-cover-letter",
+    expect(buildMenu(RX_RESUME_TOOLS, allSettings).map(menuLine)).toEqual([
+      "create-resume",
+      "update-resume",
+      "delete-resume",
+      "create-cover-letter",
       "update-cover-letter",
       "delete-cover-letter",
       MenuAction.Exit,
@@ -488,14 +497,16 @@ describe("RX_RESUME_TOOLS", () => {
       expect(menuEntry(tool, {})).toMatchObject({
         disabled: `Not available: ${tool.preflight?.({})}`,
       });
-      expect(menuEntry(tool, fullEnv)).not.toHaveProperty("disabled");
+      expect(menuEntry(tool, allSettings)).not.toHaveProperty("disabled");
     },
   );
 
   it.each(RX_RESUME_TOOLS)(
     "rejects $id without its required flags, before doing any work",
     async (tool) => {
-      const error = await tool.run([], runContext).catch((e: unknown) => e);
+      const error = await tool
+        .run([], toolDependencies)
+        .catch((error: unknown) => error);
 
       expect(error).toMatchObject({
         message: expect.stringMatching(/ is required\n/),
@@ -508,29 +519,29 @@ describe("RX_RESUME_TOOLS", () => {
 
 describe("runCli", () => {
   it("prints each tool's usage and fails without a terminal", async () => {
-    const { deps, errors } = createCliHarness(
+    const { dependencies, errors } = createCliHarness(
       [updateResumeTool],
       {},
-      { isTTY: false },
+      { isInteractiveTerminal: false },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors.join("\n")).toContain(updateResumeTool.usage);
   });
 
   it("exits cleanly when Exit is picked", async () => {
     const { tool, calls } = withRecordedRuns(updateResumeTool);
-    const { deps } = createCliHarness([tool], {
+    const { dependencies } = createCliHarness([tool], {
       [PICK_TOOL]: "Exit",
     });
 
-    expect(await runCli(deps)).toBe(ExitCode.Success);
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
     expect(calls).toEqual([]);
   });
 
   it("prints the command and runs the tool with the answers", async () => {
     const { tool, calls } = withRecordedRuns(updateResumeTool);
-    const { deps, output } = createCliHarness(
+    const { dependencies, output } = createCliHarness(
       [tool],
       {
         [PICK_TOOL]: updateResumeTool.title,
@@ -538,12 +549,12 @@ describe("runCli", () => {
         [promptFor(updateResumeTool, "resume")]: "resume/Resume.md",
         [RUN_IT]: true,
       },
-      { env: fullEnv },
+      { environmentVariables: allSettings },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Success);
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
     expect(output).toContain(
-      "bun run cli update-rx-resume --id resume-1 --resume resume/Resume.md",
+      "bun run cli update-resume --id resume-1 --resume resume/Resume.md",
     );
     expect(calls).toEqual([
       ["--id", "resume-1", "--resume", "resume/Resume.md"],
@@ -551,33 +562,33 @@ describe("runCli", () => {
   });
 
   it("quotes an answer the shell would split in the printed command", async () => {
-    const { tool } = withRecordedRuns(generateResumeTool);
-    const { deps, output } = createCliHarness(
+    const { tool } = withRecordedRuns(createResumeTool);
+    const { dependencies, output } = createCliHarness(
       [tool],
       {
-        [PICK_TOOL]: generateResumeTool.title,
-        ...generateRequiredScript,
+        [PICK_TOOL]: createResumeTool.title,
+        ...createRequiredScript,
         [RUN_IT]: true,
       },
-      { env: fullEnv },
+      { environmentVariables: allSettings },
     );
 
-    await runCli(deps);
+    await runCli(dependencies);
 
     expect(output).toContain(
-      'bun run cli generate-rx-resume --resume resume/Resume.md --name "Jane Doe"',
+      'bun run cli create-resume --resume resume/Resume.md --name "Jane Doe"',
     );
   });
 
   it("prints the error and fails when the tool throws", async () => {
-    // Without .env the tool stops at its config check, before any request.
-    const { deps, errors } = createCliHarness(
+    // Without .env the tool stops at its settings check, before any request.
+    const { dependencies, errors } = createCliHarness(
       [deleteCoverLetterTool],
       {},
-      { argv: ["delete-cover-letter", "--id", LETTER_ID] },
+      { commandLineArguments: ["delete-cover-letter", "--id", LETTER_ID] },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors).toEqual([
       expect.stringContaining("Missing RXRESUME_API_KEY"),
     ]);
@@ -591,13 +602,13 @@ describe("runCli", () => {
         cause: new Error("POST failed", { cause: refused }),
       }),
     );
-    const { deps, errors } = createCliHarness(
+    const { dependencies, errors } = createCliHarness(
       [tool],
       {},
-      { argv: ["update-rx-resume"] },
+      { commandLineArguments: ["update-resume"] },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors).toEqual([
       "Upload failed\n  caused by: POST failed\n  caused by: Unable to connect.",
     ]);
@@ -609,34 +620,41 @@ describe("runCli", () => {
       updateResumeTool,
       new Error("POST failed: Unable to connect.", { cause: refused }),
     );
-    const { deps, errors } = createCliHarness(
+    const { dependencies, errors } = createCliHarness(
       [tool],
       {},
-      { argv: ["update-rx-resume"] },
+      { commandLineArguments: ["update-resume"] },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors).toEqual(["POST failed: Unable to connect."]);
   });
 
   it("runs the tool named by the first argument, without the menu", async () => {
     const { tool, calls } = withRecordedRuns(updateResumeTool);
     const flags = ["--id", "resume-1", "--resume", "resume/Resume.md"];
-    const { deps } = createCliHarness(
+    const { dependencies } = createCliHarness(
       [tool],
       {},
-      { argv: ["update-rx-resume", ...flags], isTTY: false },
+      {
+        commandLineArguments: ["update-resume", ...flags],
+        isInteractiveTerminal: false,
+      },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Success);
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
     expect(calls).toEqual([flags]);
   });
 
   it("lists every tool's usage and fails for an unknown tool", async () => {
     const { tool, calls } = withRecordedRuns(updateResumeTool);
-    const { deps, errors } = createCliHarness([tool], {}, { argv: ["nope"] });
+    const { dependencies, errors } = createCliHarness(
+      [tool],
+      {},
+      { commandLineArguments: ["nope"] },
+    );
 
-    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors.join("\n")).toContain('Unknown tool "nope"');
     expect(errors.join("\n")).toContain(tool.usage);
     expect(calls).toEqual([]);
@@ -646,7 +664,7 @@ describe("runCli", () => {
     const cancel = async (): Promise<never> => {
       throw new PromptCancelled();
     };
-    const { deps, errors } = createCliHarness(
+    const { dependencies, errors } = createCliHarness(
       [updateResumeTool],
       {},
       {
@@ -659,7 +677,7 @@ describe("runCli", () => {
       },
     );
 
-    expect(await runCli(deps)).toBe(ExitCode.Cancelled);
+    expect(await runCli(dependencies)).toBe(ExitCode.Cancelled);
     expect(errors).toEqual(["Cancelled."]);
   });
 });

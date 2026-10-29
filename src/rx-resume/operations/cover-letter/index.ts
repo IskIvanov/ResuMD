@@ -1,7 +1,7 @@
 /**
  * index.ts
  *
- * The cover-letter operations: each parses the `.md` and checks the body
+ * The cover-letter operations: each parses the `.md` and checks the request
  * against the API's rules, then writes the letter. Every letter is freeform,
  * since the `.md` writes its own greeting and sign-off.
  */
@@ -10,14 +10,14 @@ import { omitUndefined } from "../../../utils/record.ts";
 import { parseOrThrow } from "../../../utils/schema.ts";
 import type { RxResumeApiClient } from "../../api/client.ts";
 import {
-  CreateCoverLetterBodySchema,
-  UpdateCoverLetterBodySchema,
+  CreateCoverLetterRequestSchema,
+  UpdateCoverLetterRequestSchema,
 } from "../../api/schema.ts";
 import { type CoverLetter, CoverLetterLayout } from "../../api/types.ts";
 import type { LetterFields, NewLetterFields } from "../../types.ts";
 import { parseCoverLetter } from "./parser.ts";
 
-/** Heads the error for a body the API would reject. */
+/** Heads the error for a request the API would reject. */
 const INVALID_REQUEST = "Invalid cover letter request:";
 
 /**
@@ -25,7 +25,8 @@ const INVALID_REQUEST = "Invalid cover letter request:";
  *
  * @param client - The Reactive Resume API client.
  * @param markdown - The full cover-letter `.md` text.
- * @param fields - The new letter's name, resume id and optional metadata.
+ * @param fields - The new letter's name, source resume id and optional
+ *   fields.
  * @param today - The letter's date, as `YYYY-MM-DD`.
  * @returns The created letter.
  * @throws If the `.md` is missing a section or a field breaks the API's
@@ -33,16 +34,16 @@ const INVALID_REQUEST = "Invalid cover letter request:";
  *   request fails.
  *
  * @example
- * await generateCoverLetter(client, markdown, { name, resumeId }, "2026-10-06");
+ * await createCoverLetter(client, markdown, { name, resumeId }, "2026-10-06");
  */
-export async function generateCoverLetter(
+export async function createCoverLetter(
   client: RxResumeApiClient,
   markdown: string,
   fields: NewLetterFields,
   today: string,
 ): Promise<CoverLetter> {
-  const body = parseOrThrow(
-    CreateCoverLetterBodySchema,
+  const newLetter = parseOrThrow(
+    CreateCoverLetterRequestSchema,
     omitUndefined({
       ...fields,
       ...parseCoverLetter(markdown),
@@ -51,7 +52,7 @@ export async function generateCoverLetter(
     }),
     INVALID_REQUEST,
   );
-  return client.createCoverLetter(body);
+  return client.createCoverLetter(newLetter);
 }
 
 /**
@@ -59,9 +60,9 @@ export async function generateCoverLetter(
  * today, so a concurrent edit isn't overwritten.
  *
  * @param client - The Reactive Resume API client.
- * @param id - The letter's id, as generate prints it.
+ * @param id - The letter's id, as create prints it.
  * @param markdown - The full cover-letter `.md` text.
- * @param fields - The metadata to change; a field left out keeps its value.
+ * @param fields - The fields to change; a field left out keeps its value.
  * @param today - The letter's date, as `YYYY-MM-DD`.
  * @returns The updated letter.
  * @throws If the `.md` is invalid, before any request; before any update is
@@ -81,7 +82,7 @@ export async function updateCoverLetter(
   fields: LetterFields,
   today: string,
 ): Promise<CoverLetter> {
-  const parsed = parseCoverLetter(markdown);
+  const letterText = parseCoverLetter(markdown);
   const { layout, revision } = await client.getCoverLetter(id);
   if (layout !== CoverLetterLayout.Freeform) {
     throw new Error(
@@ -89,21 +90,21 @@ export async function updateCoverLetter(
         "can be updated, since the .md writes its own greeting and sign-off",
     );
   }
-  const body = parseOrThrow(
-    UpdateCoverLetterBodySchema,
+  const changes = parseOrThrow(
+    UpdateCoverLetterRequestSchema,
     omitUndefined({
       ...fields,
-      ...parsed,
+      ...letterText,
       letterDate: today,
       expectedRevision: revision,
     }),
     INVALID_REQUEST,
   );
-  return client.updateCoverLetter(id, body);
+  return client.updateCoverLetter(id, changes);
 }
 
 /**
- * Deletes a letter for good. The API only removes a letter that's already in
+ * Deletes a letter for good. The API only purges a letter that's already in
  * Trash, so it's moved there first, at the revision just read.
  *
  * @param client - The Reactive Resume API client.
@@ -122,9 +123,10 @@ export async function deleteCoverLetter(
   const { revision } = await client.getCoverLetter(id);
   await client.trashCoverLetter(id, revision);
   try {
-    await client.removeCoverLetter(id);
+    await client.purgeCoverLetter(id);
   } catch (error) {
-    const failure = error instanceof Error ? error.message : String(error);
+    let failure = String(error);
+    if (error instanceof Error) failure = error.message;
     throw new Error(`${failure}; letter ${id} is in Trash`, { cause: error });
   }
 }

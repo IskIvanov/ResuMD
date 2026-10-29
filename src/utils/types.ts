@@ -26,7 +26,10 @@ export type DefaultEntry = readonly [
 ];
 
 /** Environment variables, usually `process.env` after Bun has loaded `.env`. */
-export type Env = Record<string, string | undefined>;
+export type EnvironmentVariables = Record<string, string | undefined>;
 
 /** The subset of `fetch` a client uses; `globalThis.fetch` satisfies it. */
-export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+export type FetchFunction = (
+  url: string,
+  httpRequest?: RequestInit,
+) => Promise<Response>;

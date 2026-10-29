@@ -52,7 +52,7 @@ function listSections(layout: Layout): string[] {
  * page: the given sections first, then every other section the layout had
  * (profiles, awards, custom sections, …) in its existing order.
  *
- * @param data - The resume's data, e.g. the output of `applyResume`.
+ * @param data - The resume's data, e.g. the output of `applyResumeMd`.
  * @param order - Section ids in the order they should appear.
  * @returns The data with `metadata.layout.pages` replaced; the sidebar width
  *   and the rest of the metadata are kept.

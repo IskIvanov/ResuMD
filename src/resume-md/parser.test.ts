@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { ParsedResume } from "./types.ts";
-import { parseResume } from "./parser.ts";
+import type { ResumeMd } from "./types.ts";
+import { parseResumeMd } from "./parser.ts";
 
 // ─── Fixtures: sections ───────────────────────────────────────────────────────
 //
@@ -162,8 +162,8 @@ function buildResume(overrides: Partial<ResumeParts> = {}): string {
 }
 
 /** Parses a resume built from the default parts and the overrides. */
-function parseWith(overrides: Partial<ResumeParts> = {}): ParsedResume {
-  return parseResume(buildResume(overrides));
+function parseWith(overrides: Partial<ResumeParts> = {}): ResumeMd {
+  return parseResumeMd(buildResume(overrides));
 }
 
 // ─── Fixtures: variants ───────────────────────────────────────────────────────
@@ -267,39 +267,39 @@ const INTERESTS_WITHOUT_NOTE_FIXTURE = `
 Cycling · Weightlifting · Travel
 `.trim();
 
-// ─── parseResume ──────────────────────────────────────────────────────────────
+// ─── parseResumeMd ──────────────────────────────────────────────────────────────
 
-describe("parseResume", () => {
+describe("parseResumeMd", () => {
   it("parses every section of a full resume", () => {
-    const parsed = parseWith();
+    const resumeMd = parseWith();
 
-    expect(parsed.contact.name).toBe("Jane Doe");
-    expect(parsed.summary).toBe(
+    expect(resumeMd.header.name).toBe("Jane Doe");
+    expect(resumeMd.summary).toBe(
       "Senior engineer with 9+ years shipping products.",
     );
-    expect(parsed.jobs).toHaveLength(2);
-    expect(parsed.skillGroups).toHaveLength(2);
-    expect(parsed.eduItems).toHaveLength(2);
-    expect(parsed.projects).toHaveLength(2);
-    expect(parsed.certifications).toHaveLength(2);
-    expect(parsed.languages).toHaveLength(3);
-    expect(parsed.interests).toHaveLength(3);
-    expect(parsed.references).toHaveLength(1);
+    expect(resumeMd.jobs).toHaveLength(2);
+    expect(resumeMd.skillGroups).toHaveLength(2);
+    expect(resumeMd.schools).toHaveLength(2);
+    expect(resumeMd.projects).toHaveLength(2);
+    expect(resumeMd.certifications).toHaveLength(2);
+    expect(resumeMd.languages).toHaveLength(3);
+    expect(resumeMd.interests).toHaveLength(3);
+    expect(resumeMd.references).toHaveLength(1);
   });
 
   // ─── Header ─────────────────────────────────────────────────────────────────
 
   describe("header", () => {
     it("reads the name from the # heading", () => {
-      expect(parseWith().contact.name).toBe("Jane Doe");
+      expect(parseWith().header.name).toBe("Jane Doe");
     });
 
     it("reads the headline from the bold line", () => {
-      expect(parseWith().contact.headline).toBe("Software Engineer");
+      expect(parseWith().header.headline).toBe("Software Engineer");
     });
 
     it("classifies the contact line into email, phone, location and website", () => {
-      expect(parseWith().contact).toMatchObject({
+      expect(parseWith().header).toMatchObject({
         email: "jane.doe@example.com",
         phone: "+31 6 12345678",
         location: "City, Country",
@@ -309,13 +309,13 @@ describe("parseResume", () => {
 
     it("leaves phone empty when the phone has invalid characters", () => {
       const header = HEADER_FIXTURE.replace("+31 6 12345678", "+31 6 123s5678");
-      expect(parseWith({ header }).contact.phone).toBe("");
+      expect(parseWith({ header }).header.phone).toBe("");
     });
 
     it("classifies contact parts regardless of their order", () => {
       const header =
         "# Jane Doe\n\n**Engineer**\n\nhttps://example.com/me | City | jane@example.com";
-      expect(parseWith({ header }).contact).toMatchObject({
+      expect(parseWith({ header }).header).toMatchObject({
         email: "jane@example.com",
         phone: "",
         location: "City",
@@ -325,20 +325,20 @@ describe("parseResume", () => {
 
     it("reads header links as profiles", () => {
       const header = LINKED_HEADER_FIXTURE;
-      expect(parseWith({ header }).contact.profiles).toEqual([
+      expect(parseWith({ header }).header.profiles).toEqual([
         { label: "LinkedIn", url: "https://linkedin.com/in/jane-doe" },
         { label: "GitHub", url: "https://github.com/jane-doe" },
       ]);
     });
 
     it("returns no profiles for plain labels without URLs", () => {
-      expect(parseWith().contact.profiles).toEqual([]);
+      expect(parseWith().header.profiles).toEqual([]);
     });
 
     it("keeps links on the contact line out of the contact details", () => {
       const header =
         "# Jane Doe\n\n**Engineer**\n\njane@example.com | [GitHub](https://github.com/jane) | City";
-      expect(parseWith({ header }).contact).toMatchObject({
+      expect(parseWith({ header }).header).toMatchObject({
         email: "jane@example.com",
         location: "City",
         website: "",
@@ -348,7 +348,7 @@ describe("parseResume", () => {
 
     it("does not pick up links from the sections below the header", () => {
       const projects = LINKED_PROJECTS_FIXTURE;
-      expect(parseWith({ projects }).contact.profiles).toEqual([]);
+      expect(parseWith({ projects }).header.profiles).toEqual([]);
     });
 
     it("throws if the email in the header is invalid", () => {
@@ -357,7 +357,7 @@ describe("parseResume", () => {
         "jane.doe@",
       );
       expect(() => parseWith({ header })).toThrow(
-        "contact.email: invalid email format",
+        "header.email: invalid email format",
       );
     });
 
@@ -367,13 +367,13 @@ describe("parseResume", () => {
         "+31 (6) 1234.5678",
       );
       expect(() => parseWith({ header })).toThrow(
-        "contact.phone: invalid phone number format",
+        "header.phone: invalid phone number format",
       );
     });
 
     it("throws if the header is missing", () => {
       expect(() => parseWith({ header: "" })).toThrow(
-        "contact.email: invalid email format",
+        "header.email: invalid email format",
       );
     });
   });
@@ -437,14 +437,14 @@ describe("parseResume", () => {
       });
     });
 
-    it("reads the context paragraph after the role line", () => {
-      expect(parseWith().jobs[0].context).toBe("Acme Corp builds widgets.");
+    it("reads the intro paragraph after the role line", () => {
+      expect(parseWith().jobs[0].intro).toBe("Acme Corp builds widgets.");
     });
 
-    it("returns an empty context when the job has no paragraph", () => {
+    it("returns an empty intro when the job has no paragraph", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].context).toBe("");
-      expect(jobs[1].context).toBe("");
+      expect(jobs[0].intro).toBe("");
+      expect(jobs[1].intro).toBe("");
     });
 
     it('reads bullets without the leading "- "', () => {
@@ -454,14 +454,14 @@ describe("parseResume", () => {
       ]);
     });
 
-    it("finds the bullets of a job without a context paragraph", () => {
+    it("finds the bullets of a job without an intro paragraph", () => {
       expect(parseWith().jobs[1].bullets).toEqual([
         "Owned the returns micro-frontend.",
       ]);
     });
 
-    it('reads the stack without the "**Tech Stack:**" label', () => {
-      expect(parseWith().jobs[0].stack).toBe("React, TypeScript, GraphQL");
+    it('reads the tech stack without the "**Tech Stack:**" label', () => {
+      expect(parseWith().jobs[0].techStack).toBe("React, TypeScript, GraphQL");
     });
 
     it("reads the company website from a bare URL line", () => {
@@ -488,7 +488,7 @@ describe("parseResume", () => {
 
     it("joins a hard-wrapped Tech Stack line", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].stack).toBe(
+      expect(jobs[0].techStack).toBe(
         "React, TypeScript, GraphQL, Node.js, Jest, ApexCharts, Highcharts, Styled Components",
       );
     });
@@ -509,7 +509,7 @@ describe("parseResume", () => {
         "",
       );
       expect(() => parseWith({ experience })).toThrow(
-        "jobs[1].stack: required",
+        "jobs[1].techStack: required",
       );
     });
 
@@ -542,9 +542,9 @@ describe("parseResume", () => {
       ]);
     });
 
-    it('does not take a plain "Reference:" line as the context', () => {
+    it('does not take a plain "Reference:" line as the intro', () => {
       const experience = PLAIN_REFERENCE_EXPERIENCE_FIXTURE;
-      expect(parseWith({ experience }).jobs[0].context).toBe("");
+      expect(parseWith({ experience }).jobs[0].intro).toBe("");
     });
 
     it.each([
@@ -552,7 +552,7 @@ describe("parseResume", () => {
       "**References:** manager@acme.example, lead@acme.example",
       "References: manager@acme.example, lead@acme.example",
       "reference: manager@acme.example, lead@acme.example",
-    ])("reads the references, not the context, from %j", (line) => {
+    ])("reads the references, not the intro, from %j", (line) => {
       const experience = PLAIN_REFERENCE_EXPERIENCE_FIXTURE.replace(
         "Reference: manager@acme.example, lead@acme.example",
         line,
@@ -562,13 +562,13 @@ describe("parseResume", () => {
         "manager@acme.example",
         "lead@acme.example",
       ]);
-      expect(job.context).toBe("");
+      expect(job.intro).toBe("");
     });
 
     it("reads a reference line written right under the tech stack", () => {
       const experience = UNSPACED_REFERENCE_EXPERIENCE_FIXTURE;
       const [job] = parseWith({ experience }).jobs;
-      expect(job.stack).toBe("React, TypeScript");
+      expect(job.techStack).toBe("React, TypeScript");
       expect(job.references).toEqual([
         "manager@acme.example",
         "lead@acme.example",
@@ -619,22 +619,22 @@ describe("parseResume", () => {
   // ─── Technical Skills ───────────────────────────────────────────────────────
 
   describe("## Technical Skills", () => {
-    it('returns one group per "**Heading:** a, b" line', () => {
+    it('returns one group per "**Label:** a, b" line', () => {
       expect(parseWith().skillGroups).toEqual([
-        { heading: "Languages", items: ["TypeScript", "JavaScript", "Python"] },
-        { heading: "Frontend", items: ["React", "Next.js", "Vue.js"] },
+        { label: "Languages", skills: ["TypeScript", "JavaScript", "Python"] },
+        { label: "Frontend", skills: ["React", "Next.js", "Vue.js"] },
       ]);
     });
 
-    it("includes items from hard-wrapped continuation lines", () => {
+    it("includes skills from hard-wrapped continuation lines", () => {
       const skills =
         "## Technical Skills\n\n**Frontend:** React, Next.js, Styled Components,\nMaterial UI\n\n**Languages:** Java";
       expect(parseWith({ skills }).skillGroups).toEqual([
         {
-          heading: "Frontend",
-          items: ["React", "Next.js", "Styled Components", "Material UI"],
+          label: "Frontend",
+          skills: ["React", "Next.js", "Styled Components", "Material UI"],
         },
-        { heading: "Languages", items: ["Java"] },
+        { label: "Languages", skills: ["Java"] },
       ]);
     });
 
@@ -648,40 +648,40 @@ describe("parseResume", () => {
   // ─── Education ──────────────────────────────────────────────────────────────
 
   describe("## Education", () => {
-    it("returns one item per ### block", () => {
-      expect(parseWith().eduItems).toHaveLength(2);
+    it("returns one school per ### block", () => {
+      expect(parseWith().schools).toHaveLength(2);
     });
 
     it('reads school and location from the heading, location empty without " — "', () => {
-      const { eduItems } = parseWith();
-      expect(eduItems[0]).toMatchObject({
+      const { schools } = parseWith();
+      expect(schools[0]).toMatchObject({
         school: "University A",
         location: "Springfield",
       });
-      expect(eduItems[1]).toMatchObject({
+      expect(schools[1]).toMatchObject({
         school: "University B",
         location: "",
       });
     });
 
     it("reads degree, area and period from the degree line", () => {
-      expect(parseWith().eduItems[0]).toMatchObject({
+      expect(parseWith().schools[0]).toMatchObject({
         degree: "Master's degree",
         area: "Engineering",
         period: "2018 – 2019",
       });
     });
 
-    it("reads the context line after the degree, before the bullets", () => {
-      const { eduItems } = parseWith();
-      expect(eduItems[0].context).toBe(
+    it("reads the intro line after the degree, before the bullets", () => {
+      const { schools } = parseWith();
+      expect(schools[0].intro).toBe(
         "Coursework completed; transitioned to full-time role.",
       );
-      expect(eduItems[1].context).toBe("85% Overall Average");
+      expect(schools[1].intro).toBe("85% Overall Average");
     });
 
     it('reads bullets as plain text without the leading "- "', () => {
-      expect(parseWith().eduItems[0].bullets).toEqual([
+      expect(parseWith().schools[0].bullets).toEqual([
         "LINK101 Course Title Here",
         "Plain bullet without link",
       ]);
@@ -699,7 +699,7 @@ describe("parseResume", () => {
         "  University)",
         "- CS101 Software Engineering",
       ].join("\n");
-      expect(parseWith({ education }).eduItems[0].bullets).toEqual([
+      expect(parseWith({ education }).schools[0].bullets).toEqual([
         "ESMM290 Software Systems Architecture (in collaboration with Carnegie Mellon University)",
         "CS101 Software Engineering",
       ]);
@@ -707,17 +707,17 @@ describe("parseResume", () => {
 
     it("throws if ## Education is missing", () => {
       expect(() => parseWith({ education: "" })).toThrow(
-        "eduItems: needs at least one entry",
+        "schools: needs at least one entry",
       );
     });
 
-    it("throws if an education item has no degree line", () => {
+    it("throws if a school has no degree line", () => {
       const education = EDUCATION_FIXTURE.replace(
         "**Master's degree, Engineering** | 2018 – 2019\n",
         "",
       );
       expect(() => parseWith({ education })).toThrow(
-        "eduItems[0].degree: required",
+        "schools[0].degree: required",
       );
     });
   });
@@ -735,14 +735,14 @@ describe("parseResume", () => {
       expect(projects[1].title).toBe("Acme Tools — Prototype");
     });
 
-    it("joins the hard-wrapped context paragraph", () => {
-      expect(parseWith().projects[0].context).toBe(
+    it("joins the hard-wrapped intro paragraph", () => {
+      expect(parseWith().projects[0].intro).toBe(
         "A small example that streams widget prices in real time, built to try out server-sent events.",
       );
     });
 
     it("joins the hard-wrapped Tech Stack line", () => {
-      expect(parseWith().projects[0].stack).toBe(
+      expect(parseWith().projects[0].techStack).toBe(
         "Next.js, React, Server Sent Events (provided by Next.js)",
       );
     });
@@ -767,9 +767,9 @@ describe("parseResume", () => {
       ]);
     });
 
-    it("does not mistake a link line for the context paragraph", () => {
+    it("does not mistake a link line for the intro paragraph", () => {
       const { projects } = parseWith({ projects: LINKED_PROJECTS_FIXTURE });
-      expect(projects[1].context).toBe("");
+      expect(projects[1].intro).toBe("");
       expect(projects[1].links).toHaveLength(1);
     });
 

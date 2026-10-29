@@ -3,39 +3,40 @@
  *
  * Every type resume-md uses, in one place. Data shapes are inferred from the
  * Zod schemas in schema.ts, which are the source of truth; only the shapes
- * that are not data (the Resume.md document model) are declared here by hand.
+ * that are not data (the Resume.md outline and its lines) are declared here
+ * by hand.
  */
 
 import type { z } from "zod";
 import type { ValueOf } from "../utils/types.ts";
 import type {
-  ParsedCertificationSchema,
-  ParsedContactSchema,
-  ParsedEduItemSchema,
-  ParsedJobSchema,
-  ParsedLanguageSchema,
-  ParsedLinkSchema,
-  ParsedProjectSchema,
-  ParsedResumeSchema,
-  ParsedSkillGroupSchema,
+  CertificationSchema,
+  HeaderSchema,
+  JobSchema,
+  LanguageSchema,
+  LinkSchema,
+  ProjectSchema,
+  ResumeMdSchema,
+  SchoolSchema,
+  SkillGroupSchema,
 } from "./schema.ts";
 
-// ─── Parsed Resume.md ─────────────────────────────────────────────────────────
+// ─── What Resume.md says ──────────────────────────────────────────────────────
 
-export type ParsedLink = z.infer<typeof ParsedLinkSchema>;
-export type ParsedContact = z.infer<typeof ParsedContactSchema>;
-export type ParsedJob = z.infer<typeof ParsedJobSchema>;
-export type ParsedSkillGroup = z.infer<typeof ParsedSkillGroupSchema>;
-export type ParsedEduItem = z.infer<typeof ParsedEduItemSchema>;
-export type ParsedProject = z.infer<typeof ParsedProjectSchema>;
-export type ParsedCertification = z.infer<typeof ParsedCertificationSchema>;
-export type ParsedLanguage = z.infer<typeof ParsedLanguageSchema>;
-export type ParsedResume = z.infer<typeof ParsedResumeSchema>;
+export type Link = z.infer<typeof LinkSchema>;
+export type Header = z.infer<typeof HeaderSchema>;
+export type Job = z.infer<typeof JobSchema>;
+export type SkillGroup = z.infer<typeof SkillGroupSchema>;
+export type School = z.infer<typeof SchoolSchema>;
+export type Project = z.infer<typeof ProjectSchema>;
+export type Certification = z.infer<typeof CertificationSchema>;
+export type Language = z.infer<typeof LanguageSchema>;
+export type ResumeMd = z.infer<typeof ResumeMdSchema>;
 
-// ─── Resume.md document model ────────────────────────────────────────────────
+// ─── The Resume.md outline ───────────────────────────────────────────────────
 //
 // How parser.ts reads Resume.md before the section readers build the
-// ParsedResume; see docs/GLOSSARY.md.
+// ResumeMd; see docs/GLOSSARY.md.
 
 /** `## Heading` names the parser reads. */
 export const SectionHeading = {
@@ -55,7 +56,7 @@ export type SectionHeading = ValueOf<typeof SectionHeading>;
 export enum LineKind {
   /** `---` */
   Rule = "rule",
-  /** `- item` */
+  /** `- text` */
   Bullet = "bullet",
   /** `Reference: a, b`, plain or bold. */
   Reference = "reference",
@@ -63,7 +64,7 @@ export enum LineKind {
   TechStack = "techStack",
   /** `**Title** | dates` */
   Title = "title",
-  /** `**Label** rest`: skill groups and certifications. */
+  /** `**Label** value`: skill groups and certifications. */
   Labelled = "labelled",
   /** A sub-heading or bold markup no reader takes. */
   Markup = "markup",
@@ -79,7 +80,7 @@ interface BulletLine {
   kind: LineKind.Bullet;
   text: string;
   /** The bullet without its `- `. */
-  item: string;
+  bulletText: string;
 }
 
 interface ReferenceLine {
@@ -91,7 +92,7 @@ interface ReferenceLine {
 interface TechStackLine {
   kind: LineKind.TechStack;
   text: string;
-  stack: string;
+  techStack: string;
 }
 
 interface TitleLine {
@@ -105,7 +106,8 @@ interface LabelledLine {
   kind: LineKind.Labelled;
   text: string;
   label: string;
-  rest: string;
+  /** Everything after the bold label. */
+  value: string;
 }
 
 interface PlainLine<TKind extends LineKind> {
@@ -140,8 +142,9 @@ export interface Section {
   entries: Entry[];
 }
 
-export interface ResumeDocument {
+/** Resume.md read once into its header lines and sections. */
+export interface ResumeOutline {
   /** Trimmed, non-empty lines above the first `## ` heading, without rules. */
-  header: string[];
+  headerLines: string[];
   sections: Map<string, Section>;
 }

@@ -2,13 +2,14 @@
  * define-tool.ts
  *
  * Turns a tool's specs into everything both ways of running it need: the
- * menu's option list, the usage line and one argv parser. A tool declares
+ * menu's option list, the usage line and one argument parser. A tool declares
  * each option once and its run receives typed values, so the menu and the
  * direct command can't drift apart.
  *
- * Parsing argv takes three steps, each with its own data (the terms are
- * defined in types.ts):
- * 1. answers: the flags given on argv, then each missing one's default.
+ * Parsing the tool arguments takes three steps, each with its own data (the
+ * terms are defined in types.ts):
+ * 1. answers: the flags given in the tool arguments, then each missing one's
+ *    default.
  * 2. checks: every required option has an answer, every choice a valid one.
  * 3. values: each answer converted for its kind, as run receives it.
  */
@@ -19,12 +20,12 @@ import { fillDefaults, pickNonEmptyStrings } from "../utils/record.ts";
 import { firstIssue } from "../utils/schema.ts";
 import { splitList } from "../utils/string.ts";
 import {
+  type AnyOptionValue,
   type Answers,
   OptionKind,
   type OptionDescriptor,
   type OptionSpecs,
   type OptionValues,
-  type ResolvedValue,
   type ToolDefinition,
   type ToolSpec,
 } from "./types.ts";
@@ -42,8 +43,8 @@ const STRING_FLAG = { type: "string" } as const;
  * @returns One option per spec, with its flag.
  *
  * @example
- * toOptionDescriptors({ id: { kind: OptionKind.Text, required: true, message: "Id" } });
- * // [{ flag: "id", kind: "text", required: true, message: "Id" }]
+ * toOptionDescriptors({ id: { kind: OptionKind.Text, required: true, question: "Id" } });
+ * // [{ flag: "id", kind: "text", required: true, question: "Id" }]
  */
 function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
   return Object.entries(specs).map(([flag, spec]) => ({ ...spec, flag }));
@@ -53,7 +54,7 @@ function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
  * The value hint shown after a flag in the usage line and errors. A choice
  * shows `<flag>`, like text; its values are listed when one is rejected.
  */
-function placeholder(option: OptionDescriptor): string {
+function valuePlaceholder(option: OptionDescriptor): string {
   if (option.kind === OptionKind.Path) return "<path>";
   if (option.kind === OptionKind.List) return "<a,b>";
   return `<${option.flag}>`;
@@ -65,25 +66,25 @@ function formatUsage(
   options: readonly OptionDescriptor[],
 ): string {
   const flags = options.map((option) => {
-    const flag = `--${option.flag} ${placeholder(option)}`;
+    const flag = `--${option.flag} ${valuePlaceholder(option)}`;
     if (option.required) return flag;
     return `[${flag}]`;
   });
   return ["Usage:", command, ...flags].join(" ");
 }
 
-/** Step 1: the answers given on argv, then each missing option's default. */
+/** Step 1: the answers given in the tool arguments, then each missing option's default. */
 function collectAnswers(
   options: readonly OptionDescriptor[],
-  argv: readonly string[],
+  toolArguments: readonly string[],
 ): Answers {
-  const { values: flags } = parseArgs({
-    args: [...argv],
+  const { values: givenAnswers } = parseArgs({
+    args: [...toolArguments],
     options: Object.fromEntries(options.map(({ flag }) => [flag, STRING_FLAG])),
     strict: true,
   });
   return fillDefaults(
-    pickNonEmptyStrings(flags),
+    pickNonEmptyStrings(givenAnswers),
     options.map((option) => [option.flag, option.default]),
   );
 }
@@ -101,7 +102,9 @@ function assertValidAnswer(
 ): void {
   const flag = `--${option.flag}`;
   if (!answer && option.required) {
-    throw new Error(`${flag} ${placeholder(option)} is required\n${usage}`);
+    throw new Error(
+      `${flag} ${valuePlaceholder(option)} is required\n${usage}`,
+    );
   }
   if (answer === undefined) return;
   switch (option.kind) {
@@ -119,23 +122,23 @@ function assertValidAnswer(
 }
 
 /** Step 3: converts an answer into the value run receives for its kind. */
-function toValue(
+function toOptionValue(
   option: OptionDescriptor,
   answer: string | undefined,
-  cwd: string,
-): ResolvedValue {
+  workingDirectory: string,
+): AnyOptionValue {
   if (option.kind === OptionKind.List) return splitList(answer);
   if (answer === undefined) return undefined;
-  if (option.kind === OptionKind.Path) return resolve(cwd, answer);
+  if (option.kind === OptionKind.Path) return resolve(workingDirectory, answer);
   return answer;
 }
 
 /**
- * Parses argv against a tool's specs.
+ * Parses the tool arguments against a tool's specs.
  *
  * @param specs - The tool's specs, keyed by flag.
- * @param argv - Flags and values, without the tool id.
- * @param cwd - Base directory for relative paths.
+ * @param toolArguments - Flags and values, without the tool id.
+ * @param workingDirectory - Where relative paths start.
  * @param usage - Printed under a missing-option error.
  * @returns The typed values: paths absolute, lists split on commas, defaults
  *   applied in declaration order (each sees the answers before it).
@@ -143,21 +146,21 @@ function toValue(
  *   value outside its choices or text breaks its schema, and parseArgs' error
  *   for an unknown flag.
  */
-function parseToolArgs<TOptions extends OptionSpecs>(
+function parseToolArguments<TOptions extends OptionSpecs>(
   specs: TOptions,
-  argv: readonly string[],
-  cwd: string,
+  toolArguments: readonly string[],
+  workingDirectory: string,
   usage: string,
 ): OptionValues<TOptions> {
   const options = toOptionDescriptors(specs);
-  const answers = collectAnswers(options, argv);
+  const answers = collectAnswers(options, toolArguments);
   for (const option of options) {
     assertValidAnswer(option, answers[option.flag], usage);
   }
   const values = Object.fromEntries(
     options.map((option) => [
       option.flag,
-      toValue(option, answers[option.flag], cwd),
+      toOptionValue(option, answers[option.flag], workingDirectory),
     ]),
   );
   // Built key by key from `specs` with each kind's value, so it matches
@@ -170,16 +173,17 @@ function parseToolArgs<TOptions extends OptionSpecs>(
  *
  * @param spec - The tool's id, menu text, specs and typed run.
  * @returns The tool, with its command, usage line, option list, a typed
- *   `parse`, and an argv `run` that parses before calling `spec.run`.
+ *   `parse`, and a `run` that parses the tool arguments before calling
+ *   `spec.run`.
  *
  * @example
  * export const deleteResumeTool = defineTool({
- *   id: "delete-rx-resume",
- *   options: { id: { kind: OptionKind.Text, required: true, message: "Id" } },
- *   run: async ({ id }, { env }) => { … },
+ *   id: "delete-resume",
+ *   options: { id: { kind: OptionKind.Text, required: true, question: "Id" } },
+ *   run: async ({ id }, dependencies) => { … },
  *   …
  * });
- * deleteResumeTool.parse(["--id", "r1"], cwd); // { id: "r1" }
+ * deleteResumeTool.parse(["--id", "r1"], workingDirectory); // { id: "r1" }
  */
 export function defineTool<const TOptions extends OptionSpecs>(
   spec: ToolSpec<TOptions>,
@@ -188,9 +192,10 @@ export function defineTool<const TOptions extends OptionSpecs>(
   const options = toOptionDescriptors(spec.options);
   const usage = formatUsage(command, options);
   const parse = (
-    argv: readonly string[],
-    cwd: string,
-  ): OptionValues<TOptions> => parseToolArgs(spec.options, argv, cwd, usage);
+    toolArguments: readonly string[],
+    workingDirectory: string,
+  ): OptionValues<TOptions> =>
+    parseToolArguments(spec.options, toolArguments, workingDirectory, usage);
 
   return {
     id: spec.id,
@@ -201,7 +206,10 @@ export function defineTool<const TOptions extends OptionSpecs>(
     options,
     preflight: spec.preflight,
     parse,
-    run: async (argv, runContext) =>
-      spec.run(parse(argv, runContext.cwd), runContext),
+    run: async (toolArguments, dependencies) =>
+      spec.run(
+        parse(toolArguments, dependencies.workingDirectory),
+        dependencies,
+      ),
   };
 }

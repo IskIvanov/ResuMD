@@ -8,27 +8,27 @@
 const SECTION_HEADING = /\n## /;
 
 /**
- * Splits a Markdown string into a map of `## Heading` → body.
+ * Splits a Markdown string into a map of `## Heading` → the section's text.
  * Prepends a newline so the first heading is always found by /\n## /.
  *
- * @param md - A Markdown string, e.g. Resume.md or a cover letter.
- * @returns Each section's body, as written, keyed by its trimmed heading.
+ * @param markdown - A Markdown string, e.g. Resume.md or a cover letter.
+ * @returns Each section's text, as written, keyed by its trimmed heading.
  *   Text above the first `## ` heading is left out.
  *
  * @example
  * splitSections("# Jane\n## Summary\nHello\n");
  * // { Summary: "Hello\n" }
  */
-export function splitSections(md: string): Record<string, string> {
+export function splitSections(markdown: string): Record<string, string> {
   return Object.fromEntries(
-    ("\n" + md)
+    ("\n" + markdown)
       .split(SECTION_HEADING)
       .slice(1)
-      .map((part) => {
-        const newlineIdx = part.indexOf("\n");
-        const heading = part.slice(0, newlineIdx).trim();
-        const body = part.slice(newlineIdx + 1);
-        return [heading, body];
+      .map((headingAndText) => {
+        const newlineIndex = headingAndText.indexOf("\n");
+        const heading = headingAndText.slice(0, newlineIndex).trim();
+        const sectionText = headingAndText.slice(newlineIndex + 1);
+        return [heading, sectionText];
       }),
   );
 }

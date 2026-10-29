@@ -1,7 +1,7 @@
 /**
  * index.ts
  *
- * The Reactive Resume tools, in menu order: generate, update and delete a
+ * The Reactive Resume tools, in menu order: create, update and delete a
  * resume from Resume.md, then the same for a cover letter from its `.md`.
  * Each connects, reads its file, runs an operation and prints what it wrote.
  * Every tool is disabled in the menu until `.env` has the Reactive Resume
@@ -13,25 +13,25 @@ import { defineTool } from "../cli/define-tool.ts";
 import {
   FileExtension,
   OptionKind,
-  type RunContext,
   type ToolDefinition,
+  type ToolDependencies,
 } from "../cli/types.ts";
 import { slugify } from "../utils/string.ts";
 import type { RxResumeApiClient } from "./api/client.ts";
-import { apiConfigProblem, connectRxResume } from "./api/config.ts";
+import { connectRxResume, describeMissingSettings } from "./api/settings.ts";
 import {
   type CoverLetter,
   CoverLetterTemplate,
   type Resume,
 } from "./api/types.ts";
 import {
+  createCoverLetter,
   deleteCoverLetter,
-  generateCoverLetter,
   updateCoverLetter,
 } from "./operations/cover-letter/index.ts";
 import {
+  createResume,
   deleteResume,
-  generateResume,
   updateResume,
 } from "./operations/resume/index.ts";
 import { CoverLetterIdSchema } from "./schema.ts";
@@ -43,59 +43,60 @@ import type { LetterFields } from "./types.ts";
 const MARKDOWN_FILE = { extensions: [FileExtension.Markdown], mustExist: true };
 
 const RESUME_FILE_OPTION = {
-  message: "Path to Resume.md",
+  question: "Path to Resume.md",
   kind: OptionKind.Path,
   required: true,
   path: MARKDOWN_FILE,
 } as const;
 
 const LETTER_FILE_OPTION = {
-  message: "Path to the cover letter (.md)",
+  question: "Path to the cover letter (.md)",
   kind: OptionKind.Path,
   required: true,
   path: MARKDOWN_FILE,
 } as const;
 
 const APPLICATION_ID_OPTION = {
-  message: "Id of the job application it's for",
+  question: "Id of the job application it's for",
   kind: OptionKind.Text,
   required: false,
 } as const;
 
 const COMPANY_OPTION = {
-  message: "Company it's addressed to",
+  question: "Company it's addressed to",
   kind: OptionKind.Text,
   required: false,
 } as const;
 
-/** Connects to the API that the run's `.env` configures. */
-function connect(context: RunContext): RxResumeApiClient {
-  return connectRxResume(context.env, context.fetch, {
-    write: context.logError,
-    now: context.now,
-  });
+/** Connects to the instance the run's `.env` settings name. */
+function connect(dependencies: ToolDependencies): RxResumeApiClient {
+  return connectRxResume(
+    dependencies.environmentVariables,
+    dependencies.fetch,
+    { write: dependencies.logError, now: dependencies.now },
+  );
 }
 
-/** Prints a written resume and its builder link. */
+/** Prints a written resume and the link that opens it in the editor. */
 function printResume(
-  context: RunContext,
+  dependencies: ToolDependencies,
   heading: string,
   resume: Resume,
   client: RxResumeApiClient,
 ): void {
-  context.log(
+  dependencies.log(
     `${heading} "${resume.name}" (slug ${resume.slug}, id ${resume.id})`,
   );
-  context.log(`  builder: ${client.builderUrl(resume.id)}`);
+  dependencies.log(`  editor: ${client.resumeEditorUrl(resume.id)}`);
 }
 
 /**
- * Prints a written cover letter and its dashboard link. The template is shown
- * only when one was chosen, since the letter then no longer follows the
- * resume's design.
+ * Prints a written cover letter and the link that opens it. The template is
+ * shown only when one was chosen, since the letter then no longer matches
+ * its source resume.
  */
 function printLetter(
-  context: RunContext,
+  dependencies: ToolDependencies,
   heading: string,
   letter: CoverLetter,
   client: RxResumeApiClient,
@@ -103,11 +104,11 @@ function printLetter(
 ): void {
   const details = [`id ${letter.id}`, `revision ${letter.revision}`];
   if (template) details.push(`template ${template}`);
-  context.log(`${heading} "${letter.name}" (${details.join(", ")})`);
-  context.log(`  letter: ${client.letterUrl(letter.id)}`);
+  dependencies.log(`${heading} "${letter.name}" (${details.join(", ")})`);
+  dependencies.log(`  editor: ${client.coverLetterEditorUrl(letter.id)}`);
 }
 
-/** A cover-letter tool's metadata flags, named as the API names them. */
+/** A cover-letter tool's field flags, named as the API names them. */
 function letterFields(values: {
   name?: string;
   "resume-id"?: string;
@@ -127,90 +128,97 @@ function letterFields(values: {
 // ─── Resumes ──────────────────────────────────────────────────────────────────
 
 /** Parses Resume.md and creates a new resume from it. */
-export const generateResumeTool = defineTool({
-  id: "generate-rx-resume",
-  title: "Generate resume",
-  description: "create a new resume in Reactive Resume via its API",
+export const createResumeTool = defineTool({
+  id: "create-resume",
+  title: "Create resume",
+  description: "create a new resume in Reactive Resume from Resume.md",
   options: {
     resume: RESUME_FILE_OPTION,
     name: {
-      message: "Name of the new resume",
+      question: "Name of the new resume",
       kind: OptionKind.Text,
       required: true,
     },
     slug: {
-      message: "URL slug (must be unused)",
+      question: "URL slug (must be unused)",
       kind: OptionKind.Text,
       required: false,
       default: (answers) => slugify(answers.name ?? ""),
     },
     tags: {
-      message: "Tags, comma-separated",
+      question: "Tags, comma-separated",
       kind: OptionKind.List,
       required: false,
     },
   },
-  preflight: apiConfigProblem,
-  run: async ({ resume, name, slug, tags }, context) => {
+  preflight: describeMissingSettings,
+  run: async ({ resume, name, slug, tags }, dependencies) => {
     if (!slug) {
       throw new Error(`Cannot derive --slug from "${name}"; pass --slug`);
     }
     // Settings are checked before the file is read.
-    const client = connect(context);
-    const markdown = context.readFile(resume);
-    const created = await generateResume(
+    const client = connect(dependencies);
+    const markdown = dependencies.readFile(resume);
+    const created = await createResume(
       client,
       markdown,
       { name, slug, tags },
-      context.newId,
+      dependencies.newId,
     );
-    printResume(context, "✓ Created", created, client);
+    printResume(dependencies, "✓ Created", created, client);
   },
 });
 
-/** Parses Resume.md and writes it into a resume, by the id generate prints. */
+/** Parses Resume.md and writes it into a resume, by the id create prints. */
 export const updateResumeTool = defineTool({
-  id: "update-rx-resume",
+  id: "update-resume",
   title: "Update resume",
   description: "rewrite an existing resume in Reactive Resume from Resume.md",
   options: {
     id: {
-      message: "Id of the resume to update",
+      question: "Id of the resume to update",
       kind: OptionKind.Text,
       required: true,
     },
     resume: RESUME_FILE_OPTION,
   },
-  preflight: apiConfigProblem,
-  run: async ({ id, resume }, context) => {
+  preflight: describeMissingSettings,
+  run: async ({ id, resume }, dependencies) => {
     // Settings are checked before the file is read.
-    const client = connect(context);
-    const markdown = context.readFile(resume);
-    const updated = await updateResume(client, id, markdown, context.newId);
-    printResume(context, "✓ Updated", updated, client);
+    const client = connect(dependencies);
+    const markdown = dependencies.readFile(resume);
+    const updated = await updateResume(
+      client,
+      id,
+      markdown,
+      dependencies.newId,
+    );
+    printResume(dependencies, "✓ Updated", updated, client);
   },
 });
 
 /**
- * Permanently deletes a resume, by the id generate prints. The API also
- * removes its screenshots and PDFs, and rejects a locked resume.
+ * Deletes a resume for good, by the id create prints: moves it to Trash,
+ * then purges it. The API also removes its screenshots and PDFs, and rejects
+ * a locked resume.
  */
 export const deleteResumeTool = defineTool({
-  id: "delete-rx-resume",
+  id: "delete-resume",
   title: "Delete resume",
-  description: "permanently delete a resume in Reactive Resume via its API",
+  description:
+    "delete a resume in Reactive Resume: move it to Trash, then purge it",
   options: {
     id: {
-      message: "Id of the resume to delete",
+      question: "Id of the resume to delete",
       kind: OptionKind.Text,
       required: true,
     },
   },
-  preflight: apiConfigProblem,
+  preflight: describeMissingSettings,
   // The API returns no data on deletion, so only the id is printed.
-  run: async ({ id }, context) => {
-    await deleteResume(connect(context), id);
-    context.log(`✓ Deleted resume ${id}`);
+  run: async ({ id }, dependencies) => {
+    await deleteResume(connect(dependencies), id);
+    dependencies.log(`✓ Deleted resume ${id}`);
   },
 });
 
@@ -218,39 +226,39 @@ export const deleteResumeTool = defineTool({
 
 /**
  * Parses a cover-letter `.md` and creates a letter from it, linked to a
- * resume for its sender details and design.
+ * source resume for its sender details and design.
  */
-export const generateCoverLetterTool = defineTool({
-  id: "generate-cover-letter",
-  title: "Generate cover letter",
+export const createCoverLetterTool = defineTool({
+  id: "create-cover-letter",
+  title: "Create cover letter",
   description: "create a cover letter in Reactive Resume from a .md",
   options: {
     letter: LETTER_FILE_OPTION,
     name: {
-      message: "Name of the new cover letter",
+      question: "Name of the new cover letter",
       kind: OptionKind.Text,
       required: true,
     },
     "resume-id": {
-      message: "Id of the resume it goes with (gives the sender and design)",
+      question: "Id of the source resume (gives the sender details and design)",
       kind: OptionKind.Text,
       required: true,
     },
     "application-id": APPLICATION_ID_OPTION,
     company: COMPANY_OPTION,
     template: {
-      message: "Template (leave out to follow the resume's design)",
+      question: "Template (leave out to match the resume's design)",
       kind: OptionKind.Choice,
       required: false,
       choices: Object.values(CoverLetterTemplate),
     },
   },
-  preflight: apiConfigProblem,
-  run: async (values, context) => {
+  preflight: describeMissingSettings,
+  run: async (values, dependencies) => {
     // Settings are checked before the file is read.
-    const client = connect(context);
-    const markdown = context.readFile(values.letter);
-    const letter = await generateCoverLetter(
+    const client = connect(dependencies);
+    const markdown = dependencies.readFile(values.letter);
+    const letter = await createCoverLetter(
       client,
       markdown,
       {
@@ -258,10 +266,10 @@ export const generateCoverLetterTool = defineTool({
         name: values.name,
         resumeId: values["resume-id"],
       },
-      context.today(),
+      dependencies.today(),
     );
     printLetter(
-      context,
+      dependencies,
       "✓ Created cover letter",
       letter,
       client,
@@ -272,7 +280,7 @@ export const generateCoverLetterTool = defineTool({
 
 /**
  * Parses a cover-letter `.md` and rewrites a letter from it, by the id
- * generate prints. A flag left out keeps the stored value.
+ * create prints. A flag left out keeps the stored value.
  */
 export const updateCoverLetterTool = defineTool({
   id: "update-cover-letter",
@@ -280,41 +288,41 @@ export const updateCoverLetterTool = defineTool({
   description: "rewrite an existing cover letter in Reactive Resume from a .md",
   options: {
     id: {
-      message: "Id of the cover letter to update",
+      question: "Id of the cover letter to update",
       kind: OptionKind.Text,
       schema: CoverLetterIdSchema,
       required: true,
     },
     letter: LETTER_FILE_OPTION,
-    name: { message: "New name", kind: OptionKind.Text, required: false },
+    name: { question: "New name", kind: OptionKind.Text, required: false },
     company: COMPANY_OPTION,
     "resume-id": {
-      message: "Id of the resume it goes with",
+      question: "Id of the source resume",
       kind: OptionKind.Text,
       required: false,
     },
     "application-id": APPLICATION_ID_OPTION,
     template: {
-      message: "Template (stops following the resume's design)",
+      question: "Template (stops matching the resume's design)",
       kind: OptionKind.Choice,
       required: false,
       choices: Object.values(CoverLetterTemplate),
     },
   },
-  preflight: apiConfigProblem,
-  run: async (values, context) => {
+  preflight: describeMissingSettings,
+  run: async (values, dependencies) => {
     // Settings are checked before the file is read.
-    const client = connect(context);
-    const markdown = context.readFile(values.letter);
+    const client = connect(dependencies);
+    const markdown = dependencies.readFile(values.letter);
     const letter = await updateCoverLetter(
       client,
       values.id,
       markdown,
       letterFields(values),
-      context.today(),
+      dependencies.today(),
     );
     printLetter(
-      context,
+      dependencies,
       "✓ Updated cover letter",
       letter,
       client,
@@ -324,35 +332,35 @@ export const updateCoverLetterTool = defineTool({
 });
 
 /**
- * Permanently deletes a cover letter, by the id generate prints: moves it to
+ * Deletes a cover letter for good, by the id create prints: moves it to
  * Trash, then purges it. The API rejects a locked letter.
  */
 export const deleteCoverLetterTool = defineTool({
   id: "delete-cover-letter",
   title: "Delete cover letter",
   description:
-    "permanently delete a cover letter in Reactive Resume via its API",
+    "delete a cover letter in Reactive Resume: move it to Trash, then purge it",
   options: {
     id: {
-      message: "Id of the cover letter to delete",
+      question: "Id of the cover letter to delete",
       kind: OptionKind.Text,
       schema: CoverLetterIdSchema,
       required: true,
     },
   },
-  preflight: apiConfigProblem,
-  run: async ({ id }, context) => {
-    await deleteCoverLetter(connect(context), id);
-    context.log(`✓ Permanently deleted cover letter ${id}`);
+  preflight: describeMissingSettings,
+  run: async ({ id }, dependencies) => {
+    await deleteCoverLetter(connect(dependencies), id);
+    dependencies.log(`✓ Deleted cover letter ${id}`);
   },
 });
 
 /** Every Reactive Resume tool, in menu order. */
 export const RX_RESUME_TOOLS: readonly ToolDefinition[] = [
-  generateResumeTool,
+  createResumeTool,
   updateResumeTool,
   deleteResumeTool,
-  generateCoverLetterTool,
+  createCoverLetterTool,
   updateCoverLetterTool,
   deleteCoverLetterTool,
 ];

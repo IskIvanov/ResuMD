@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { parseOrThrow, requiredText, ValidationMessage } from "./schema.ts";
+import { parseOrThrow, requiredText, FieldProblem } from "./schema.ts";
 
 describe("requiredText", () => {
   it("accepts a non-empty string", () => {
@@ -9,14 +9,14 @@ describe("requiredText", () => {
 
   it.each([undefined, ""])("reports %j as required", (value) => {
     const result = requiredText.safeParse(value);
-    expect(result.error?.issues[0]?.message).toBe(ValidationMessage.Required);
+    expect(result.error?.issues[0]?.message).toBe(FieldProblem.Required);
   });
 });
 
 describe("parseOrThrow", () => {
   const schema = z.object({
     name: requiredText,
-    tags: z.array(z.string()).min(1, ValidationMessage.Empty),
+    tags: z.array(z.string()).min(1, FieldProblem.Empty),
   });
 
   it("returns the parsed value when it matches", () => {

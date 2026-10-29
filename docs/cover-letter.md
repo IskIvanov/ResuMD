@@ -7,7 +7,7 @@ for where the code differs from or adds to the plan. Risk 3 below is
 resolved; the others are still open.
 
 > **Revision (merged platforms):** the cover-letter code now lives in
-> `src/rx-resume/operations/cover-letter/` (`index.ts`: generate, update and
+> `src/rx-resume/operations/cover-letter/` (`index.ts`: create, update and
 > delete, taking the API client; `parser.ts`), and the three tools are
 > declared in `src/rx-resume/index.ts`, which also prints. `body.ts`,
 > `update.ts`, `delete.ts`, `CoverLetterError` and `camelCaseKeys` are gone:
@@ -15,6 +15,13 @@ resolved; the others are still open.
 > names directly. `letterDate` comes from the run context's `today`; luxon is
 > gone. The tests drive each tool through its argv with `recordingFetch`.
 > Paths below describe the original layout.
+>
+> **Revision (glossary names):** the tools are `create-cover-letter`,
+> `update-cover-letter` and `delete-cover-letter`; the `.md`'s sections are
+> `## Recipient`, `## Letter` and `## Sign-off`, and errors name them as
+> `recipient`, `letter` and `signOff`; links print as `editor:`. The terms are
+> in [GLOSSARY.md](GLOSSARY.md). Sections from "Changes by file" on keep the
+> names of the time.
 
 ## Goal
 
@@ -24,9 +31,9 @@ same way `Resume.md` drives a resume. Three new tools are added under the
 
 | Tool id                 | Title                 | Does                                        |
 | ----------------------- | --------------------- | ------------------------------------------- |
-| `generate-cover-letter` | Generate cover letter | Creates a letter from the `.md`             |
+| `create-cover-letter`   | Create cover letter   | Creates a letter from the `.md`             |
 | `update-cover-letter`   | Update cover letter   | Rewrites an existing letter from the `.md`  |
-| `delete-cover-letter`   | Delete cover letter   | Permanently deletes a letter                |
+| `delete-cover-letter`   | Delete cover letter   | Deletes a letter for good                   |
 
 ## Non-goals
 
@@ -44,8 +51,8 @@ same way `Resume.md` drives a resume. Three new tools are added under the
 | #  | Decision |
 | -- | -------- |
 | 1  | The `.md` is the source of truth for the letter's text. CLI flags carry the metadata (`name`, ids, company, template). |
-| 2  | The `.md` has three **required** sections: `## Contact` (the hiring manager), `## Letter` and `## Closing`. |
-| 3  | The sender's own details come live from the linked resume, so `--resume-id` is **required** on generate. |
+| 2  | The `.md` has three **required** sections: `## Recipient` (the recipient block), `## Letter` (the body) and `## Sign-off`. |
+| 3  | The sender's own details come live from the source resume, so `--resume-id` is **required** on create. |
 | 4  | `layout` is always `freeform`: the `.md` writes its own greeting and sign-off, so `structured` would duplicate them. |
 | 5  | The `.md` always sets `recipient`, even when `--application-id` is given. The application only links the job. |
 | 6  | `letterDate` is set to today on **every** create and update, formatted with luxon. |
@@ -88,13 +95,13 @@ Neither the create nor the update body accepts sender details. The letter's
 `style.basics` is a copy of the sender's details, or is read live from the
 resume when `senderLinked` is true. Passing `resumeId` on create links both
 the sender and the design, and `Resume.md` already feeds that resume through
-generate/update-rx-resume. That's why `--resume-id` is required: a letter
+create-resume and update-resume. That's why `--resume-id` is required: a letter
 without it has no sender block, and nothing can fill one.
 
 ## The cover-letter `.md`
 
 ```md
-## Contact
+## Recipient
 
 Jane Smith
 Acme BV
@@ -108,17 +115,17 @@ First paragraph…
 
 Second paragraph…
 
-## Closing
+## Sign-off
 
 Kind regards,
 Jane Doe
 ```
 
-| Section       | Becomes     | Rule |
-| ------------- | ----------- | ---- |
-| `## Contact`  | `recipient` | Lines kept as written, trimmed |
-| `## Letter`   | `content`   | Then a blank line, then `## Closing`. Paragraphs and hard line breaks kept |
-| `## Closing`  | `content`   | |
+| Section        | Becomes     | Rule |
+| -------------- | ----------- | ---- |
+| `## Recipient` | `recipient` | Lines kept as written, trimmed |
+| `## Letter`    | `content`   | Then a blank line, then `## Sign-off`. Paragraphs and hard line breaks kept |
+| `## Sign-off`  | `content`   | |
 
 - Sections are split by the existing `splitSections` in
   `sync-resume/parser.ts`. It is only **exported**, not moved.
@@ -127,12 +134,12 @@ Jane Doe
 - The text is sent as it is. `content` is plain text, so there's no
   Markdown-to-HTML conversion, and `**bold**` arrives literally.
 - A missing or empty section fails Zod validation with a path that names it,
-  e.g. `closing: required`, in the same style as `jobs[2].role: required`.
+  e.g. `signOff: required`, in the same style as `jobs[2].role: required`.
 
 ## CLI
 
 ```
-bun run cli generate-cover-letter --letter <path.md> --name <text> --resume-id <id>
+bun run cli create-cover-letter --letter <path.md> --name <text> --resume-id <id>
     [--application-id <id>] [--company <text>] [--template <template>]
 
 bun run cli update-cover-letter --id <letterId> --letter <path.md>
@@ -145,18 +152,18 @@ bun run cli delete-cover-letter --id <letterId>
 - `--letter` is an `OptionKind.Path` that accepts `.md` and must exist.
 - `--company` is sent as `recipientCompany`.
 - On update, an optional flag that isn't given leaves the stored value as it is.
-- All three tools use `preflight: apiConfigProblem`, so they're disabled in the
-  menu until `.env` has the Reactive Resume settings.
-- They're appended to `TOOLS` after `deleteTool`, in the order generate,
-  update, delete.
+- All three tools use `preflight: describeMissingSettings`, so they're
+  disabled in the menu until `.env` has the Reactive Resume settings.
+- They follow the resume tools in the menu, in the order create, update,
+  delete.
 
 In use:
 
-- `--resume-id` links the letter to a resume, which gives it the sender's
-  details and design. Keep that resume up to date from `Resume.md` with
-  `update-rx-resume`.
-- `--template` picks one of the 17 templates, and the letter stops following
-  the resume's design. Leave it out to keep the resume's design.
+- `--resume-id` links the letter to its source resume, which gives it the
+  sender details and design. Keep that resume up to date from `Resume.md`
+  with `update-resume`.
+- `--template` picks one of the 17 templates, and the letter stops matching
+  the resume's design. Leave it out to keep matching it.
 - Update is refused if the letter was edited after it was read; run it again.
   It's also refused, before anything is sent, for a letter that isn't
   `freeform` (see risk 3 below).
@@ -168,14 +175,14 @@ In use:
 
 ```
 ✓ Created cover letter "Acme — Frontend" (id clx…, revision 1, template onyx)
-  letter: https://rxresu.me/dashboard/clx…
+  editor: https://rxresu.me/dashboard/clx…
 ✓ Updated cover letter "Acme — Frontend" (id clx…, revision 4)
-  letter: https://rxresu.me/dashboard/clx…
-✓ Permanently deleted cover letter clx…
+  editor: https://rxresu.me/dashboard/clx…
+✓ Deleted cover letter clx…
 ```
 
 `, template <name>` is printed only when `--template` was given, so it's
-visible that the letter no longer follows the resume's design. The origin
+visible that the letter no longer matches the resume's design. The origin
 comes from `RXRESUME_APP_URL` (already in `.env.example`), so a local instance
 works without code changes. Only the `/dashboard/<id>` path is in code.
 

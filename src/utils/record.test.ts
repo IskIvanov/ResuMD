@@ -4,16 +4,28 @@ import { fillDefaults, omitUndefined, pickNonEmptyStrings } from "./record.ts";
 describe("omitUndefined", () => {
   it("drops undefined fields and keeps every other value", () => {
     expect(
-      omitUndefined({ a: "x", b: undefined, c: 0, d: null, e: "" }),
-    ).toEqual({ a: "x", c: 0, d: null, e: "" });
+      omitUndefined({
+        name: "Acme",
+        template: undefined,
+        revision: 0,
+        letterDate: null,
+        recipient: "",
+      }),
+    ).toEqual({ name: "Acme", revision: 0, letterDate: null, recipient: "" });
   });
 });
 
 describe("pickNonEmptyStrings", () => {
   it("keeps only the entries that are non-empty strings", () => {
     expect(
-      pickNonEmptyStrings({ a: "x", b: "", c: undefined, d: true, e: ["y"] }),
-    ).toEqual({ a: "x" });
+      pickNonEmptyStrings({
+        id: "resume-1",
+        slug: "",
+        name: undefined,
+        verbose: true,
+        tags: ["cv"],
+      }),
+    ).toEqual({ id: "resume-1" });
   });
 });
 

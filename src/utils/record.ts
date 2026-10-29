@@ -48,17 +48,17 @@ export function pickNonEmptyStrings(
  * Fills each key that has no value from its default, in order. A default sees
  * the given entries and every default filled before it.
  *
- * @param given - The entries supplied, keyed by name.
+ * @param entries - The entries supplied, keyed by name.
  * @param defaults - Each key with its default builder, in the order to fill
  *   them. A key that already has a value, or has no builder, is skipped.
- * @returns A copy of `given` plus each default that built a value.
+ * @returns A copy of `entries` plus each default that built a value.
  *
  * @example
  * fillDefaults({ name: "Jane" }, [["slug", (known) => known.name.toLowerCase()]]);
  * // { name: "Jane", slug: "jane" }
  */
 export function fillDefaults(
-  given: Readonly<Record<string, string>>,
+  entries: Readonly<Record<string, string>>,
   defaults: readonly DefaultEntry[],
 ): Record<string, string> {
   return defaults.reduce<Record<string, string>>(
@@ -68,6 +68,6 @@ export function fillDefaults(
       if (value === undefined) return known;
       return { ...known, [key]: value };
     },
-    { ...given },
+    { ...entries },
   );
 }

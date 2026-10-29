@@ -5,6 +5,19 @@ Linear:
 · Follow-up:
 [BAC-53](https://linear.app/bck123/issue/BAC-53/move-test-fixtures-into-one-mocksts-per-tool-folder)
 
+> **Revision (glossary names):** names follow [GLOSSARY.md](GLOSSARY.md) and
+> spell out what they hold. The tools are `create-resume`, `update-resume`,
+> `delete-resume`, `create-cover-letter`, `update-cover-letter` and
+> `delete-cover-letter`. In `src/cli/`: `RunContext` → `ToolDependencies`,
+> `CliDeps` → `CliDependencies`, `PathContext` → `PathLookup`; `argv` →
+> `toolArguments` (a tool's) or `commandLineArguments` (runCli's), `cwd` →
+> `workingDirectory`, `env` → `environmentVariables`, `isTTY` →
+> `isInteractiveTerminal`, and an option's and a prompt's `message` →
+> `question`. In `src/rx-resume/api/`: `config.ts` → `settings.ts`
+> (`apiConfigProblem` → `describeMissingSettings`), `request` → `callApi`,
+> `*Body` → `*Request`, `RequestLog` → `ApiCallLog`, `baseUrl` → `apiUrl`.
+> Older names below keep the names of the time.
+
 > **Revision (merged platforms):** a platform's tools now live in its own
 > folder: `src/rx-resume/index.ts` declares them, `api/` holds the client and
 > `operations/` the API calls. `RunContext` carries `fetch`, ids, the clock,

@@ -17,11 +17,11 @@ describe("slugify", () => {
 
 describe("splitList", () => {
   it("splits on commas and trims each entry", () => {
-    expect(splitList("a, b ,c")).toEqual(["a", "b", "c"]);
+    expect(splitList("react, vue ,svelte")).toEqual(["react", "vue", "svelte"]);
   });
 
   it("drops empty entries", () => {
-    expect(splitList("a,, ,b,")).toEqual(["a", "b"]);
+    expect(splitList("react,, ,vue,")).toEqual(["react", "vue"]);
   });
 
   it("returns an empty list for an absent or empty value", () => {

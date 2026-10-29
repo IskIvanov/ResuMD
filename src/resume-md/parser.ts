@@ -1,32 +1,33 @@
 /**
  * parser.ts
  *
- * Parses a Resume.md string into a validated ParsedResume. Pure: no file I/O.
+ * Parses a Resume.md string into a validated ResumeMd. Pure: no file I/O.
  *
- * The document is read once: the header above the first `## ` heading, then
- * each section as logical lines (hard-wrapped lines joined) and `### ` entries.
+ * Resume.md is read once into an outline: the header above the first `## `
+ * heading, then each section as logical lines (hard-wrapped lines joined) and
+ * `### ` entries.
  * Every logical line gets one LineKind from classifyLine, the only place that
  * decides what a line is; the section readers below only consume kinds.
  */
 
 import { splitSections } from "../utils/markdown.ts";
 import { splitList } from "../utils/string.ts";
-import { validateParsedResume } from "./schema.ts";
+import { validateResumeMd } from "./schema.ts";
 import {
   type Entry,
   type Line,
   LineKind,
   type LineOf,
-  type ParsedCertification,
-  type ParsedContact,
-  type ParsedEduItem,
-  type ParsedJob,
-  type ParsedLanguage,
-  type ParsedLink,
-  type ParsedProject,
-  type ParsedResume,
-  type ParsedSkillGroup,
-  type ResumeDocument,
+  type Certification,
+  type Header,
+  type School,
+  type Job,
+  type Language,
+  type Link,
+  type Project,
+  type ResumeMd,
+  type SkillGroup,
+  type ResumeOutline,
   type Section,
   SectionHeading,
 } from "./types.ts";
@@ -98,8 +99,11 @@ const EMPTY_SECTION: Section = { lines: [], entries: [] };
 
 /** True for a line made up only of markdown links and `|` separators. */
 function isLinkLine(text: string): boolean {
-  const rest = text.replace(MARKDOWN_LINK_REGEX, "");
-  return rest !== text && rest.split(CONTACT_SEPARATOR).join("").trim() === "";
+  const withoutLinks = text.replace(MARKDOWN_LINK_REGEX, "");
+  return (
+    withoutLinks !== text &&
+    withoutLinks.split(CONTACT_SEPARATOR).join("").trim() === ""
+  );
 }
 
 /**
@@ -110,38 +114,38 @@ function isLinkLine(text: string): boolean {
 function classifyLine(text: string): Line {
   if (text === RULE) return { kind: LineKind.Rule, text };
   if (text.startsWith(BULLET_PREFIX)) {
-    const item = text.slice(BULLET_PREFIX.length).trim();
-    return { kind: LineKind.Bullet, text, item };
+    const bulletText = text.slice(BULLET_PREFIX.length).trim();
+    return { kind: LineKind.Bullet, text, bulletText };
   }
 
-  const reference = REFERENCE_LINE_REGEX.exec(text);
-  if (reference) {
-    const references = splitList(reference[1]);
+  const referenceMatch = REFERENCE_LINE_REGEX.exec(text);
+  if (referenceMatch) {
+    const references = splitList(referenceMatch[1]);
     return { kind: LineKind.Reference, text, references };
   }
 
   if (text.startsWith(TECH_STACK_PREFIX)) {
-    const stack = text.slice(TECH_STACK_PREFIX.length).trim();
-    return { kind: LineKind.TechStack, text, stack };
+    const techStack = text.slice(TECH_STACK_PREFIX.length).trim();
+    return { kind: LineKind.TechStack, text, techStack };
   }
 
-  const title = TITLE_LINE_REGEX.exec(text);
-  if (title) {
+  const titleMatch = TITLE_LINE_REGEX.exec(text);
+  if (titleMatch) {
     return {
       kind: LineKind.Title,
       text,
-      title: title[1].trim(),
-      period: title[2].trim(),
+      title: titleMatch[1].trim(),
+      period: titleMatch[2].trim(),
     };
   }
 
-  const labelled = BOLD_PREFIX_REGEX.exec(text);
-  if (labelled) {
+  const labelledMatch = BOLD_PREFIX_REGEX.exec(text);
+  if (labelledMatch) {
     return {
       kind: LineKind.Labelled,
       text,
-      label: labelled[1].trim(),
-      rest: labelled[2],
+      label: labelledMatch[1].trim(),
+      value: labelledMatch[2],
     };
   }
 
@@ -165,10 +169,10 @@ function isEducationField(line: Line): boolean {
  * hard-wrapped one: a bullet, heading or rule at the start of the line, a
  * reference line or an education field line.
  */
-function startsLogicalLine(raw: string): boolean {
-  const line = classifyLine(raw);
+function startsLogicalLine(rawLine: string): boolean {
+  const line = classifyLine(rawLine);
   return (
-    BLOCK_START_PREFIXES.some((prefix) => raw.startsWith(prefix)) ||
+    BLOCK_START_PREFIXES.some((prefix) => rawLine.startsWith(prefix)) ||
     line.kind === LineKind.Reference ||
     isEducationField(line)
   );
@@ -180,62 +184,65 @@ function startsLogicalLine(raw: string): boolean {
  * logical line; any other line, indented or not, continues the previous one.
  */
 function readLines(text: string): Line[] {
-  const logical: string[] = [];
-  let current: string | null = null;
+  const logicalLines: string[] = [];
+  let currentLine: string | null = null;
 
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (line.length > 0 && current !== null && !startsLogicalLine(raw)) {
-      current = `${current} ${line}`;
+  for (const rawLine of text.split("\n")) {
+    const trimmedLine = rawLine.trim();
+    if (
+      trimmedLine.length > 0 &&
+      currentLine !== null &&
+      !startsLogicalLine(rawLine)
+    ) {
+      currentLine = `${currentLine} ${trimmedLine}`;
       continue;
     }
-    if (current !== null) logical.push(current);
-    current = null;
-    if (line.length > 0) current = line;
+    if (currentLine !== null) logicalLines.push(currentLine);
+    currentLine = null;
+    if (trimmedLine.length > 0) currentLine = trimmedLine;
   }
-  if (current !== null) logical.push(current);
+  if (currentLine !== null) logicalLines.push(currentLine);
 
-  return logical.map(classifyLine);
+  return logicalLines.map(classifyLine);
 }
 
 /** Reads one `### ` block; a block with no lines at all has no entry. */
-function readEntries(chunk: string): Entry[] {
-  const [heading, ...lines] = readLines(chunk).filter(
+function readEntries(entryMarkdown: string): Entry[] {
+  const [heading, ...lines] = readLines(entryMarkdown).filter(
     (line) => line.kind !== LineKind.Rule,
   );
   if (heading === undefined) return [];
   return [{ heading: heading.text, lines }];
 }
 
-function readSection(body: string): Section {
+function readSection(sectionMarkdown: string): Section {
   return {
-    lines: readLines(body),
-    entries: body
+    lines: readLines(sectionMarkdown),
+    entries: sectionMarkdown
       .split(ENTRY_START)
-      .filter((chunk) => chunk.trim().length > 0)
+      .filter((entryMarkdown) => entryMarkdown.trim().length > 0)
       .flatMap(readEntries),
   };
 }
 
-function readDocument(md: string): ResumeDocument {
-  const [preamble] = `\n${md}`.split(SECTION_START);
-  const header = preamble
+function readOutline(markdown: string): ResumeOutline {
+  const [preamble] = `\n${markdown}`.split(SECTION_START);
+  const headerLines = preamble
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && line !== RULE);
   const sections = new Map(
-    Object.entries(splitSections(md)).map(([heading, body]) => [
-      heading,
-      readSection(body),
-    ]),
+    Object.entries(splitSections(markdown)).map(
+      ([heading, sectionMarkdown]) => [heading, readSection(sectionMarkdown)],
+    ),
   );
-  return { header, sections };
+  return { headerLines, sections };
 }
 
 // ─── Line helpers ─────────────────────────────────────────────────────────────
 
-function sectionOf(document: ResumeDocument, heading: SectionHeading): Section {
-  return document.sections.get(heading) ?? EMPTY_SECTION;
+function sectionOf(outline: ResumeOutline, heading: SectionHeading): Section {
+  return outline.sections.get(heading) ?? EMPTY_SECTION;
 }
 
 function linesOfKind<TKind extends LineKind>(
@@ -252,9 +259,9 @@ function firstOfKind<TKind extends LineKind>(
   return linesOfKind(lines, kind).at(0);
 }
 
-/** The items of every bullet line. */
-function bulletItems(lines: Line[]): string[] {
-  return linesOfKind(lines, LineKind.Bullet).map((line) => line.item);
+/** The text of every bullet line, without its `- `. */
+function bulletTexts(lines: Line[]): string[] {
+  return linesOfKind(lines, LineKind.Bullet).map((line) => line.bulletText);
 }
 
 /** The first paragraph, stopping at the first bullet; empty without one. */
@@ -267,13 +274,13 @@ function firstParagraph(lines: Line[]): string {
 }
 
 /**
- * The context paragraph after the `**Title** | dates` line; empty when the
+ * The intro paragraph after the `**Title** | dates` line; empty when the
  * entry has no title line.
  */
-function contextAfterTitle(lines: Line[]): string {
-  const titleIdx = lines.findIndex((line) => line.kind === LineKind.Title);
-  if (titleIdx < 0) return "";
-  return firstParagraph(lines.slice(titleIdx + 1));
+function introAfterTitle(lines: Line[]): string {
+  const titleIndex = lines.findIndex((line) => line.kind === LineKind.Title);
+  if (titleIndex < 0) return "";
+  return firstParagraph(lines.slice(titleIndex + 1));
 }
 
 /** The text of every line before the first rule, joined with spaces. */
@@ -291,31 +298,31 @@ function textBeforeRule(lines: Line[]): string {
  * without one.
  */
 function splitQualified(text: string): { name: string; qualifier: string } {
-  const separatorIdx = text.indexOf(NAME_SEPARATOR);
-  if (separatorIdx < 0) return { name: text.trim(), qualifier: "" };
+  const separatorIndex = text.indexOf(NAME_SEPARATOR);
+  if (separatorIndex < 0) return { name: text.trim(), qualifier: "" };
   return {
-    name: text.slice(0, separatorIdx).trim(),
-    qualifier: text.slice(separatorIdx + NAME_SEPARATOR.length).trim(),
+    name: text.slice(0, separatorIndex).trim(),
+    qualifier: text.slice(separatorIndex + NAME_SEPARATOR.length).trim(),
   };
 }
 
 /** The value of the first `**Label** value` line with this label, or "". */
 function labelledValue(lines: Line[], label: string): string {
   const line = linesOfKind(lines, LineKind.Labelled).find(
-    (labelled) => labelled.label === label,
+    (labelledLine) => labelledLine.label === label,
   );
-  return line?.rest.trim() ?? "";
+  return line?.value.trim() ?? "";
 }
 
 /**
  * Splits `Degree, Area` on its first `, `; the area is empty without one.
  */
 function splitDegree(title: string): { degree: string; area: string } {
-  const separatorIdx = title.indexOf(DEGREE_SEPARATOR);
-  if (separatorIdx < 0) return { degree: title.trim(), area: "" };
+  const separatorIndex = title.indexOf(DEGREE_SEPARATOR);
+  if (separatorIndex < 0) return { degree: title.trim(), area: "" };
   return {
-    degree: title.slice(0, separatorIdx).trim(),
-    area: title.slice(separatorIdx + DEGREE_SEPARATOR.length).trim(),
+    degree: title.slice(0, separatorIndex).trim(),
+    area: title.slice(separatorIndex + DEGREE_SEPARATOR.length).trim(),
   };
 }
 
@@ -332,10 +339,10 @@ function readDegree(
 }
 
 /** Every markdown link with an http(s) URL, in document order. */
-function parseLinks(text: string): ParsedLink[] {
-  return [...text.matchAll(MARKDOWN_LINK_REGEX)].map((match) => ({
-    label: match[1].trim(),
-    url: match[2],
+function parseLinks(text: string): Link[] {
+  return [...text.matchAll(MARKDOWN_LINK_REGEX)].map((linkMatch) => ({
+    label: linkMatch[1].trim(),
+    url: linkMatch[2],
   }));
 }
 
@@ -347,14 +354,16 @@ function parseLinks(text: string): ParsedLink[] {
  * website), not position. The first unrecognised part is the location.
  * Markdown links anywhere below the headline become profiles.
  */
-function readContact(header: string[]): ParsedContact {
-  const nameLine = header.find((line) => line.startsWith(NAME_PREFIX));
-  const headlineIdx = header.findIndex((line) => BOLD_LINE_REGEX.test(line));
-  const headline = BOLD_LINE_REGEX.exec(header[headlineIdx] ?? "");
+function readHeader(headerLines: string[]): Header {
+  const nameLine = headerLines.find((line) => line.startsWith(NAME_PREFIX));
+  const headlineIndex = headerLines.findIndex((line) =>
+    BOLD_LINE_REGEX.test(line),
+  );
+  const headline = BOLD_LINE_REGEX.exec(headerLines[headlineIndex] ?? "");
   // Contact details come from the first line only; links are read from every
   // line, so profiles may share the contact line or follow on their own.
-  const contactLines = header
-    .slice(headlineIdx + 1)
+  const contactLines = headerLines
+    .slice(headlineIndex + 1)
     .filter((line) => !line.startsWith(HEADING_MARKER));
   const parts = (contactLines[0] ?? "")
     .split(CONTACT_SEPARATOR)
@@ -380,7 +389,7 @@ function readContact(header: string[]): ParsedContact {
 }
 
 /** A `### Company — Location` entry of `## Experience`. */
-function readJob({ heading, lines }: Entry): ParsedJob {
+function readJob({ heading, lines }: Entry): Job {
   const { name, qualifier } = splitQualified(heading);
   const title = firstOfKind(lines, LineKind.Title);
   const references = firstOfKind(lines, LineKind.Reference)?.references;
@@ -390,9 +399,9 @@ function readJob({ heading, lines }: Entry): ParsedJob {
     location: qualifier,
     role: title?.title ?? "",
     period: title?.period ?? "",
-    context: contextAfterTitle(lines),
-    bullets: bulletItems(lines),
-    stack: firstOfKind(lines, LineKind.TechStack)?.stack ?? "",
+    intro: introAfterTitle(lines),
+    bullets: bulletTexts(lines),
+    techStack: firstOfKind(lines, LineKind.TechStack)?.techStack ?? "",
     website: firstOfKind(lines, LineKind.Url)?.text ?? "",
     ...(references !== undefined && { references }),
   };
@@ -403,7 +412,7 @@ function readJob({ heading, lines }: Entry): ParsedJob {
  * `**Grade:**` and `**Location:**` lines set those fields; the location line
  * overrides the heading's.
  */
-function readEducation({ heading, lines }: Entry): ParsedEduItem {
+function readSchool({ heading, lines }: Entry): School {
   const { name, qualifier } = splitQualified(heading);
   const title = firstOfKind(lines, LineKind.Title);
   const { degree, area } = readDegree(
@@ -420,8 +429,8 @@ function readEducation({ heading, lines }: Entry): ParsedEduItem {
     area,
     grade: labelledValue(lines, EducationLabel.Grade),
     period: title?.period ?? "",
-    context: contextAfterTitle(lines),
-    bullets: bulletItems(lines),
+    intro: introAfterTitle(lines),
+    bullets: bulletTexts(lines),
   };
 }
 
@@ -429,26 +438,27 @@ function readEducation({ heading, lines }: Entry): ParsedEduItem {
  * A `### Title` entry of `## Projects`. The heading is kept whole, since a
  * project title may itself contain ` — `; links come from every line.
  */
-function readProject({ heading, lines }: Entry): ParsedProject {
+function readProject({ heading, lines }: Entry): Project {
   return {
     title: heading.trim(),
-    context: firstParagraph(lines),
-    stack: firstOfKind(lines, LineKind.TechStack)?.stack ?? "",
+    intro: firstParagraph(lines),
+    techStack: firstOfKind(lines, LineKind.TechStack)?.techStack ?? "",
     links: lines.flatMap((line) => parseLinks(line.text)),
   };
 }
 
 /** Each `**Heading:** a, b` line of `## Technical Skills`. */
-function readSkillGroups(lines: Line[]): ParsedSkillGroup[] {
+function readSkillGroups(lines: Line[]): SkillGroup[] {
   return linesOfKind(lines, LineKind.Labelled)
     .filter(
-      (line) => line.label.endsWith(SKILL_LABEL_SUFFIX) && line.rest.length > 0,
+      (line) =>
+        line.label.endsWith(SKILL_LABEL_SUFFIX) && line.value.length > 0,
     )
     .map((line) => ({
-      heading: line.label.slice(0, -SKILL_LABEL_SUFFIX.length).trim(),
-      items: line.rest
+      label: line.label.slice(0, -SKILL_LABEL_SUFFIX.length).trim(),
+      skills: line.value
         .split(SKILL_SEPARATOR)
-        .map((item) => item.trim())
+        .map((skill) => skill.trim())
         .filter(Boolean),
     }));
 }
@@ -458,7 +468,7 @@ function readSkillGroups(lines: Line[]): ParsedSkillGroup[] {
  * paragraph, a `**Credential ID:** a, b` line and a markdown link are each
  * optional; only the first link is kept.
  */
-function readCertification({ heading, lines }: Entry): ParsedCertification {
+function readCertification({ heading, lines }: Entry): Certification {
   const { name, qualifier } = splitQualified(heading);
   const [link] = lines.flatMap((line) => parseLinks(line.text));
 
@@ -475,9 +485,9 @@ function readCertification({ heading, lines }: Entry): ParsedCertification {
  * Each `- Language — Fluency (n/5)` bullet of `## Languages`; the fluency and
  * the level are each optional, and `- Language — n` gives a level alone.
  */
-function readLanguages(lines: Line[]): ParsedLanguage[] {
-  return bulletItems(lines).map((item) => {
-    const { name, qualifier } = splitQualified(item);
+function readLanguages(lines: Line[]): Language[] {
+  return bulletTexts(lines).map((bulletText) => {
+    const { name, qualifier } = splitQualified(bulletText);
     return { language: name, ...splitFluency(qualifier) };
   });
 }
@@ -487,8 +497,10 @@ function splitFluency(qualifier: string): { fluency: string; level: number } {
   if (LANGUAGE_LEVEL_REGEX.test(qualifier)) {
     return { fluency: "", level: Number(qualifier) };
   }
-  const rated = LANGUAGE_RATED_REGEX.exec(qualifier);
-  if (rated) return { fluency: rated[1], level: Number(rated[2]) };
+  const ratedMatch = LANGUAGE_RATED_REGEX.exec(qualifier);
+  if (ratedMatch) {
+    return { fluency: ratedMatch[1], level: Number(ratedMatch[2]) };
+  }
   return { fluency: qualifier, level: NO_LANGUAGE_LEVEL };
 }
 
@@ -502,7 +514,7 @@ function readInterests(lines: Line[]): string[] {
 
 /** A reference line as listed: a bullet without its `- `. */
 function listedText(line: Line): string {
-  if (line.kind === LineKind.Bullet) return line.item;
+  if (line.kind === LineKind.Bullet) return line.bulletText;
   return line.text;
 }
 
@@ -510,13 +522,13 @@ function listedText(line: Line): string {
  * Each line of `## References`; without that section, a standalone note such
  * as "References available upon request" anywhere in the sections.
  */
-function readReferences(document: ResumeDocument): string[] {
-  const listed = sectionOf(document, SectionHeading.References).lines.filter(
+function readReferences(outline: ResumeOutline): string[] {
+  const listed = sectionOf(outline, SectionHeading.References).lines.filter(
     (line) => line.kind !== LineKind.Rule,
   );
   if (listed.length > 0) return listed.map(listedText);
 
-  return [...document.sections.values()]
+  return [...outline.sections.values()]
     .flatMap((section) => linesOfKind(section.lines, LineKind.Paragraph))
     .filter((line) => REFERENCES_NOTE_REGEX.test(line.text))
     .map((line) => line.text);
@@ -525,37 +537,37 @@ function readReferences(document: ResumeDocument): string[] {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 /**
- * Parses a full Resume.md string into a structured ParsedResume object and
- * validates it against ParsedResumeSchema.
+ * Parses a full Resume.md string into what it says, a ResumeMd, and
+ * validates it against ResumeMdSchema.
  *
  * @param markdown - The full Resume.md string.
- * @returns The parsed and validated resume.
+ * @returns What Resume.md says, validated.
  * @throws If required content is missing (the summary, a job's role or tech
  *   stack, a whole required section, …); the error names each path, e.g.
  *   `jobs[2].role: required`.
  *
  * @example
- * parseResume(readFileSync("Resume.md", "utf-8")).jobs[0].company;
+ * parseResumeMd(readFileSync("Resume.md", "utf-8")).jobs[0].company;
  * // "Acme Corp"
  */
 // todo; add a custom section for additional
-export function parseResume(markdown: string): ParsedResume {
-  const document = readDocument(markdown);
-  const section = (heading: SectionHeading): Section =>
-    sectionOf(document, heading);
+export function parseResumeMd(markdown: string): ResumeMd {
+  const outline = readOutline(markdown);
+  const sectionNamed = (heading: SectionHeading): Section =>
+    sectionOf(outline, heading);
 
-  return validateParsedResume({
-    contact: readContact(document.header),
-    summary: textBeforeRule(section(SectionHeading.Summary).lines),
-    jobs: section(SectionHeading.Experience).entries.map(readJob),
-    skillGroups: readSkillGroups(section(SectionHeading.Skills).lines),
-    eduItems: section(SectionHeading.Education).entries.map(readEducation),
-    projects: section(SectionHeading.Projects).entries.map(readProject),
-    certifications: section(SectionHeading.Certifications).entries.map(
+  return validateResumeMd({
+    header: readHeader(outline.headerLines),
+    summary: textBeforeRule(sectionNamed(SectionHeading.Summary).lines),
+    jobs: sectionNamed(SectionHeading.Experience).entries.map(readJob),
+    skillGroups: readSkillGroups(sectionNamed(SectionHeading.Skills).lines),
+    schools: sectionNamed(SectionHeading.Education).entries.map(readSchool),
+    projects: sectionNamed(SectionHeading.Projects).entries.map(readProject),
+    certifications: sectionNamed(SectionHeading.Certifications).entries.map(
       readCertification,
     ),
-    languages: readLanguages(section(SectionHeading.Languages).lines),
-    interests: readInterests(section(SectionHeading.Interests).lines),
-    references: readReferences(document),
+    languages: readLanguages(sectionNamed(SectionHeading.Languages).lines),
+    interests: readInterests(sectionNamed(SectionHeading.Interests).lines),
+    references: readReferences(outline),
   });
 }

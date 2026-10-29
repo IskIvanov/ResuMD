@@ -1,24 +1,24 @@
 /**
  * client.ts
  *
- * A minimal Reactive Resume API client for the resume and cover-letter
- * endpoints. `fetch` is injected, so the client holds no global state and is
- * tested without a network.
+ * A minimal client for Reactive Resume's REST API: the resume, cover-letter
+ * and document endpoints the tools call. `fetch` is injected, so the client
+ * holds no global state and is tested without a network.
  */
 
 import { describeCaught } from "../../utils/error.ts";
-import type { FetchFn, ValueOf } from "../../utils/types.ts";
+import type { FetchFunction, ValueOf } from "../../utils/types.ts";
 import {
-  type ApiErrorBody,
+  type ApiCallLog,
+  type ApiErrorDetails,
   type CoverLetter,
-  type CreateCoverLetterBody,
-  type CreateResumeBody,
-  EnvVar,
-  type RequestLog,
+  type CreateCoverLetterRequest,
+  type CreateResumeRequest,
+  EnvironmentVariable,
   type Resume,
-  type RxResumeClientConfig,
-  type UpdateCoverLetterBody,
-  type UpdateResumeBody,
+  type RxResumeClientDependencies,
+  type UpdateCoverLetterRequest,
+  type UpdateResumeRequest,
 } from "./types.ts";
 
 /** Header carrying the API key. */
@@ -37,14 +37,21 @@ const HttpMethod = {
 } as const;
 type HttpMethod = ValueOf<typeof HttpMethod>;
 
+/** The kinds of document in `/documents/{type}/{id}`. */
+const DocumentType = {
+  Resume: "resume",
+  Letter: "letter",
+} as const;
+type DocumentType = ValueOf<typeof DocumentType>;
+
 const RESUMES_PATH = "/resumes";
-/** Where the web app opens a resume. */
-const BUILDER_PATH = "/builder";
-/** Where the web app lists a cover letter. */
-const LETTER_DASHBOARD_PATH = "/dashboard";
 const COVER_LETTERS_PATH = "/cover-letters";
-/** Where a letter already in Trash is deleted for good. */
-const LETTER_DOCUMENTS_PATH = "/documents/letter";
+/** Where a document already in Trash is purged. */
+const DOCUMENTS_PATH = "/documents";
+/** Where the web app's editor opens a resume. */
+const RESUME_EDITOR_PATH = "/builder";
+/** Where the web app opens a cover letter. */
+const COVER_LETTER_EDITOR_PATH = "/dashboard";
 
 /** One or more slashes at the end of a URL. */
 const TRAILING_SLASHES = /\/+$/;
@@ -64,32 +71,35 @@ export class RxResumeApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
 
-  constructor(status: number, code: string | undefined, message: string) {
-    super(
-      `Reactive Resume API error ${status}${code ? ` ${code}` : ""}: ${message}`,
-    );
+  constructor(status: number, code: string | undefined, apiMessage: string) {
+    let codePart = "";
+    if (code) codePart = ` ${code}`;
+    super(`Reactive Resume API error ${status}${codePart}: ${apiMessage}`);
     this.name = "RxResumeApiError";
     this.status = status;
     this.code = code;
   }
 }
 
-/** Builds an RxResumeApiError from a failed response, JSON body or not. */
-async function toApiError(response: Response): Promise<RxResumeApiError> {
-  const text = await response.text();
-  let body: ApiErrorBody = {};
+/** Builds an RxResumeApiError from a failed response, JSON or not. */
+async function toApiError(httpResponse: Response): Promise<RxResumeApiError> {
+  const responseText = await httpResponse.text();
+  let errorDetails: ApiErrorDetails = {};
   try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed === "object" && parsed !== null) body = parsed;
+    const errorJson: unknown = JSON.parse(responseText);
+    if (typeof errorJson === "object" && errorJson !== null) {
+      errorDetails = errorJson;
+    }
   } catch {
     // Not JSON (e.g. a proxy error page); fall back to the raw text.
   }
-  const code = typeof body.code === "string" ? body.code : undefined;
-  const message =
-    typeof body.message === "string"
-      ? body.message
-      : text || response.statusText;
-  return new RxResumeApiError(response.status, code, message);
+  let code: string | undefined;
+  if (typeof errorDetails.code === "string") code = errorDetails.code;
+  let apiMessage = responseText || httpResponse.statusText;
+  if (typeof errorDetails.message === "string") {
+    apiMessage = errorDetails.message;
+  }
+  return new RxResumeApiError(httpResponse.status, code, apiMessage);
 }
 
 /** `/resumes/{id}`. */
@@ -98,154 +108,184 @@ function resumePath(id: string): string {
 }
 
 /** `/cover-letters/{id}`. */
-function letterPath(id: string): string {
+function coverLetterPath(id: string): string {
   return itemPath(COVER_LETTERS_PATH, id);
 }
 
+/** `/documents/{type}/{id}`. */
+function documentPath(type: DocumentType, id: string): string {
+  return itemPath(`${DOCUMENTS_PATH}/${type}`, id);
+}
+
 /**
- * A client for the Reactive Resume resume and cover-letter endpoints. Each
- * method rejects with RxResumeApiError on a non-2xx response.
+ * A client for the Reactive Resume resume, cover-letter and document
+ * endpoints. Each method rejects with RxResumeApiError on a non-2xx response.
  *
  * @example
- * const client = new RxResumeApiClient({ baseUrl, apiKey, fetch });
+ * const client = new RxResumeApiClient({ apiUrl, appUrl, apiKey, fetch });
  * const id = await client.createResume({ name: "CV", slug: "cv", tags: [] });
  */
 export class RxResumeApiClient {
-  readonly baseUrl: string;
+  readonly apiUrl: string;
   readonly appUrl: string;
   readonly apiKey: string;
-  readonly fetch: FetchFn;
-  readonly requestLog: RequestLog | undefined;
+  readonly fetch: FetchFunction;
+  readonly apiCallLog: ApiCallLog | undefined;
 
   /**
-   * @param config - Base URL (e.g. `https://rxresu.me/api/openapi`), app URL
-   *   (e.g. `https://rxresu.me`) for links, API key, the `fetch`
-   *   implementation to send requests with, and an optional log for every
-   *   request.
+   * @param dependencies - The API URL (e.g. `https://rxresu.me/api/openapi`),
+   *   the web app URL (e.g. `https://rxresu.me`) for links, the API key, the
+   *   `fetch` to call the API with, and an optional log of every call.
    */
-  constructor(config: RxResumeClientConfig) {
-    this.baseUrl = trimTrailingSlashes(config.baseUrl);
-    this.appUrl = trimTrailingSlashes(config.appUrl);
-    this.apiKey = config.apiKey;
-    this.fetch = config.fetch;
-    this.requestLog = config.requestLog;
+  constructor(dependencies: RxResumeClientDependencies) {
+    this.apiUrl = trimTrailingSlashes(dependencies.apiUrl);
+    this.appUrl = trimTrailingSlashes(dependencies.appUrl);
+    this.apiKey = dependencies.apiKey;
+    this.fetch = dependencies.fetch;
+    this.apiCallLog = dependencies.apiCallLog;
   }
 
-  /** Sends one request and returns its JSON body, or undefined if empty. */
-  async request(
+  /**
+   * Calls one endpoint and returns the JSON it answered with, or undefined
+   * for an empty answer.
+   */
+  async callApi(
     method: HttpMethod,
     path: string,
-    body?: object,
+    requestBody?: object,
   ): Promise<unknown> {
     const headers = new Headers({ [ApiKeyHeader]: this.apiKey });
-    const url = `${this.baseUrl}${path}`;
+    const endpointUrl = `${this.apiUrl}${path}`;
 
-    if (body) headers.set(ContentType.Header, ContentType.Json);
+    let jsonBody: string | undefined;
+    if (requestBody) {
+      headers.set(ContentType.Header, ContentType.Json);
+      jsonBody = JSON.stringify(requestBody);
+    }
+    const httpRequest: RequestInit = { method, headers, body: jsonBody };
 
-    const options: RequestInit = {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    };
+    const startedAt = this.apiCallLog?.now();
+    this.apiCallLog?.write(`→ ${method} ${endpointUrl}`);
 
-    const startedAt = this.requestLog?.now();
-    this.requestLog?.write(`→ ${method} ${url}`);
-
-    let response: Response;
+    let httpResponse: Response;
     try {
-      response = await this.fetch(url, options);
+      httpResponse = await this.fetch(endpointUrl, httpRequest);
     } catch (error) {
       throw new Error(
-        `${method} ${url} failed: ${describeCaught(error)}\n` +
-          `Check ${EnvVar.BaseUrl} (http or https, host, port) and that the ` +
-          "server is running.",
+        `${method} ${endpointUrl} failed: ${describeCaught(error)}\n` +
+          `Check ${EnvironmentVariable.ApiUrl} (http or https, host, port) ` +
+          "and that the server is running.",
         { cause: error },
       );
     }
 
-    if (this.requestLog && startedAt !== undefined) {
-      const took = Math.round(this.requestLog.now() - startedAt);
-      this.requestLog.write(
-        `← ${response.status} ${method} ${url} (${took}ms)`,
+    if (this.apiCallLog && startedAt !== undefined) {
+      const elapsedMilliseconds = Math.round(this.apiCallLog.now() - startedAt);
+      this.apiCallLog.write(
+        `← ${httpResponse.status} ${method} ${endpointUrl} (${elapsedMilliseconds}ms)`,
       );
     }
 
-    if (!response.ok) throw await toApiError(response);
-    // DELETE replies with an empty body, which response.json() rejects.
-    const text = await response.text();
-    return text ? JSON.parse(text) : undefined;
+    if (!httpResponse.ok) throw await toApiError(httpResponse);
+    // DELETE answers with an empty body, which httpResponse.json() rejects.
+    const responseText = await httpResponse.text();
+    if (!responseText) return undefined;
+    return JSON.parse(responseText);
   }
 
   /**
-   * Builds the link that opens a resume in the web app's builder.
+   * Builds the link that opens a resume in the web app's editor.
    *
    * @param resumeId - The resume's id.
-   * @returns The builder URL, with the id URL-encoded.
+   * @returns The editor URL, with the id URL-encoded.
    *
    * @example
-   * client.builderUrl("abc"); // "https://rxresu.me/builder/abc"
+   * client.resumeEditorUrl("abc"); // "https://rxresu.me/builder/abc"
    */
-  builderUrl(resumeId: string): string {
-    return itemPath(`${this.appUrl}${BUILDER_PATH}`, resumeId);
+  resumeEditorUrl(resumeId: string): string {
+    return itemPath(`${this.appUrl}${RESUME_EDITOR_PATH}`, resumeId);
   }
 
   /**
-   * Builds the link to a cover letter on the web app's dashboard.
+   * Builds the link that opens a cover letter in the web app.
    *
    * @param letterId - The cover letter's id.
-   * @returns The dashboard URL, with the id URL-encoded.
+   * @returns The letter's URL, with the id URL-encoded.
    *
    * @example
-   * client.letterUrl("abc"); // "https://rxresu.me/dashboard/abc"
+   * client.coverLetterEditorUrl("abc"); // "https://rxresu.me/dashboard/abc"
    */
-  letterUrl(letterId: string): string {
-    return itemPath(`${this.appUrl}${LETTER_DASHBOARD_PATH}`, letterId);
+  coverLetterEditorUrl(letterId: string): string {
+    return itemPath(`${this.appUrl}${COVER_LETTER_EDITOR_PATH}`, letterId);
   }
 
   /** `POST /resumes`; resolves to the new resume's id. */
-  async createResume(body: CreateResumeBody): Promise<string> {
-    const id = await this.request(HttpMethod.Post, RESUMES_PATH, body);
-    if (typeof id !== "string") {
+  async createResume(newResume: CreateResumeRequest): Promise<string> {
+    const resumeId = await this.callApi(
+      HttpMethod.Post,
+      RESUMES_PATH,
+      newResume,
+    );
+    if (typeof resumeId !== "string") {
       throw new Error(
-        `POST ${RESUMES_PATH}: expected a resume id, got ${JSON.stringify(id)}`,
+        `POST ${RESUMES_PATH}: expected a resume id, got ${JSON.stringify(resumeId)}`,
       );
     }
-    return id;
+    return resumeId;
   }
 
   /** `GET /resumes/{id}`. */
   async getResume(id: string): Promise<Resume> {
     // Trusts the API's documented response shape; not validated at runtime.
-    return (await this.request(HttpMethod.Get, resumePath(id))) as Resume;
+    return (await this.callApi(HttpMethod.Get, resumePath(id))) as Resume;
   }
 
   /** `PUT /resumes/{id}`; resolves to the updated resume. */
-  async updateResume(id: string, body: UpdateResumeBody): Promise<Resume> {
+  async updateResume(
+    id: string,
+    changes: UpdateResumeRequest,
+  ): Promise<Resume> {
     // Trusts the API's documented response shape; not validated at runtime.
-    return (await this.request(HttpMethod.Put, resumePath(id), body)) as Resume;
+    return (await this.callApi(
+      HttpMethod.Put,
+      resumePath(id),
+      changes,
+    )) as Resume;
   }
 
-  /** `DELETE /resumes/{id}`; permanent, and rejected for a locked resume. */
-  async deleteResume(id: string): Promise<void> {
-    await this.request(HttpMethod.Delete, resumePath(id));
+  /** `DELETE /resumes/{id}`; moves the resume to Trash. Rejected if locked. */
+  async trashResume(id: string): Promise<void> {
+    await this.callApi(HttpMethod.Delete, resumePath(id));
+  }
+
+  /** `DELETE /documents/resume/{id}`; permanent, only for a resume in Trash. */
+  async purgeResume(id: string): Promise<void> {
+    await this.callApi(
+      HttpMethod.Delete,
+      documentPath(DocumentType.Resume, id),
+    );
   }
 
   /** `POST /cover-letters`; resolves to the new letter. */
-  async createCoverLetter(body: CreateCoverLetterBody): Promise<CoverLetter> {
+  async createCoverLetter(
+    newLetter: CreateCoverLetterRequest,
+  ): Promise<CoverLetter> {
     // Unlike POST /resumes, this returns the whole letter, not only its id.
     // Trusts the API's documented response shape; not validated at runtime.
-    const coverLetterPostRequest = (await this.request(
+    return (await this.callApi(
       HttpMethod.Post,
       COVER_LETTERS_PATH,
-      body,
+      newLetter,
     )) as CoverLetter;
-    return coverLetterPostRequest;
   }
 
   /** `GET /cover-letters/{id}`. */
   async getCoverLetter(id: string): Promise<CoverLetter> {
     // Trusts the API's documented response shape; not validated at runtime.
-    return (await this.request(HttpMethod.Get, letterPath(id))) as CoverLetter;
+    return (await this.callApi(
+      HttpMethod.Get,
+      coverLetterPath(id),
+    )) as CoverLetter;
   }
 
   /**
@@ -254,16 +294,14 @@ export class RxResumeApiClient {
    */
   async updateCoverLetter(
     id: string,
-    body: UpdateCoverLetterBody,
+    changes: UpdateCoverLetterRequest,
   ): Promise<CoverLetter> {
     // Trusts the API's documented response shape; not validated at runtime.
-    const coverLetterUpdateRequest = (await this.request(
+    return (await this.callApi(
       HttpMethod.Put,
-      letterPath(id),
-      body,
+      coverLetterPath(id),
+      changes,
     )) as CoverLetter;
-
-    return coverLetterUpdateRequest;
   }
 
   /**
@@ -271,13 +309,16 @@ export class RxResumeApiClient {
    * locked letter or a stale revision.
    */
   async trashCoverLetter(id: string, expectedRevision: number): Promise<void> {
-    await this.request(HttpMethod.Delete, letterPath(id), {
+    await this.callApi(HttpMethod.Delete, coverLetterPath(id), {
       expectedRevision,
     });
   }
 
   /** `DELETE /documents/letter/{id}`; permanent, only for a letter in Trash. */
-  async removeCoverLetter(id: string): Promise<void> {
-    await this.request(HttpMethod.Delete, itemPath(LETTER_DOCUMENTS_PATH, id));
+  async purgeCoverLetter(id: string): Promise<void> {
+    await this.callApi(
+      HttpMethod.Delete,
+      documentPath(DocumentType.Letter, id),
+    );
   }
 }

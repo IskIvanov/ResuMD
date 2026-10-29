@@ -3,11 +3,11 @@
  *
  * The Reactive Resume API's types. Its shapes are inferred from the Zod
  * schemas in schema.ts, which are the source of truth; only the shapes that
- * are not data (the client's config, the settings) are declared by hand.
+ * are not data (the client's dependencies, the settings) are declared by hand.
  */
 
 import type { z } from "zod";
-import type { Env, FetchFn } from "../../utils/types.ts";
+import type { EnvironmentVariables, FetchFunction } from "../../utils/types.ts";
 import type {
   BasicsSchema,
   BasicsCustomFieldSchema,
@@ -15,8 +15,8 @@ import type {
   CoverLetterLayoutSchema,
   CoverLetterSchema,
   CoverLetterTemplateSchema,
-  CreateCoverLetterBodySchema,
-  CreateResumeBodySchema,
+  CreateCoverLetterRequestSchema,
+  CreateResumeRequestSchema,
   EducationItemSchema,
   ExperienceItemSchema,
   InterestItemSchema,
@@ -28,8 +28,8 @@ import type {
   ResumeDataSchema,
   SectionLayoutSchema,
   SkillItemSchema,
-  UpdateCoverLetterBodySchema,
-  UpdateResumeBodySchema,
+  UpdateCoverLetterRequestSchema,
+  UpdateResumeRequestSchema,
   WebsiteSchema,
 } from "./schema.ts";
 
@@ -56,62 +56,72 @@ export type Layout = z.infer<typeof LayoutSchema>;
 export type Section<TItem> = SectionLayout & { items: TItem[] };
 export type ResumeData = z.infer<typeof ResumeDataSchema>;
 
-// ─── Requests and responses ──────────────────────────────────────────────────────
+// ─── What the endpoints take and return ──────────────────────────────────────────
 
-export type CreateResumeBody = z.infer<typeof CreateResumeBodySchema>;
-export type UpdateResumeBody = z.infer<typeof UpdateResumeBodySchema>;
+/** The JSON sent to `POST /resumes`. */
+export type CreateResumeRequest = z.infer<typeof CreateResumeRequestSchema>;
+/** The JSON sent to `PUT /resumes/{id}`. */
+export type UpdateResumeRequest = z.infer<typeof UpdateResumeRequestSchema>;
 export type Resume = z.infer<typeof ResumeSchema>;
 export type CoverLetterTemplate = z.infer<typeof CoverLetterTemplateSchema>;
 export type CoverLetterLayout = z.infer<typeof CoverLetterLayoutSchema>;
-export type CreateCoverLetterBody = z.infer<typeof CreateCoverLetterBodySchema>;
-export type UpdateCoverLetterBody = z.infer<typeof UpdateCoverLetterBodySchema>;
+/** The JSON sent to `POST /cover-letters`. */
+export type CreateCoverLetterRequest = z.infer<
+  typeof CreateCoverLetterRequestSchema
+>;
+/** The JSON sent to `PUT /cover-letters/{id}`. */
+export type UpdateCoverLetterRequest = z.infer<
+  typeof UpdateCoverLetterRequestSchema
+>;
 export type CoverLetter = z.infer<typeof CoverLetterSchema>;
 
 /** Produces a unique item id; `crypto.randomUUID` in production. */
 export type IdFactory = () => string;
 
-// ─── Client and config ────────────────────────────────────────────────────────
+// ─── Client ───────────────────────────────────────────────────────────────────
 
-/** Where the client writes a line per request and response, and its clock. */
-export interface RequestLog {
+/** Where the client writes a line per API call and its answer, and its clock. */
+export interface ApiCallLog {
   write: (line: string) => void;
-  /** Milliseconds, for the time a request took. */
+  /** Milliseconds, for the time a call took. */
   now: () => number;
 }
 
-export interface RxResumeClientConfig extends ApiConfig {
-  fetch: FetchFn;
-  /** Set to log every request; left out, the client writes nothing. */
-  requestLog?: RequestLog;
+/** The settings and injected I/O the client runs with. */
+export interface RxResumeClientDependencies extends RxResumeSettings {
+  fetch: FetchFunction;
+  /** Set to log every API call; left out, the client writes nothing. */
+  apiCallLog?: ApiCallLog;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
-/** Variables the Reactive Resume tools need from `.env`. */
-export enum EnvVar {
+/** What the tools need to reach a Reactive Resume instance, read from `.env`. */
+export interface RxResumeSettings {
+  apiKey: string;
+  /** The REST API's address, e.g. `https://rxresu.me/api/openapi`. */
+  apiUrl: string;
+  /** The web app's address, e.g. `https://rxresu.me`; used for editor links. */
+  appUrl: string;
+}
+
+/** The environment variables that hold the settings, set in `.env`. */
+export enum EnvironmentVariable {
   ApiKey = "RXRESUME_API_KEY",
-  BaseUrl = "RXRESUME_API_URL",
+  ApiUrl = "RXRESUME_API_URL",
   AppUrl = "RXRESUME_APP_URL",
 }
 
 /** Variables the tools read when set, and never ask for. */
-export enum OptionalEnvVar {
-  /** Any non-empty value logs every API request to stderr. */
+export enum OptionalEnvironmentVariable {
+  /** Any non-empty value logs every API call to stderr. */
   Debug = "RXRESUME_DEBUG",
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
-/** The body of a failed response, when the API sent JSON. */
-export interface ApiErrorBody {
+/** What a failed response's JSON says, when the API sent JSON. */
+export interface ApiErrorDetails {
   code?: unknown;
   message?: unknown;
-}
-
-export interface ApiConfig {
-  apiKey: string;
-  /** Base URL of the API, e.g. `https://rxresu.me/api/openapi`. */
-  baseUrl: string;
-  /** URL of the web app, e.g. `https://rxresu.me`; used for builder links. */
-  appUrl: string;
 }

@@ -10,15 +10,15 @@ import { splitSections } from "../../../utils/markdown.ts";
 import { parseOrThrow } from "../../../utils/schema.ts";
 import {
   CoverLetterSectionsSchema,
-  ParsedCoverLetterSchema,
+  CoverLetterTextSchema,
 } from "../../schema.ts";
-import type { ParsedCoverLetter } from "../../types.ts";
+import type { CoverLetterText } from "../../types.ts";
 
 /** `## Heading` names the parser reads; any other section is ignored. */
 const CoverLetterHeading = {
-  Contact: "Contact",
+  Recipient: "Recipient",
   Letter: "Letter",
-  Closing: "Closing",
+  SignOff: "Sign-off",
 } as const;
 
 /** Heads the error for a letter missing a section or over the limits. */
@@ -34,9 +34,9 @@ const EXTRA_BLANK_LINES = /\n{3,}/g;
  * lines collapsed to one. Paragraphs and hard line breaks are kept. Empty
  * when the section is missing.
  */
-function sectionText(body: string | undefined): string {
-  if (!body) return "";
-  return body
+function sectionText(sectionMarkdown: string | undefined): string {
+  if (!sectionMarkdown) return "";
+  return sectionMarkdown
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== RULE)
@@ -48,34 +48,35 @@ function sectionText(body: string | undefined): string {
 /**
  * Parses a cover-letter `.md` and checks it against the API's limits.
  *
- * @param md - The full `.md` string.
- * @returns `## Contact` as the recipient, and `## Letter`, a blank line and
- *   `## Closing` as the content.
+ * @param markdown - The full cover-letter `.md` text.
+ * @returns `## Recipient` as the recipient block, and `## Letter`, a blank
+ *   line and `## Sign-off` as the content.
  * @throws If a section is missing or empty, naming it (e.g.
- *   `closing: required`), or if the text is over the API's limits.
+ *   `signOff: required`), or if the text is over the API's limits.
  *
  * @example
- * parseCoverLetter("## Contact\nAlex\n## Letter\nDear Alex,\n## Closing\nJane");
+ * parseCoverLetter("## Recipient\nAlex\n## Letter\nDear Alex,\n## Sign-off\nJane");
  * // { recipient: "Alex", content: "Dear Alex,\n\nJane" }
  */
-export function parseCoverLetter(md: string): ParsedCoverLetter {
-  const sections = splitSections(md);
-  const contactSection = sections[CoverLetterHeading.Contact];
-  const letterSection = sections[CoverLetterHeading.Letter];
-  const closingSection = sections[CoverLetterHeading.Closing];
-  const { contact, letter, closing } = parseOrThrow(
+export function parseCoverLetter(markdown: string): CoverLetterText {
+  const sections = splitSections(markdown);
+  const {
+    recipient,
+    letter: body,
+    signOff,
+  } = parseOrThrow(
     CoverLetterSectionsSchema,
     {
-      contact: sectionText(contactSection),
-      letter: sectionText(letterSection),
-      closing: sectionText(closingSection),
+      recipient: sectionText(sections[CoverLetterHeading.Recipient]),
+      letter: sectionText(sections[CoverLetterHeading.Letter]),
+      signOff: sectionText(sections[CoverLetterHeading.SignOff]),
     },
     INVALID_LETTER,
   );
 
   return parseOrThrow(
-    ParsedCoverLetterSchema,
-    { recipient: contact, content: [letter, closing].join(PARAGRAPH_BREAK) },
+    CoverLetterTextSchema,
+    { recipient, content: [body, signOff].join(PARAGRAPH_BREAK) },
     INVALID_LETTER,
   );
 }

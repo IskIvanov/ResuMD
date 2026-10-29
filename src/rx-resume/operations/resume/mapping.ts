@@ -1,7 +1,7 @@
 /**
  * mapping.ts
  *
- * Writes a parsed Resume.md into a resume's `data`. `PUT /resumes/{id}`
+ * Writes what Resume.md says into a resume's `data`. `PUT /resumes/{id}`
  * validates every required field, so each item is built whole: the fields
  * Resume.md feeds, empty defaults for the rest and a fresh id. Section
  * layout, the sections Resume.md doesn't feed and every other block
@@ -9,15 +9,15 @@
  */
 
 import type {
-  ParsedCertification,
-  ParsedContact,
-  ParsedEduItem,
-  ParsedJob,
-  ParsedLanguage,
-  ParsedLink,
-  ParsedProject,
-  ParsedResume,
-  ParsedSkillGroup,
+  Certification,
+  Header,
+  School,
+  Job,
+  Language,
+  Link,
+  Project,
+  ResumeMd,
+  SkillGroup,
 } from "../../../resume-md/types.ts";
 import type {
   Basics,
@@ -67,14 +67,14 @@ function paragraph(html: string): string {
 }
 
 /** An external link that opens in a new tab. */
-function renderLink(link: ParsedLink): string {
+function renderLink(link: Link): string {
   return `<a ${LINK_ATTRIBUTES} href="${link.url}">${link.label}</a>`;
 }
 
-/** The context paragraph, when there is one. */
-function renderContext(context: string): string[] {
-  if (!context) return [];
-  return [paragraph(context)];
+/** The intro paragraph, when there is one. */
+function renderIntro(intro: string): string[] {
+  if (!intro) return [];
+  return [paragraph(intro)];
 }
 
 function renderBullets(bullets: string[]): string[] {
@@ -82,32 +82,32 @@ function renderBullets(bullets: string[]): string[] {
 }
 
 /** The bold-labelled tech stack, when there is one. */
-function renderStack(stack: string): string[] {
-  if (!stack) return [];
-  return [paragraph(`<strong>${TECH_STACK_LABEL}</strong> ${stack}`)];
+function renderTechStack(techStack: string): string[] {
+  if (!techStack) return [];
+  return [paragraph(`<strong>${TECH_STACK_LABEL}</strong> ${techStack}`)];
 }
 
 /** One `<p>` per paragraph, hard-wrapped lines joined with a space. */
 function renderSummary(summary: string): string {
   return summary
     .split(PARAGRAPH_BREAK)
-    .map((text) =>
-      text
+    .map((paragraphText) =>
+      paragraphText
         .split("\n")
         .map((line) => line.trim())
         .join(" "),
     )
-    .filter((text) => text.length > 0)
+    .filter((paragraphText) => paragraphText.length > 0)
     .map(paragraph)
     .join("");
 }
 
-/** Context, bullets and tech stack, then the job's references, if any. */
-function renderJob(job: ParsedJob): string {
+/** Intro, bullets and tech stack, then the job's references, if any. */
+function renderJob(job: Job): string {
   const parts = [
-    ...renderContext(job.context),
+    ...renderIntro(job.intro),
     ...renderBullets(job.bullets),
-    ...renderStack(job.stack),
+    ...renderTechStack(job.techStack),
   ];
   if (job.references?.length) {
     const references = job.references.join(LIST_SEPARATOR);
@@ -116,14 +116,11 @@ function renderJob(job: ParsedJob): string {
   return parts.join("");
 }
 
-/** Context and tech stack, then every link past the first, if any. */
-function renderProject(
-  project: ParsedProject,
-  extraLinks: ParsedLink[],
-): string {
+/** Intro and tech stack, then every link past the first, if any. */
+function renderProject(project: Project, extraLinks: Link[]): string {
   const parts = [
-    ...renderContext(project.context),
-    ...renderStack(project.stack),
+    ...renderIntro(project.intro),
+    ...renderTechStack(project.techStack),
   ];
   if (extraLinks.length > 0) {
     parts.push(paragraph(extraLinks.map(renderLink).join(LINK_SEPARATOR)));
@@ -132,9 +129,11 @@ function renderProject(
 }
 
 /** The credential ids, or nothing when there are none. */
-function renderCredentials(ids: string[]): string {
-  if (ids.length === 0) return "";
-  return paragraph(`${CREDENTIAL_ID_LABEL} ${ids.join(LIST_SEPARATOR)}`);
+function renderCredentials(credentialIds: string[]): string {
+  if (credentialIds.length === 0) return "";
+  return paragraph(
+    `${CREDENTIAL_ID_LABEL} ${credentialIds.join(LIST_SEPARATOR)}`,
+  );
 }
 
 // ─── Items ────────────────────────────────────────────────────────────────────
@@ -146,12 +145,8 @@ function toWebsite(url: string, label: string): Website {
 const emptyWebsite = (): Website => toWebsite("", "");
 
 /** The header details; a bare website gets `https://` and keeps its text. */
-function toBasics(
-  contact: ParsedContact,
-  current: Basics,
-  newId: IdFactory,
-): Basics {
-  const { name, headline, email, phone, location, website } = contact;
+function toBasics(header: Header, current: Basics, newId: IdFactory): Basics {
+  const { name, headline, email, phone, location, website } = header;
   return {
     ...current,
     name,
@@ -160,7 +155,7 @@ function toBasics(
     phone,
     location,
     website: toBasicsWebsite(website),
-    customFields: contact.profiles.map((link) => toCustomField(link, newId())),
+    customFields: header.profiles.map((link) => toCustomField(link, newId())),
   };
 }
 
@@ -172,7 +167,7 @@ function toBasicsWebsite(website: string): Basics["website"] {
 }
 
 /** A header link, shown next to the contact details with its network icon. */
-function toCustomField(link: ParsedLink, id: string): BasicsCustomField {
+function toCustomField(link: Link, id: string): BasicsCustomField {
   return {
     id,
     icon: NetworkIcon[link.label.toLowerCase()] ?? DEFAULT_LINK_ICON,
@@ -181,7 +176,7 @@ function toCustomField(link: ParsedLink, id: string): BasicsCustomField {
   };
 }
 
-function toExperienceItem(job: ParsedJob, id: string): ExperienceItem {
+function toExperienceItem(job: Job, id: string): ExperienceItem {
   return {
     id,
     hidden: false,
@@ -195,7 +190,7 @@ function toExperienceItem(job: ParsedJob, id: string): ExperienceItem {
   };
 }
 
-function toSkillItem(group: ParsedSkillGroup, id: string): SkillItem {
+function toSkillItem(group: SkillGroup, id: string): SkillItem {
   return {
     id,
     hidden: false,
@@ -203,25 +198,25 @@ function toSkillItem(group: ParsedSkillGroup, id: string): SkillItem {
     iconColor: "",
     proficiency: "",
     level: 0,
-    name: group.heading,
-    keywords: [...group.items],
+    name: group.label,
+    keywords: [...group.skills],
   };
 }
 
-function toEducationItem(edu: ParsedEduItem, id: string): EducationItem {
+function toEducationItem(school: School, id: string): EducationItem {
   return {
     id,
     hidden: false,
     website: emptyWebsite(),
-    school: edu.school,
-    degree: edu.degree,
-    area: edu.area,
-    grade: edu.grade,
-    location: edu.location,
-    period: edu.period,
+    school: school.school,
+    degree: school.degree,
+    area: school.area,
+    grade: school.grade,
+    location: school.location,
+    period: school.period,
     description: [
-      ...renderContext(edu.context),
-      ...renderBullets(edu.bullets),
+      ...renderIntro(school.intro),
+      ...renderBullets(school.bullets),
     ].join(""),
   };
 }
@@ -230,17 +225,17 @@ function toEducationItem(edu: ParsedEduItem, id: string): EducationItem {
  * The API holds one website per project, so the first link becomes it and
  * the rest are appended to the description.
  */
-function toProjectItem(project: ParsedProject, id: string): ProjectItem {
-  const [primary, ...extra] = project.links;
+function toProjectItem(project: Project, id: string): ProjectItem {
+  const [firstLink, ...otherLinks] = project.links;
   let website = emptyWebsite();
-  if (primary) website = toWebsite(primary.url, primary.label);
+  if (firstLink) website = toWebsite(firstLink.url, firstLink.label);
 
   return {
     id,
     hidden: false,
     period: "",
     name: project.title,
-    description: renderProject(project, extra),
+    description: renderProject(project, otherLinks),
     website,
   };
 }
@@ -250,7 +245,7 @@ function toProjectItem(project: ParsedProject, id: string): ProjectItem {
  * there is one, becomes the website.
  */
 function toCertificationItem(
-  certification: ParsedCertification,
+  certification: Certification,
   id: string,
 ): CertificationItem {
   const { link } = certification;
@@ -265,13 +260,13 @@ function toCertificationItem(
     title: certification.title,
     issuer: certification.issuer,
     description: [
-      ...renderContext(certification.description),
+      ...renderIntro(certification.description),
       renderCredentials(certification.credentialIds),
     ].join(""),
   };
 }
 
-function toLanguageItem(language: ParsedLanguage, id: string): LanguageItem {
+function toLanguageItem(language: Language, id: string): LanguageItem {
   return {
     id,
     hidden: false,
@@ -302,67 +297,74 @@ function toReferenceItem(name: string, id: string): ReferenceItem {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 /**
- * Writes a parsed Resume.md into a resume's data, returning new data.
+ * Writes what Resume.md says into a resume's data, returning new data.
  *
  * Sets the basics (the header links become custom fields) and the summary,
  * and replaces the items of every section Resume.md feeds, each with a fresh
  * id.
  *
  * @param data - The resume's current data, from `GET /resumes/{id}`.
- * @param resume - Output of `parseResume`.
+ * @param resumeMd - What Resume.md says, from `parseResumeMd`.
  * @param newId - Called once per item.
  * @returns Data ready to send as the `data` of `PUT /resumes/{id}`.
  *
  * @example
- * applyResume(current.data, parseResume(markdown), randomUUID);
+ * applyResumeMd(current.data, parseResumeMd(markdown), randomUUID);
  */
-export function applyResume(
+export function applyResumeMd(
   data: ResumeData,
-  resume: ParsedResume,
+  resumeMd: ResumeMd,
   newId: IdFactory,
 ): ResumeData {
-  /** Replaces a section's items, giving each a fresh id. */
-  function withItems<TSection extends { items: unknown[] }, TParsed>(
+  /** Replaces a section's items with one per Resume.md entry, each with a fresh id. */
+  function withItems<TSection extends { items: unknown[] }, TEntry>(
     section: TSection,
-    parsed: TParsed[],
-    toItem: (item: TParsed, id: string) => TSection["items"][number],
+    entries: TEntry[],
+    toItem: (entry: TEntry, id: string) => TSection["items"][number],
   ): TSection {
-    return { ...section, items: parsed.map((item) => toItem(item, newId())) };
+    return {
+      ...section,
+      items: entries.map((entry) => toItem(entry, newId())),
+    };
   }
 
   const { sections } = data;
   return {
     ...data,
-    basics: toBasics(resume.contact, data.basics, newId),
-    summary: { ...data.summary, content: renderSummary(resume.summary) },
+    basics: toBasics(resumeMd.header, data.basics, newId),
+    summary: { ...data.summary, content: renderSummary(resumeMd.summary) },
     sections: {
       ...sections,
-      experience: withItems(sections.experience, resume.jobs, toExperienceItem),
-      skills: withItems(sections.skills, resume.skillGroups, toSkillItem),
+      experience: withItems(
+        sections.experience,
+        resumeMd.jobs,
+        toExperienceItem,
+      ),
+      skills: withItems(sections.skills, resumeMd.skillGroups, toSkillItem),
       education: withItems(
         sections.education,
-        resume.eduItems,
+        resumeMd.schools,
         toEducationItem,
       ),
-      projects: withItems(sections.projects, resume.projects, toProjectItem),
+      projects: withItems(sections.projects, resumeMd.projects, toProjectItem),
       certifications: withItems(
         sections.certifications,
-        resume.certifications,
+        resumeMd.certifications,
         toCertificationItem,
       ),
       languages: withItems(
         sections.languages,
-        resume.languages,
+        resumeMd.languages,
         toLanguageItem,
       ),
       interests: withItems(
         sections.interests,
-        resume.interests,
+        resumeMd.interests,
         toInterestItem,
       ),
       references: withItems(
         sections.references,
-        resume.references,
+        resumeMd.references,
         toReferenceItem,
       ),
     },

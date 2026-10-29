@@ -18,9 +18,13 @@ import type { Prompter } from "./types.ts";
 
 /** Today's date in the local time zone, as `YYYY-MM-DD`. */
 function localToday(): string {
-  const now = new Date();
-  const pad = (part: number): string => String(part).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const currentDate = new Date();
+  const twoDigits = (datePart: number): string =>
+    String(datePart).padStart(2, "0");
+  const year = currentDate.getFullYear();
+  const month = twoDigits(currentDate.getMonth() + 1);
+  const day = twoDigits(currentDate.getDate());
+  return `${year}-${month}-${day}`;
 }
 
 /** Error names the prompt library uses. Its README checks Ctrl+C by name. */
@@ -29,9 +33,11 @@ enum InquirerError {
 }
 
 /** Rethrows the library's Ctrl+C error as the CLI's own. */
-async function cancellable<TValue>(prompt: Promise<TValue>): Promise<TValue> {
+async function cancellable<TValue>(
+  pendingPrompt: Promise<TValue>,
+): Promise<TValue> {
   try {
-    return await prompt;
+    return await pendingPrompt;
   } catch (error) {
     if (error instanceof Error && error.name === InquirerError.Exit) {
       throw new PromptCancelled();
@@ -40,24 +46,26 @@ async function cancellable<TValue>(prompt: Promise<TValue>): Promise<TValue> {
   }
 }
 
+/** Adapts the prompt library to the CLI's Prompter; it calls a question its `message`. */
 const prompter: Prompter = {
-  select: ({ message, choices }) =>
-    cancellable(select({ message, choices: [...choices] })),
-  input: ({ message, validate }) => cancellable(input({ message, validate })),
-  checkbox: ({ message, choices }) =>
-    cancellable(checkbox({ message, choices: [...choices] })),
-  confirm: ({ message, default: fallback }) =>
-    cancellable(confirm({ message, default: fallback })),
+  select: ({ question, choices }) =>
+    cancellable(select({ message: question, choices: [...choices] })),
+  input: ({ question, validate }) =>
+    cancellable(input({ message: question, validate })),
+  checkbox: ({ question, choices }) =>
+    cancellable(checkbox({ message: question, choices: [...choices] })),
+  confirm: ({ question, default: fallback }) =>
+    cancellable(confirm({ message: question, default: fallback })),
 };
 
 process.exit(
   await runCli({
-    argv: process.argv.slice(2),
+    commandLineArguments: process.argv.slice(2),
     tools: RX_RESUME_TOOLS,
     prompter,
-    env: process.env,
-    isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-    cwd: process.cwd(),
+    environmentVariables: process.env,
+    isInteractiveTerminal: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    workingDirectory: process.cwd(),
     exists: existsSync,
     fetch: globalThis.fetch,
     newId: randomUUID,

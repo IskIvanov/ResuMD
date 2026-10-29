@@ -6,25 +6,25 @@
  * object, so every write fetches the resume's current data first.
  */
 
-import { parseResume } from "../../../resume-md/parser.ts";
+import { parseResumeMd } from "../../../resume-md/parser.ts";
 import type { RxResumeApiClient } from "../../api/client.ts";
 import type {
-  CreateResumeBody,
+  CreateResumeRequest,
   IdFactory,
   Resume,
   ResumeData,
 } from "../../api/types.ts";
 import { applySectionOrder, SECTION_ORDER } from "./layout.ts";
-import { applyResume } from "./mapping.ts";
+import { applyResumeMd } from "./mapping.ts";
 
-/** Fetches a resume, changes its data and saves the result. */
-async function patchResume(
+/** Fetches a resume, rewrites its data and saves the result. */
+async function rewriteResumeData(
   client: RxResumeApiClient,
   id: string,
-  change: (data: ResumeData) => ResumeData,
+  rewrite: (currentData: ResumeData) => ResumeData,
 ): Promise<Resume> {
   const { data } = await client.getResume(id);
-  return client.updateResume(id, { data: change(data) });
+  return client.updateResume(id, { data: rewrite(data) });
 }
 
 /**
@@ -33,26 +33,29 @@ async function patchResume(
  *
  * @param client - The Reactive Resume API client.
  * @param markdown - The full Resume.md text.
- * @param resume - The new resume's name, unused slug and tags.
+ * @param newResume - The new resume's name, unused slug and tags.
  * @param newId - Ids for the items written from Resume.md.
  * @returns The saved resume.
  * @throws If Resume.md is invalid, before any request, or if a request fails.
  *
  * @example
- * await generateResume(client, markdown, { name, slug, tags }, randomUUID);
+ * await createResume(client, markdown, { name, slug, tags }, randomUUID);
  */
-export async function generateResume(
+export async function createResume(
   client: RxResumeApiClient,
   markdown: string,
-  resume: CreateResumeBody,
+  newResume: CreateResumeRequest,
   newId: IdFactory,
 ): Promise<Resume> {
-  const parsed = parseResume(markdown);
-  // POST /resumes returns only an id, so the parsed data is written onto the
+  const resumeMd = parseResumeMd(markdown);
+  // POST /resumes returns only an id, so Resume.md is written onto the
   // created resume's server defaults.
-  const id = await client.createResume(resume);
-  return patchResume(client, id, (created) =>
-    applySectionOrder(applyResume(created, parsed, newId), SECTION_ORDER),
+  const id = await client.createResume(newResume);
+  return rewriteResumeData(client, id, (defaultData) =>
+    applySectionOrder(
+      applyResumeMd(defaultData, resumeMd, newId),
+      SECTION_ORDER,
+    ),
   );
 }
 
@@ -61,7 +64,7 @@ export async function generateResume(
  * template and every section Resume.md doesn't feed.
  *
  * @param client - The Reactive Resume API client.
- * @param id - The resume's id, as generate prints it.
+ * @param id - The resume's id, as create prints it.
  * @param markdown - The full Resume.md text.
  * @param newId - Ids for the items written from Resume.md.
  * @returns The saved resume.
@@ -76,25 +79,35 @@ export async function updateResume(
   markdown: string,
   newId: IdFactory,
 ): Promise<Resume> {
-  const parsed = parseResume(markdown);
-  return patchResume(client, id, (current) =>
-    applyResume(current, parsed, newId),
+  const resumeMd = parseResumeMd(markdown);
+  return rewriteResumeData(client, id, (currentData) =>
+    applyResumeMd(currentData, resumeMd, newId),
   );
 }
 
 /**
- * Deletes a resume for good, with its screenshots and PDFs.
+ * Deletes a resume for good, with its screenshots and PDFs. The API only
+ * purges a resume that's already in Trash, so it's moved there first.
  *
  * @param client - The Reactive Resume API client.
  * @param id - The resume's id.
- * @throws If the request fails, e.g. for a locked resume.
+ * @throws If a request fails, e.g. for a locked resume. When only the purge
+ *   fails, the error says the resume is in Trash, where it can still be
+ *   restored; it isn't rolled back.
  *
  * @example
  * await deleteResume(client, "resume-1");
  */
-export function deleteResume(
+export async function deleteResume(
   client: RxResumeApiClient,
   id: string,
 ): Promise<void> {
-  return client.deleteResume(id);
+  await client.trashResume(id);
+  try {
+    await client.purgeResume(id);
+  } catch (error) {
+    let failure = String(error);
+    if (error instanceof Error) failure = error.message;
+    throw new Error(`${failure}; resume ${id} is in Trash`, { cause: error });
+  }
 }

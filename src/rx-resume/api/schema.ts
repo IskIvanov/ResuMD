@@ -2,8 +2,8 @@
  * schema.ts
  *
  * Zod schemas for the Reactive Resume v5 API: the resume `data` object, the
- * bodies of `POST /resumes` and `PUT /resumes/{id}`, and the cover-letter
- * bodies and response. They are the source of truth for the types in
+ * requests to `POST /resumes` and `PUT /resumes/{id}`, and the cover-letter
+ * requests and response. They are the source of truth for the types in
  * types.ts, which are inferred from them. Only the parts that Resume.md and
  * the cover-letter `.md` feed are declared in full; see
  * https://rxresu.me/api/openapi/spec.json for the complete schema.
@@ -233,16 +233,16 @@ export const ResumeDataSchema = z.looseObject({
 
 // ─── Requests and responses ───────────────────────────────────────────────────
 
-/** Body of `POST /resumes`. */
-export const CreateResumeBodySchema = z.object({
+/** The JSON sent to `POST /resumes`. */
+export const CreateResumeRequestSchema = z.object({
   name: z.string(),
   slug: z.string(),
   tags: z.array(z.string()),
   withSampleData: z.boolean().optional(),
 });
 
-/** Body of `PUT /resumes/{id}`. Every field is optional. */
-export const UpdateResumeBodySchema = z.object({
+/** The JSON sent to `PUT /resumes/{id}`. Every field is optional. */
+export const UpdateResumeRequestSchema = z.object({
   name: z.string().optional(),
   slug: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -310,8 +310,8 @@ export const CoverLetterTemplateSchema = z.enum(CoverLetterTemplate);
 
 export const CoverLetterLayoutSchema = z.enum(CoverLetterLayout);
 
-/** Body of `POST /cover-letters`. Only `name` is required by the API. */
-export const CreateCoverLetterBodySchema = z.object({
+/** The JSON sent to `POST /cover-letters`. Only `name` is required by the API. */
+export const CreateCoverLetterRequestSchema = z.object({
   name: z.string().min(1).max(CoverLetterLimit.NameMax),
   /** Plain text: the block above the greeting. */
   recipient: z.string().max(CoverLetterLimit.RecipientMax).optional(),
@@ -331,17 +331,18 @@ export const CreateCoverLetterBodySchema = z.object({
 });
 
 /**
- * Body of `PUT /cover-letters/{id}`. Every field is optional except
+ * The JSON sent to `PUT /cover-letters/{id}`. Every field is optional except
  * `expectedRevision`, and the layout can't be changed.
  */
-export const UpdateCoverLetterBodySchema = CreateCoverLetterBodySchema.omit({
-  layout: true,
-})
-  .partial()
-  .extend({
-    /** The revision last read; a newer one rejects the update. */
-    expectedRevision: z.int().min(1),
-  });
+export const UpdateCoverLetterRequestSchema =
+  CreateCoverLetterRequestSchema.omit({
+    layout: true,
+  })
+    .partial()
+    .extend({
+      /** The revision last read; a newer one rejects the update. */
+      expectedRevision: z.int().min(1),
+    });
 
 /**
  * Response of the cover-letter endpoints. Only the fields the tools read are

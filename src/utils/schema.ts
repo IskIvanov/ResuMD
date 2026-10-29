@@ -7,8 +7,8 @@
 
 import { z } from "zod";
 
-/** Messages reported for a value that is missing, repeated or malformed. */
-export const ValidationMessage = {
+/** What can be wrong with a field: missing, repeated or malformed. */
+export const FieldProblem = {
   Required: "required",
   Empty: "needs at least one entry",
   Duplicate: "has duplicate entries",
@@ -19,9 +19,9 @@ export const ValidationMessage = {
 export const requiredText = z
   .string({
     error: (issue) =>
-      issue.input === undefined ? ValidationMessage.Required : undefined,
+      issue.input === undefined ? FieldProblem.Required : undefined,
   })
-  .min(1, ValidationMessage.Required);
+  .min(1, FieldProblem.Required);
 
 /** A Zod issue path as code writes it: `jobs[2].role`. */
 function formatIssuePath(path: readonly PropertyKey[]): string {
@@ -62,7 +62,7 @@ export function firstIssue(
  *   heading, e.g. `  jobs[2].role: required`.
  *
  * @example
- * parseOrThrow(ParsedResumeSchema, { ...resume, jobs: [] }, "Invalid Resume.md:");
+ * parseOrThrow(ResumeMdSchema, { ...resume, jobs: [] }, "Invalid Resume.md:");
  * // Error: Invalid Resume.md:
  * //   jobs: needs at least one entry
  */

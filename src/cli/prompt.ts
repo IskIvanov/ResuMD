@@ -1,10 +1,10 @@
 /**
  * prompt.ts
  *
- * Asks for a tool's options and turns the answers into argv: required options
- * first, then a checkbox of optional flags, then a prompt for each one ticked.
- * Each typed answer is checked as it's entered, so the menu can't build argv
- * the tool would reject.
+ * Asks for a tool's options and turns the answers into tool arguments:
+ * required options first, then a checkbox of optional flags, then a prompt
+ * for each one ticked. Each typed answer is checked as it's entered, so the
+ * menu can't build tool arguments the tool would reject.
  */
 
 import { extname, resolve } from "path";
@@ -14,7 +14,7 @@ import {
   type Choice,
   OptionKind,
   type OptionDescriptor,
-  type PathContext,
+  type PathLookup,
   type PathRule,
   type Prompter,
   type Validator,
@@ -34,10 +34,10 @@ const rejectBlankAnswer: Validator = (answer) => {
  * is allowed, and (when the rule requires it) the file exists. Only the
  * first failure is reported.
  */
-function pathValidator(rule: PathRule, context: PathContext): Validator {
+function pathValidator(rule: PathRule, pathLookup: PathLookup): Validator {
   const expected = `expected ${rule.extensions.join(" or ")}`;
-  return (raw) => {
-    const path = raw.trim();
+  return (typedPath) => {
+    const path = typedPath.trim();
     const extension = extname(path);
 
     if (!path) return "A path is required";
@@ -45,7 +45,8 @@ function pathValidator(rule: PathRule, context: PathContext): Validator {
     if (!rule.extensions.some((allowed) => allowed === extension)) {
       return `Unsupported format "${extension}" — ${expected}`;
     }
-    if (rule.mustExist && !context.exists(resolve(context.cwd, path))) {
+    const absolutePath = resolve(pathLookup.workingDirectory, path);
+    if (rule.mustExist && !pathLookup.exists(absolutePath)) {
       return `File not found: ${path}`;
     }
     return true;
@@ -55,11 +56,11 @@ function pathValidator(rule: PathRule, context: PathContext): Validator {
 /** Checks a typed answer: a path by its rule, text by its schema, else not blank if required. */
 function answerValidator(
   option: OptionDescriptor,
-  pathContext: PathContext,
+  pathLookup: PathLookup,
 ): Validator {
   switch (option.kind) {
     case OptionKind.Path:
-      return pathValidator(option.path, pathContext);
+      return pathValidator(option.path, pathLookup);
     case OptionKind.Text:
     case OptionKind.List: {
       const { schema } = option;
@@ -96,42 +97,42 @@ function toOptionalFlagEntry(
 async function askForAnswer(
   option: OptionDescriptor,
   prompter: Prompter,
-  pathContext: PathContext,
+  pathLookup: PathLookup,
 ): Promise<string> {
   if (option.kind === OptionKind.Choice) {
     return prompter.select({
-      message: option.message,
+      question: option.question,
       choices: option.choices.map(toChoiceEntry),
     });
   }
   return prompter.input({
-    message: option.message,
-    validate: answerValidator(option, pathContext),
+    question: option.question,
+    validate: answerValidator(option, pathLookup),
   });
 }
 
 /**
- * Prompts for a tool's options and returns the matching argv.
+ * Prompts for a tool's options and returns the matching tool arguments.
  *
  * @param options - The tool's options, each with its flag.
  * @param prompter - Where the prompts are shown.
- * @param pathContext - Base directory and existence check for path options.
+ * @param pathLookup - Working directory and existence check for path options.
  * @returns Flags and answers in option order; unticked optional flags are
  *   left out, so the tool applies its own defaults. Answers are passed as
  *   typed: the tool resolves relative paths from the same working directory.
  *
  * @example
- * await promptOptions(deleteResumeTool.options, prompter, pathContext);
+ * await promptOptions(deleteResumeTool.options, prompter, pathLookup);
  * // ["--id", "resume-1"]
  */
 export async function promptOptions(
   options: readonly OptionDescriptor[],
   prompter: Prompter,
-  pathContext: PathContext,
+  pathLookup: PathLookup,
 ): Promise<string[]> {
   const answers: Record<string, string> = {};
   const recordAnswer = async (option: OptionDescriptor): Promise<void> => {
-    const answer = await askForAnswer(option, prompter, pathContext);
+    const answer = await askForAnswer(option, prompter, pathLookup);
     answers[option.flag] = answer.trim();
   };
 
@@ -143,7 +144,7 @@ export async function promptOptions(
   const optionalOptions = options.filter((option) => !option.required);
   if (optionalOptions.length > 0) {
     const tickedFlags = await prompter.checkbox({
-      message: "Set any optional flags?",
+      question: "Set any optional flags?",
       choices: optionalOptions.map((option) =>
         toOptionalFlagEntry(option, answers),
       ),

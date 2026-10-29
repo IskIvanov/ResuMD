@@ -38,6 +38,6 @@ export function splitList(value: string | undefined): string[] {
   if (!value) return [];
   return value
     .split(LIST_SEPARATOR)
-    .map((item) => item.trim())
+    .map((entry) => entry.trim())
     .filter(Boolean);
 }

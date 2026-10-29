@@ -1,26 +1,28 @@
 /**
  * types.ts
  *
- * The types the Reactive Resume tools and operations share: a parsed
- * cover-letter `.md` and a letter's metadata.
- * The parsed shape is inferred from the Zod schemas in schema.ts; the API
- * shapes they build on come from api/types.ts.
+ * The types the Reactive Resume tools and operations share: a cover letter's
+ * text and the fields a tool's flags set. The text's shape is inferred from
+ * the Zod schemas in schema.ts; the API shapes they build on come from
+ * api/types.ts.
  */
 
 import type { z } from "zod";
-import type { UpdateCoverLetterBody } from "./api/types.ts";
-import type { ParsedCoverLetterSchema } from "./schema.ts";
+import type { UpdateCoverLetterRequest } from "./api/types.ts";
+import type { CoverLetterTextSchema } from "./schema.ts";
 
-export type ParsedCoverLetter = z.infer<typeof ParsedCoverLetterSchema>;
+/** A cover-letter `.md`'s text, as the API takes it. */
+export type CoverLetterText = z.infer<typeof CoverLetterTextSchema>;
 
 /**
- * A letter's metadata, named as the API names it. A field left undefined
- * isn't sent.
+ * The letter fields a tool's flags set, named as the API names them: its
+ * name, source resume, job application, recipient's company and template. A
+ * field left undefined isn't sent.
  */
 export type LetterFields = Pick<
-  UpdateCoverLetterBody,
+  UpdateCoverLetterRequest,
   "name" | "resumeId" | "applicationId" | "recipientCompany" | "template"
 >;
 
-/** A new letter's metadata: it needs a name and the resume it goes with. */
+/** A new letter's fields: it needs a name and a source resume. */
 export type NewLetterFields = LetterFields & { name: string; resumeId: string };
