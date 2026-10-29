@@ -119,6 +119,7 @@ fails if any of these is missing, and the error names each path, for example
 - a job's company, `**Role** | dates` line and `**Tech Stack:**` line
 - an education item's school and `**Degree** | dates` line
 - a skill group's heading and items
+- a certification's title and issuer
 
 Locations, context paragraphs, bullets, links and the other sections are
 optional. A job may add a `**Reference:** a@example.com, b@example.com` line
@@ -146,6 +147,23 @@ the other fields, each on its own line:
 `**Location:**` overrides the location in the heading. When the degree name
 itself has a comma, add an `**Area:**` line and the whole title stays the
 degree. Without these lines, the area, grade and location are left empty.
+
+A certification is a `### Title — Issuer` entry. A description paragraph, a
+`**Credential ID:**` line and a link are each optional:
+
+```md
+### Example Certification — Example Issuer
+
+Short description of what it covers.
+
+**Credential ID:** EX-0001
+
+[Credential](https://example.com/cert/EX-0001)
+```
+
+The description and the credential ids become the Reactive Resume
+description, and the first link becomes its website. Without a link, the
+website is left empty.
 
 ## Development
 

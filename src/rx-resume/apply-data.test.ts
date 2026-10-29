@@ -17,6 +17,7 @@ import {
   toApiSkillItem,
 } from "./apply-data.ts";
 import type {
+  CertificationItem,
   EducationItem,
   LanguageItem,
   ParsedResumeData,
@@ -528,6 +529,55 @@ describe("applyResumeData languages from Resume.md", () => {
       language: "English",
       fluency: "Native",
       level: 5,
+    });
+  });
+});
+
+describe("applyResumeData certifications from Resume.md", () => {
+  const CERTIFICATION_HEADING = "### Example Certification — Example Issuer";
+  const CERTIFICATION_ENTRY = [
+    CERTIFICATION_HEADING,
+    "",
+    "Short description of what it covers.",
+    "",
+    "**Credential ID:** EX-0001",
+    "",
+    "[Credential](https://example.com/cert/EX-0001)",
+  ].join("\n");
+
+  /** Updates a fresh resume from the fixture with its certification replaced. */
+  function updatedCertification(entry: string): CertificationItem {
+    const markdown = RESUME_FIXTURE.replace(CERTIFICATION_ENTRY, entry);
+    const data = toResumeData(parseResume(markdown));
+    const { sections } = applyResumeData(
+      makeResumeData(),
+      data,
+      sequentialIds(),
+    );
+    return sections.certifications.items[0];
+  }
+
+  it("sends the title, issuer, description and link of a full entry", () => {
+    expect(updatedCertification(CERTIFICATION_ENTRY)).toMatchObject({
+      title: "Example Certification",
+      issuer: "Example Issuer",
+      description:
+        "<p>Short description of what it covers.</p>" +
+        "<p>Credential ID: EX-0001</p>",
+      website: {
+        url: "https://example.com/cert/EX-0001",
+        label: "Credential",
+        inlineLink: false,
+      },
+    });
+  });
+
+  it("sends an empty description and website for a heading alone", () => {
+    expect(updatedCertification(CERTIFICATION_HEADING)).toMatchObject({
+      title: "Example Certification",
+      issuer: "Example Issuer",
+      description: "",
+      website: EMPTY_WEBSITE,
     });
   });
 });

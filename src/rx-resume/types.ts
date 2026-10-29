@@ -117,10 +117,12 @@ export type ParsedEducationItem = Pick<
 export type ParsedProjectItem = Pick<ProjectItem, "name" | "description"> &
   Partial<Pick<ProjectItem, "website">>;
 
+/** `website` is set only when the certification has a link. */
 export type ParsedCertificationItem = Pick<
   CertificationItem,
   "title" | "issuer" | "description"
->;
+> &
+  Partial<Pick<CertificationItem, "website">>;
 
 export type ParsedLanguageItem = Pick<
   LanguageItem,
