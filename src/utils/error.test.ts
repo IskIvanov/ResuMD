@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ReasonedError } from "./error.ts";
+import { failureOf, ReasonedError } from "./error.ts";
 
 type FieldTooLongReason = { code: "TOO_LONG"; field: string };
 
@@ -24,5 +24,21 @@ describe("ReasonedError", () => {
       reason: { code: "TOO_LONG", field: "name" },
       cause,
     });
+  });
+});
+
+describe("failureOf", () => {
+  it("returns what the attempt threw, or undefined when it succeeds", () => {
+    expect(failureOf(() => "fine")).toBeUndefined();
+    expect(
+      failureOf(() => {
+        throw new Error("Missing KEY");
+      }),
+    ).toBe("Missing KEY");
+    expect(
+      failureOf(() => {
+        throw "Missing KEY";
+      }),
+    ).toBe("Missing KEY");
   });
 });

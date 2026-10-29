@@ -6,21 +6,17 @@
  * key nor the instance URLs appear in code, on the command line or in git.
  */
 
+import { failureOf } from "../utils/error.ts";
+import type { Env } from "../utils/types.ts";
 import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
-import type { ApiConfig, Env, RequestLog } from "./types.ts";
-
-/** Variables the Reactive Resume tools need from `.env`. */
-export enum EnvVar {
-  ApiKey = "RXRESUME_API_KEY",
-  BaseUrl = "RXRESUME_API_URL",
-  AppUrl = "RXRESUME_APP_URL",
-}
-
-/** Variables the tools read when set, and never ask for. */
-export enum OptionalEnvVar {
-  /** Any non-empty value logs every API request to stderr. */
-  Debug = "RXRESUME_DEBUG",
-}
+import { RxResumeError } from "./errors.ts";
+import {
+  type ApiConfig,
+  EnvVar,
+  OptionalEnvVar,
+  type RequestLog,
+  RxResumeErrorCode,
+} from "./types.ts";
 
 /** Writes request lines to stderr, timed with the process clock. */
 export const STDERR_REQUEST_LOG: RequestLog = {
@@ -28,9 +24,6 @@ export const STDERR_REQUEST_LOG: RequestLog = {
   now: () => performance.now(),
 };
 
-/** The file the variables belong in. */
-export const ENV_FILE = ".env";
-const ENV_EXAMPLE_FILE = ".env.example";
 const BUILDER_PATH = "/builder";
 const LETTER_DASHBOARD_PATH = "/dashboard";
 
@@ -40,7 +33,8 @@ const LETTER_DASHBOARD_PATH = "/dashboard";
  * @param env - The environment to read, usually `process.env` after Bun has
  *   loaded `.env`.
  * @returns The API key, API base URL and app URL.
- * @throws If any variable is missing or empty, naming each one.
+ * @throws An RxResumeError if any variable is missing or empty, naming each
+ *   one.
  *
  * @example
  * resolveApiConfig(process.env);
@@ -53,10 +47,10 @@ export function resolveApiConfig(env: Env): ApiConfig {
 
   if (!apiKey || !baseUrl || !appUrl) {
     const missing = Object.values(EnvVar).filter((name) => !env[name]);
-    throw new Error(
-      `Missing ${missing.join(", ")}. Copy ${ENV_EXAMPLE_FILE} to ` +
-        `${ENV_FILE} and fill it in.`,
-    );
+    throw new RxResumeError({
+      code: RxResumeErrorCode.MissingSettings,
+      missing,
+    });
   }
 
   return { apiKey, baseUrl, appUrl };
@@ -73,12 +67,7 @@ export function resolveApiConfig(env: Env): ApiConfig {
  * apiConfigProblem({}); // "Missing RXRESUME_API_KEY, … Copy .env.example …"
  */
 export function apiConfigProblem(env: Env): string | undefined {
-  try {
-    resolveApiConfig(env);
-    return undefined;
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error);
-  }
+  return failureOf(() => resolveApiConfig(env));
 }
 
 /**

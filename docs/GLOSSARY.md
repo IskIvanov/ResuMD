@@ -6,7 +6,7 @@ Domain terms used across resume-tools. Code, tests and reviews use these names.
 
 **Resume.md**
 : The hand-edited Markdown resume that is the source of truth. Never committed
-here; tests use `src/sync-resume/fixtures/Resume.md`.
+here; tests use the synthetic `RESUME_MD` in `src/rx-resume/index.test.ts`.
 
 **Header**
 : The lines above the first `## ` heading: `# Name`, a `**Headline**` and the
@@ -36,3 +36,16 @@ singular or plural). Becomes `ParsedJob.references`.
 **References note**
 : A standalone paragraph such as "References available upon request", read
 when there is no `## References` section. Never a job reference.
+
+## Platforms
+
+**Platform**
+: A destination the tools write to, e.g. Reactive Resume. Lives in two
+folders: a domain module (`src/rx-resume/`), imported only through its
+`index.ts`, and its tool files (`src/cli/tools/rx-resume/`), registered with
+one line in `TOOLS`. Deleting both folders and that line removes it.
+
+**Operation**
+: One thing a platform does, exposed as a method on its connected handle,
+e.g. `connectRxResume(deps).resumes.update(input)`. Takes Markdown text and
+returns a result; the tool file reads the file and prints.

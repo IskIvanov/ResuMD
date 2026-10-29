@@ -6,6 +6,14 @@ Linear:
 for where the code differs from or adds to the plan. Risk 3 below is
 resolved; the others are still open.
 
+> **Revision (platforms):** the cover-letter code has since moved behind the
+> Reactive Resume platform: `src/rx-resume/cover-letter/`, reached only
+> through `connectRxResume(…).coverLetters` in `src/rx-resume/index.ts`.
+> `run.ts`, `generate.ts` and `CoverLetterError` are gone (the error is now
+> `RxResumeError`), printing moved to `src/cli/tools/rx-resume/print.ts`, and
+> the tests go through the interface with `recordingFetch`. Paths below
+> describe the original layout.
+
 ## Goal
 
 Manage a Reactive Resume cover letter from one hand-edited Markdown file, the

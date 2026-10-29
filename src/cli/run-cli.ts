@@ -11,32 +11,18 @@
 import { describeCaught } from "../utils/error.ts";
 import { formatCommand } from "./command.ts";
 import { isCliError } from "./errors.ts";
-import { buildMenu, type MenuValue } from "./menu.ts";
+import { buildMenu } from "./menu.ts";
 import { promptOptions } from "./prompt-options.ts";
 import {
+  type CliDeps,
   CliErrorCode,
   CliLabel,
   ExitCode,
   MenuAction,
-  type Env,
-  type PathContext,
-  type Prompter,
+  type MenuValue,
   type RunContext,
   type ToolDefinition,
 } from "./types.ts";
-
-/** Everything runCli reads from or writes to the outside world. */
-export interface CliDeps {
-  /** Arguments after the script name; empty opens the menu. */
-  argv: readonly string[];
-  tools: readonly ToolDefinition[];
-  prompter: Prompter;
-  env: Env;
-  isTTY: boolean;
-  pathContext: PathContext;
-  log: (line: string) => void;
-  logError: (line: string) => void;
-}
 
 /** Lists every tool's usage under a heading. */
 function usageHelp(heading: string, tools: readonly ToolDefinition[]): string {

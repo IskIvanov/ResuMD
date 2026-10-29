@@ -4,23 +4,13 @@
  * Generic string helpers: slugs, comma-separated lists and kebab-case names.
  */
 
+import type { KebabToCamel } from "./types.ts";
+
 /** Separates the entries of a list typed as one value: `a, b, c`. */
 const LIST_SEPARATOR = ",";
 
 /** Separates the words of a kebab-case name: `resume-id`. */
 const KEBAB_SEPARATOR = "-";
-
-/**
- * A kebab-case name in camelCase, worked out by the compiler: each word after
- * a dash is capitalized and the dashes are dropped.
- *
- * @example
- * type Field = KebabToCamel<"resume-id">; // "resumeId"
- */
-export type KebabToCamel<TName extends string> =
-  TName extends `${infer Head}-${infer Tail}`
-    ? `${Head}${Capitalize<KebabToCamel<Tail>>}`
-    : TName;
 
 /**
  * Converts a name into a URL slug: lowercase ASCII words joined by dashes.

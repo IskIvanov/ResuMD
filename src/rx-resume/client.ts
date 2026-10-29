@@ -7,7 +7,7 @@
  */
 
 import { describeCaught } from "../utils/error.ts";
-import type { ValueOf } from "../utils/type.ts";
+import type { FetchFn, ValueOf } from "../utils/types.ts";
 import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
 import { RxResumeError } from "./errors.ts";
 import {
@@ -17,7 +17,6 @@ import {
   type CoverLetter,
   type CreateCoverLetterBody,
   type CreateResumeBody,
-  type FetchFn,
   type RequestLog,
   type Resume,
   type RxResumeClient,
@@ -27,7 +26,7 @@ import {
 } from "./types.ts";
 
 /** Header carrying the API key. */
-export const ApiKeyHeader = "x-api-key";
+const ApiKeyHeader = "x-api-key";
 
 const ContentType = {
   Header: "content-type",

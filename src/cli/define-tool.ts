@@ -32,7 +32,7 @@ import {
 } from "./types.ts";
 
 /** The direct command; a tool runs as `bun run cli <tool id> [flags]`. */
-export const CLI_COMMAND = "bun run cli";
+const CLI_COMMAND = "bun run cli";
 
 /** Every flag takes a string value; kinds are converted after parsing. */
 const STRING_FLAG = { type: "string" } as const;
@@ -47,7 +47,7 @@ const STRING_FLAG = { type: "string" } as const;
  * toOptionDescriptors({ id: { kind: OptionKind.Text, required: true, message: "Id" } });
  * // [{ flag: "id", kind: "text", required: true, message: "Id" }]
  */
-export function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
+function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
   return Object.entries(specs).map(([flag, spec]) => ({ ...spec, flag }));
 }
 

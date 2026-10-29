@@ -20,12 +20,11 @@
  */
 
 import type { z } from "zod";
+import type { Env } from "../utils/types.ts";
 
 /** Menu groups. Names what a tool does or where it writes, never a vendor. */
 export enum Platform {
-  Site = "Site",
   ReactiveResume = "Reactive Resume",
-  JobApplication = "Job Application",
 }
 
 /** How an option is prompted for, validated and parsed. */
@@ -39,10 +38,6 @@ export enum OptionKind {
 /** File extensions a path option can accept. */
 export enum FileExtension {
   Markdown = ".md",
-  Json = ".json",
-  Pdf = ".pdf",
-  Docx = ".docx",
-  Text = ".txt",
 }
 
 export enum ExitCode {
@@ -121,9 +116,6 @@ export type CliErrorReason =
     }
   | { code: CliErrorCode.PromptCancelled };
 
-/** Environment variables, usually `process.env` after Bun has loaded `.env`. */
-export type Env = Record<string, string | undefined>;
-
 /** Answers so far, keyed by option flag: given, typed or defaulted strings. */
 export type Answers = Readonly<Record<string, string>>;
 
@@ -143,7 +135,7 @@ export interface PathContext {
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 /** Builds an option's default from the answers so far, keyed by flag. */
-export type DefaultFn = (answers: Answers) => string;
+type DefaultFn = (answers: Answers) => string;
 
 interface BaseOption {
   /** Prompt text. */
@@ -153,25 +145,25 @@ interface BaseOption {
   default?: DefaultFn;
 }
 
-export interface PathOption extends BaseOption {
+interface PathOption extends BaseOption {
   kind: OptionKind.Path;
   path: PathRule;
 }
 
-export interface ValueOption extends BaseOption {
+interface ValueOption extends BaseOption {
   kind: OptionKind.Text | OptionKind.List;
   /** Checked at the prompt and in argv. */
   schema?: z.ZodType<string>;
 }
 
 /** A value picked from a fixed list: a select in the menu, checked in argv. */
-export interface ChoiceOption extends BaseOption {
+interface ChoiceOption extends BaseOption {
   kind: OptionKind.Choice;
   choices: readonly string[];
 }
 
 /** One option as a tool declares it; its flag is its key in OptionSpecs. */
-export type OptionSpec = PathOption | ValueOption | ChoiceOption;
+type OptionSpec = PathOption | ValueOption | ChoiceOption;
 
 /** A tool's options, keyed by flag name without dashes, in prompt order. */
 export type OptionSpecs = Readonly<Record<string, OptionSpec>>;
@@ -207,7 +199,7 @@ export type OptionValues<TOptions extends OptionSpecs> = {
 export type ResolvedValue = string | string[] | undefined;
 
 /** Each option's value for run, keyed by flag, with the kinds erased. */
-export type ResolvedValues = Readonly<Record<string, ResolvedValue>>;
+type ResolvedValues = Readonly<Record<string, ResolvedValue>>;
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
@@ -243,7 +235,7 @@ export interface ToolDefinition<
   title: string;
   description: string;
   platform: Platform;
-  /** The direct command, e.g. "bun run cli sync-resume"; used in the printed command. */
+  /** The direct command, e.g. "bun run cli generate-rx-resume"; used in the printed command. */
   command: string;
   /** One line listing every flag. */
   usage: string;
@@ -269,11 +261,14 @@ export interface Choice<TValue> {
   disabled?: string;
 }
 
-export interface SeparatorItem {
+interface SeparatorItem {
   separator: string;
 }
 
 export type MenuItem<TValue> = Choice<TValue> | SeparatorItem;
+
+/** A menu entry's value: the tool to run, or a non-tool action. */
+export type MenuValue = ToolDefinition | MenuAction;
 
 /** Returns true when the value is valid, or the message to show. */
 export type Validator = (value: string) => true | string;
@@ -293,4 +288,19 @@ export interface Prompter {
     choices: readonly Choice<TValue>[];
   }): Promise<TValue[]>;
   confirm(config: { message: string; default: boolean }): Promise<boolean>;
+}
+
+// ─── runCli ───────────────────────────────────────────────────────────────────
+
+/** Everything runCli reads from or writes to the outside world. */
+export interface CliDeps {
+  /** Arguments after the script name; empty opens the menu. */
+  argv: readonly string[];
+  tools: readonly ToolDefinition[];
+  prompter: Prompter;
+  env: Env;
+  isTTY: boolean;
+  pathContext: PathContext;
+  log: (line: string) => void;
+  logError: (line: string) => void;
 }

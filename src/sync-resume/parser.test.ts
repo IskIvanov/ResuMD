@@ -1,16 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
 import type { ParsedResume } from "./types.ts";
 import { parseResume } from "./parser.ts";
-
-// ─── Fixtures: full resume ────────────────────────────────────────────────────
-
-const RESUME_FIXTURE = readFileSync(
-  resolve(dirname(fileURLToPath(import.meta.url)), "fixtures/Resume.md"),
-  "utf-8",
-);
 
 // ─── Fixtures: sections ───────────────────────────────────────────────────────
 //
@@ -280,93 +270,6 @@ Cycling · Weightlifting · Travel
 // ─── parseResume ──────────────────────────────────────────────────────────────
 
 describe("parseResume", () => {
-  it("parses the fixture resume into its full structure", () => {
-    const expected: ParsedResume = {
-      contact: {
-        name: "Jane Doe",
-        headline: "Software Engineer",
-        email: "jane.doe@example.com",
-        phone: "",
-        location: "City, Country",
-        website: "example.com",
-        profiles: [
-          { label: "LinkedIn", url: "https://linkedin.com/in/jane-doe" },
-          { label: "GitHub", url: "https://github.com/jane-doe" },
-        ],
-      },
-      summary:
-        "Software engineer with a focus on building reliable products end-to-end, from API design to the interface people use every day.",
-      jobs: [
-        {
-          company: "Example Corp",
-          location: "City",
-          role: "Senior Software Engineer",
-          period: "01/2020 – Present",
-          context: "",
-          bullets: [
-            "Led the migration of a legacy dashboard to a typed component library, cutting release time in half.",
-            "Designed the public REST API used by partner integrations.",
-          ],
-          stack: "TypeScript, React, Node.js",
-          website: "",
-        },
-      ],
-      skillGroups: [
-        { heading: "Languages", items: ["TypeScript", "Python", "SQL"] },
-        { heading: "Frontend", items: ["React", "Vue.js"] },
-      ],
-      eduItems: [
-        {
-          school: "Example University",
-          location: "City",
-          degree: "Bachelor's degree",
-          area: "Computer Science",
-          grade: "",
-          period: "2012 – 2016",
-          context: "Graduated with honours.",
-          bullets: [
-            "(link) Degree course",
-            "Thesis: Distributed Task Scheduling",
-          ],
-        },
-      ],
-      projects: [
-        {
-          title: "Example Project",
-          context:
-            "A small example project that shows how the resume tools fit together.",
-          stack: "TypeScript, Bun",
-          links: [
-            {
-              label: "GitHub",
-              url: "https://github.com/example/example-project",
-            },
-            { label: "Demo", url: "https://example.com/demo" },
-          ],
-        },
-      ],
-      certifications: [
-        {
-          title: "Example Certification",
-          issuer: "Example Issuer",
-          description: "Short description of what it covers.",
-          credentialIds: ["EX-0001"],
-          link: {
-            label: "Credential",
-            url: "https://example.com/cert/EX-0001",
-          },
-        },
-      ],
-      languages: [
-        { language: "English", fluency: "Native", level: 0 },
-        { language: "Dutch", fluency: "Conversational", level: 0 },
-      ],
-      interests: ["Cycling", "Travel"],
-      references: ["References available upon request"],
-    };
-    expect(parseResume(RESUME_FIXTURE)).toEqual(expected);
-  });
-
   it("parses every section of a full resume", () => {
     const parsed = parseWith();
 

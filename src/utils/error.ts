@@ -6,6 +6,8 @@
  * details without parsing the message.
  */
 
+import type { ErrorReason } from "./types.ts";
+
 /**
  * Words a caught value as one line, led by its `code` when it has one, as
  * Bun's network errors do (`ConnectionRefused`, `CERT_HAS_EXPIRED`, …).
@@ -27,9 +29,23 @@ export function describeCaught(error: unknown): string {
   return error.message;
 }
 
-/** What went wrong: a code naming the failure, plus what its message needs. */
-export interface ErrorReason {
-  readonly code: string;
+/**
+ * Runs a check and words its failure, e.g. for a tool's preflight.
+ *
+ * @param attempt - The check, which throws when it fails.
+ * @returns The thrown message, or undefined when the check passes.
+ *
+ * @example
+ * failureOf(() => resolveApiConfig({})); // "Missing RXRESUME_API_KEY, …"
+ */
+export function failureOf(attempt: () => unknown): string | undefined {
+  try {
+    attempt();
+    return undefined;
+  } catch (error) {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  }
 }
 
 /**

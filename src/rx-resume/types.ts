@@ -8,6 +8,7 @@
  */
 
 import type { z } from "zod";
+import type { Env, FetchFn } from "../utils/types.ts";
 import type {
   BasicsSchema,
   BasicsCustomFieldSchema,
@@ -19,20 +20,16 @@ import type {
   CreateResumeBodySchema,
   EducationItemSchema,
   ExperienceItemSchema,
-  ExperienceRoleSchema,
   InterestItemSchema,
   LanguageItemSchema,
   LayoutSchema,
-  LayoutPageSchema,
   MetadataSchema,
   ProjectItemSchema,
   ReferenceItemSchema,
   ResumeSchema,
   ResumeDataSchema,
-  ResumeSectionsSchema,
   SectionLayoutSchema,
   SkillItemSchema,
-  SkillsSectionSchema,
   SummarySchema,
   UpdateCoverLetterBodySchema,
   UpdateResumeBodySchema,
@@ -51,26 +48,22 @@ export {
 export type Website = z.infer<typeof WebsiteSchema>;
 export type BasicsCustomField = z.infer<typeof BasicsCustomFieldSchema>;
 export type Basics = z.infer<typeof BasicsSchema>;
-export type SectionLayout = z.infer<typeof SectionLayoutSchema>;
+type SectionLayout = z.infer<typeof SectionLayoutSchema>;
 export type Summary = z.infer<typeof SummarySchema>;
-export type ExperienceRole = z.infer<typeof ExperienceRoleSchema>;
 export type ExperienceItem = z.infer<typeof ExperienceItemSchema>;
 export type SkillItem = z.infer<typeof SkillItemSchema>;
-export type SkillsSection = z.infer<typeof SkillsSectionSchema>;
 export type EducationItem = z.infer<typeof EducationItemSchema>;
 export type ProjectItem = z.infer<typeof ProjectItemSchema>;
 export type CertificationItem = z.infer<typeof CertificationItemSchema>;
 export type LanguageItem = z.infer<typeof LanguageItemSchema>;
 export type InterestItem = z.infer<typeof InterestItemSchema>;
 export type ReferenceItem = z.infer<typeof ReferenceItemSchema>;
-export type LayoutPage = z.infer<typeof LayoutPageSchema>;
 export type Layout = z.infer<typeof LayoutSchema>;
 export type Metadata = z.infer<typeof MetadataSchema>;
 /**
  * A section of `TItem`s: the shared layout fields plus the items themselves.
  */
 export type Section<TItem> = SectionLayout & { items: TItem[] };
-export type ResumeSections = z.infer<typeof ResumeSectionsSchema>;
 export type ResumeData = z.infer<typeof ResumeDataSchema>;
 
 // ─── Requests and responses ──────────────────────────────────────────────────────
@@ -84,88 +77,10 @@ export type CreateCoverLetterBody = z.infer<typeof CreateCoverLetterBodySchema>;
 export type UpdateCoverLetterBody = z.infer<typeof UpdateCoverLetterBodySchema>;
 export type CoverLetter = z.infer<typeof CoverLetterSchema>;
 
-// ─── Parsed subset ────────────────────────────────────────────────────────────
-//
-// The keys Resume.md can fill today. Each type is a `Pick` of the API shape,
-// so a renamed or retyped API field breaks the build instead of the request.
-
-/** A header link: an icon, its text and the URL it points to. */
-export type ParsedCustomField = Pick<
-  BasicsCustomField,
-  "icon" | "text" | "link"
->;
-
-export type ParsedBasicsData = Omit<Basics, "customFields"> & {
-  customFields: ParsedCustomField[];
-};
-
-/** `website` is set only when the job has a company URL. */
-export type ParsedExperienceItem = Pick<
-  ExperienceItem,
-  "company" | "position" | "location" | "period" | "description"
-> &
-  Partial<Pick<ExperienceItem, "website">>;
-
-export type ParsedSkillItem = Pick<SkillItem, "name" | "keywords">;
-
-export type ParsedEducationItem = Pick<
-  EducationItem,
-  "school" | "degree" | "area" | "grade" | "location" | "period" | "description"
->;
-
-/** `website` is set only when the project has a link. */
-export type ParsedProjectItem = Pick<ProjectItem, "name" | "description"> &
-  Partial<Pick<ProjectItem, "website">>;
-
-/** `website` is set only when the certification has a link. */
-export type ParsedCertificationItem = Pick<
-  CertificationItem,
-  "title" | "issuer" | "description"
-> &
-  Partial<Pick<CertificationItem, "website">>;
-
-export type ParsedLanguageItem = Pick<
-  LanguageItem,
-  "language" | "fluency" | "level"
->;
-
-export type ParsedInterestItem = Pick<InterestItem, "name">;
-
-export type ParsedReferenceItem = Pick<ReferenceItem, "name">;
-
-/** Only the `items` of a section; its layout stays with the resume. */
-type ParsedSection<TItem> = Pick<Section<TItem>, "items">;
-
-export interface ParsedResumeData {
-  basics: ParsedBasicsData;
-  summary: Pick<Summary, "content">;
-  sections: {
-    experience: ParsedSection<ParsedExperienceItem>;
-    skills: ParsedSection<ParsedSkillItem>;
-    education: ParsedSection<ParsedEducationItem>;
-    projects: ParsedSection<ParsedProjectItem>;
-    certifications: ParsedSection<ParsedCertificationItem>;
-    languages: ParsedSection<ParsedLanguageItem>;
-    interests: ParsedSection<ParsedInterestItem>;
-    references: ParsedSection<ParsedReferenceItem>;
-  };
-}
-
-// ─── Applying parsed data ─────────────────────────────────────────────────────
-
 /** Produces a unique item id; `crypto.randomUUID` in production. */
 export type IdFactory = () => string;
 
-/** Completes a parsed item into a full API item with the given id. */
-export type ItemCompleter<TParsed, TItem> = (
-  item: TParsed,
-  id: string,
-) => TItem;
-
 // ─── Client and config ────────────────────────────────────────────────────────
-
-/** The subset of `fetch` the client uses; `globalThis.fetch` satisfies it. */
-export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
 /** Where the client writes a line per request and response, and its clock. */
 export interface RequestLog {
@@ -212,11 +127,183 @@ export interface RxResumeClient {
   removeCoverLetter(id: string): Promise<void>;
 }
 
-/** The client methods patchResumeData calls. */
-export type PatchClient = Pick<RxResumeClient, "getResume" | "updateResume">;
+// ─── Connected handle ─────────────────────────────────────────────────────────
 
-/** Turns a resume's current data into the data to save. */
-export type ResumeDataPatch = (data: ResumeData) => ResumeData;
+/** What connectRxResume needs from the outside world. */
+export interface RxResumeDeps {
+  /** Holds the `.env` settings; see EnvVar. */
+  env: Env;
+  fetch: FetchFn;
+  /** Ids for the items written from Resume.md. */
+  newId: IdFactory;
+  /** Today's date as `YYYY-MM-DD`, the date a cover letter is written. */
+  today: () => string;
+  /**
+   * Where a line per request and response goes when RXRESUME_DEBUG is set;
+   * left out, nothing is logged.
+   */
+  requestLog?: RequestLog;
+}
+
+/** Rewrites an existing resume from Resume.md. */
+export interface UpdateResumeInput {
+  /** The resume's id, as generate prints it. */
+  id: string;
+  /** The full Resume.md text. */
+  markdown: string;
+}
+
+/** Creates a new resume from Resume.md. */
+export interface GenerateResumeInput {
+  /** The full Resume.md text. */
+  markdown: string;
+  /** Shown in Reactive Resume. */
+  name: string;
+  /** Must be unused across your resumes. */
+  slug: string;
+  tags: string[];
+}
+
+/** The resume an operation wrote, and where to open it. */
+export interface ResumeResult {
+  id: string;
+  name: string;
+  slug: string;
+  /** Opens the resume in the Reactive Resume builder. */
+  builderUrl: string;
+}
+
+/** The operations on resumes. */
+export interface ResumeOperations {
+  /**
+   * Creates a resume and fills it from Resume.md, its sections on one
+   * full-width page in reading order. Server defaults fill the rest.
+   */
+  generate(input: GenerateResumeInput): Promise<ResumeResult>;
+  /**
+   * Rewrites a resume's data from Resume.md, keeping its layout, picture,
+   * template and every section Resume.md doesn't feed.
+   */
+  update(input: UpdateResumeInput): Promise<ResumeResult>;
+  /** Deletes a resume for good; rejected for a locked resume. */
+  delete(id: string): Promise<void>;
+}
+
+/**
+ * A cover letter's metadata. A field left undefined isn't sent. Each is typed
+ * by the API field it's sent as, so retyping that field breaks the build here
+ * rather than the request.
+ */
+export interface CoverLetterFields {
+  name?: UpdateCoverLetterBody["name"];
+  /** The resume that gives the letter its sender details and design. */
+  resumeId?: UpdateCoverLetterBody["resumeId"];
+  /** The job application the letter is for. */
+  applicationId?: UpdateCoverLetterBody["applicationId"];
+  /** Sent as `recipientCompany`. */
+  company?: UpdateCoverLetterBody["recipientCompany"];
+  /** Unlinks the resume's design when set. */
+  template?: UpdateCoverLetterBody["template"];
+}
+
+/** A new letter's metadata: it needs a name and the resume it goes with. */
+export interface NewCoverLetterFields extends CoverLetterFields {
+  name: string;
+  resumeId: string;
+}
+
+/** Creates a cover letter from its `.md`. */
+export interface GenerateCoverLetterInput extends NewCoverLetterFields {
+  /** The full cover-letter `.md` text. */
+  markdown: string;
+}
+
+/** Rewrites a cover letter from its `.md`; a field left out keeps its value. */
+export interface UpdateCoverLetterInput extends CoverLetterFields {
+  /** The letter's id, as generate prints it. */
+  id: string;
+  /** The full cover-letter `.md` text. */
+  markdown: string;
+}
+
+/** The letter an operation wrote, and where to open it. */
+export interface CoverLetterResult {
+  id: string;
+  name: string;
+  revision: number;
+  /** Opens the letter on the Reactive Resume dashboard. */
+  dashboardUrl: string;
+}
+
+/** The operations on cover letters. */
+export interface CoverLetterOperations {
+  /** Creates a freeform letter, dated today. */
+  generate(input: GenerateCoverLetterInput): Promise<CoverLetterResult>;
+  /**
+   * Rewrites a freeform letter at the revision just read, dated today;
+   * rejected if the letter changed in between.
+   */
+  update(input: UpdateCoverLetterInput): Promise<CoverLetterResult>;
+  /** Moves a letter to Trash, then deletes it for good. */
+  delete(id: string): Promise<void>;
+}
+
+/** Every operation the Reactive Resume platform offers. */
+export interface RxResume {
+  resumes: ResumeOperations;
+  coverLetters: CoverLetterOperations;
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+/** Variables the Reactive Resume tools need from `.env`. */
+export enum EnvVar {
+  ApiKey = "RXRESUME_API_KEY",
+  BaseUrl = "RXRESUME_API_URL",
+  AppUrl = "RXRESUME_APP_URL",
+}
+
+/** Variables the tools read when set, and never ask for. */
+export enum OptionalEnvVar {
+  /** Any non-empty value logs every API request to stderr. */
+  Debug = "RXRESUME_DEBUG",
+}
+
+// ─── Errors ───────────────────────────────────────────────────────────────────
+
+/** Why an operation stopped; each code's details are in RxResumeErrorReason. */
+export enum RxResumeErrorCode {
+  /** A `.env` setting is missing or empty. */
+  MissingSettings = "MISSING_SETTINGS",
+  /** fetch rejected before any response: wrong URL, server down, TLS. */
+  Unreachable = "UNREACHABLE",
+  /** The letter's layout isn't freeform, so the `.md` would print twice. */
+  NotFreeform = "NOT_FREEFORM",
+  /** The letter was moved to Trash, but purging it failed. */
+  LeftInTrash = "LEFT_IN_TRASH",
+}
+
+/** An RxResumeError's code with what its message needs, one shape per code. */
+export type RxResumeErrorReason =
+  | { code: RxResumeErrorCode.MissingSettings; missing: string[] }
+  | {
+      code: RxResumeErrorCode.Unreachable;
+      method: string;
+      url: string;
+      /** The network error, with its code when the runtime gave one. */
+      detail: string;
+    }
+  | {
+      code: RxResumeErrorCode.NotFreeform;
+      id: string;
+      layout: CoverLetterLayout;
+    }
+  | {
+      code: RxResumeErrorCode.LeftInTrash;
+      id: string;
+      /** Why the purge failed. */
+      failure: string;
+    };
 
 /** The body of a failed response, when the API sent JSON. */
 export interface ApiErrorBody {
@@ -225,32 +312,10 @@ export interface ApiErrorBody {
 }
 
 export enum ErrorMessages {
-  UnexpectedResponse = "Unexpected response from the API",
-  InvalidId = "Invalid id provided",
-  MissingApiKey = "Missing API key",
   RxResumeApiError = "Reactive Resume API error",
-  MissingBody = "Missing request body",
   Failed = "failed:",
   CheckApiUrl = "(http or https, host, port) and that the server is running.",
 }
-
-/** Why a request to Reactive Resume stopped; details in RxResumeErrorReason. */
-export enum RxResumeErrorCode {
-  /** fetch rejected before any response: wrong URL, server down, TLS. */
-  Unreachable = "UNREACHABLE",
-}
-
-/** An RxResumeError's code with what its message needs, one shape per code. */
-export type RxResumeErrorReason = {
-  code: RxResumeErrorCode.Unreachable;
-  method: string;
-  url: string;
-  /** The network error, with its code when the runtime gave one. */
-  detail: string;
-};
-
-/** Environment variables, usually `process.env` after Bun has loaded `.env`. */
-export type Env = Record<string, string | undefined>;
 
 export interface ApiConfig {
   apiKey: string;

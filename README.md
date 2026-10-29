@@ -1,22 +1,19 @@
 # resume-tools
 
-Keep one `Resume.md` as the source of truth for your CV, and sync it everywhere
-else it has to live: a personal website, a CV builder or an application form.
+Keep one `Resume.md` as the source of truth for your CV, and sync it into
+[Reactive Resume](https://rxresu.me) through its API, along with cover letters
+written the same way.
 
 ## What's included
 
 | Tool                    | What it does                                                                                                                                                                                              |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sync-resume`           | Parses `Resume.md` and merges the text into a site CV (Markdown with YAML frontmatter). It then patches a [Reactive Resume](https://rxresu.me) JSON export, which you can re-import into Reactive Resume. |
 | `generate-rx-resume`    | Parses `Resume.md` and creates a new resume in [Reactive Resume](https://rxresu.me) through its API, filled with your personal details, summary and every section of the resume.                          |
 | `update-rx-resume`      | Parses `Resume.md` and rewrites an existing resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints. Layout, template and picture are kept.            |
 | `delete-rx-resume`      | Permanently deletes a resume in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-rx-resume` prints.                                                                         |
 | `generate-cover-letter` | Parses a cover-letter `.md` and creates a cover letter in [Reactive Resume](https://rxresu.me) through its API, linked to a resume for the sender's details and design.                                   |
 | `update-cover-letter`   | Parses a cover-letter `.md` and rewrites an existing cover letter in [Reactive Resume](https://rxresu.me) through its API, by the id that `generate-cover-letter` prints.                                 |
 | `delete-cover-letter`   | Permanently deletes a cover letter in [Reactive Resume](https://rxresu.me) through its API: moves it to Trash, then purges it.                                                                            |
-| `encode-cv`             | Encodes a CV (`.pdf`, `.docx` or `.md`) as bare base64 and checks that it decodes back to the same bytes.                                                                                                 |
-| `decode-cv`             | Decodes a base64 text file back into a CV, so you can open it and see exactly what an API receives.                                                                                                       |
-| `apply-careers-api`     | Validates a job application and sends it to the Careers API, as a test call that saves nothing or for real.                                                                                               |
 
 Run any tool from an interactive menu (`bun run cli`) or directly with
 `bun run cli <tool> [flags]`.
@@ -47,19 +44,13 @@ Before running, it prints the matching direct command and asks to confirm:
 
 ```
 ? Which tool do you want to run?
- ── Site ──
-❯ Sync resume — update the site CV and RxResume JSON from Resume.md
  ── Reactive Resume ──
-  Generate resume — create a new resume in Reactive Resume via its API
+❯ Generate resume — create a new resume in Reactive Resume via its API
   Update resume — rewrite an existing resume in Reactive Resume from Resume.md
   Delete resume — permanently delete a resume in Reactive Resume via its API
   Generate cover letter — create a cover letter in Reactive Resume from a .md
   Update cover letter — rewrite an existing cover letter in Reactive Resume from a .md
   Delete cover letter — permanently delete a cover letter in Reactive Resume via its API
- ── Careers API ──
-  Encode CV — encode a CV as base64 and check it decodes back
-  Decode CV — decode base64 text back into a CV to open and check
-  Apply — validate an application and send it to the careers APIs
   Exit
 ```
 
@@ -75,19 +66,6 @@ Before running, it prints the matching direct command and asks to confirm:
 - Ctrl+C cancels. Exit codes: `0` success, `1` failure, `130` cancelled.
 - The menu needs a terminal. Without one, it prints each tool's usage line.
 
-### How matching works
-
-Each entry in the targets is matched to `Resume.md` by name, and only text is
-replaced:
-
-- **Experience:** `### Company — Location` → role, bullets, tech stack
-- **Skills:** `**Group:** a, b, c` → the skill group with the same heading
-- **Education:** `### School — Location` → context and bullets
-- **Summary:** the `## Summary` section → the CV body
-
-Entries in `Resume.md` with no match in the target are skipped with a warning.
-Nothing gets added or removed.
-
 ### Cover letters
 
 `generate-cover-letter`, `update-cover-letter` and `delete-cover-letter` manage
@@ -100,13 +78,11 @@ The `.md` format, the flags and what each tool prints are in
 
 - `Resume.md` is your central, hand-edited resume. It belongs to your own
   project and is passed in with `--resume`. This repo never stores one, and
-  `.gitignore` blocks any `*.md` other than the README and test fixtures.
-- `resume/RxResume/Resume.template.json` is a Reactive Resume v5 template with
-  placeholder content. It is the only JSON file in version control.
-- `resume/RxResume/Resume.json` is your real export. It is gitignored, because
-  it holds personal data. To start, import the template into Reactive Resume.
-  Rename the placeholder entries there so they match your companies, schools and
-  skill groups, export the result, and save it at this path.
+  `.gitignore` blocks any `*.md` other than the README and the docs.
+- Reactive Resume is written from `Resume.md` through its API
+  (`generate-rx-resume`, `update-rx-resume`), so no Reactive Resume JSON is
+  kept in this repo. `resume/RxResume/Resume.json`, if you keep an export
+  there, stays gitignored, because it holds personal data.
 
 ### Validation
 
@@ -128,8 +104,7 @@ any case, singular or plural (`References:`, `**Reference**:`). Each entry must
 be a distinct email, for example `jobs[0].references[1]: invalid email
 format`. `generate-rx-resume` and `update-rx-resume` add them as a bold
 `Reference: a@example.com, b@example.com` line at the end of the job's
-description. The site CV has no references, so the JSON written from it has
-none either.
+description.
 
 An education item's `**Degree, Area** | dates` line is split on its first
 comma into the Reactive Resume degree and area of study. Optional lines set
@@ -178,8 +153,8 @@ Each folder in `src/` keeps its Zod schemas in `schema.ts` and its types in
 `types.ts`. Data shapes are inferred from the schemas with `z.infer`; declare a
 type by hand only when it is not data, such as CLI options or the API client.
 
-Tests use the synthetic fixtures in `src/sync-resume/fixtures/` and
-`src/cover-letter/fixtures/`, never a real resume or letter.
+Tests declare their synthetic fixtures inline (Jane Doe, Acme BV), never a
+real resume or letter.
 
 ### Layout
 
@@ -190,19 +165,21 @@ builds the menu prompts, the usage line and the argv parser, so the menu and
 `bun run cli <tool>` can't drift apart.
 
 Logic worth testing on its own lives in a domain folder, `src/<tool>/`, which
-never reads argv or imports from `src/cli/`. A tool that only calls an API
-endpoint does its work in the tool file. The design is in
+never reads argv or imports from `src/cli/`. A platform such as Reactive
+Resume exposes its operations through one `src/<platform>/index.ts`, and its
+tools live together in `src/cli/tools/<platform>/`. The design is in
 [docs/interactive-cli.md](docs/interactive-cli.md).
 
 ### Adding a tool
 
-1. Create `src/cli/tools/<tool>.ts`, exporting
+1. Create `src/cli/tools/<platform>/<tool>.ts`, exporting
    `defineTool({ id, title, description, platform, options, preflight?, run })`.
    `run` throws on failure.
-2. Append it to `TOOLS` in `src/cli/registry.ts`. It then shows up in the menu
-   and runs as `bun run cli <id>`.
-3. If the tool has real logic, put it in a domain folder `src/<tool>/`, tested
-   first.
+2. Append it to the list in `src/cli/tools/<platform>/index.ts`, which
+   `src/cli/registry.ts` spreads into `TOOLS`. It then shows up in the menu and
+   runs as `bun run cli <id>`.
+3. Put its logic behind `src/<platform>/index.ts` as an operation, tested
+   first through that interface.
 4. Add a `Platform` entry only for a new destination or kind of job, never for a
    vendor.
 

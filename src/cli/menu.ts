@@ -10,13 +10,11 @@ import {
   MenuAction,
   Platform,
   type Choice,
-  type Env,
   type MenuItem,
+  type MenuValue,
   type ToolDefinition,
 } from "./types.ts";
-
-/** A menu entry's value: the tool to run, or a non-tool action. */
-export type MenuValue = ToolDefinition | MenuAction;
+import type { Env } from "../utils/types.ts";
 
 /** Lists a tool, disabled with the reason when its preflight fails. */
 function toToolChoice(tool: ToolDefinition, env: Env): Choice<MenuValue> {

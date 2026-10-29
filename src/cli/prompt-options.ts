@@ -88,8 +88,8 @@ async function askForAnswer(
  *   typed: the tool resolves relative paths from the same working directory.
  *
  * @example
- * await promptOptions(encodeTool.options, prompter, pathContext);
- * // ["--cv", "cv.md"]
+ * await promptOptions(deleteTool.options, prompter, pathContext);
+ * // ["--id", "resume-1"]
  */
 export async function promptOptions(
   options: readonly OptionDescriptor[],

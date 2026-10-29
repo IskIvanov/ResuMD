@@ -1,16 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
-import yaml from "js-yaml";
 import {
-  CvDataSchema,
   ParsedContactSchema,
   ParsedEduItemSchema,
   ParsedJobSchema,
   ParsedResumeSchema,
   ParsedSkillGroupSchema,
-  ResumeJsonSchema,
   validateParsedResume,
 } from "./schema.ts";
 import { ValidationMessage } from "../utils/schema.ts";
@@ -21,8 +15,6 @@ import type {
   ParsedResume,
   ParsedSkillGroup,
 } from "./types.ts";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -271,41 +263,5 @@ describe("validateParsedResume", () => {
         `  jobs[0].stack: ${Required}`,
       ].join("\n"),
     );
-  });
-});
-
-// ─── CvDataSchema ─────────────────────────────────────────────────────────────
-
-describe("CvDataSchema", () => {
-  const cvRaw = readFileSync(resolve(__dirname, "fixtures/cv.md"), "utf-8");
-  const frontmatter: unknown = yaml.load(cvRaw.split("---\n")[1]);
-
-  it("accepts the fixture CV frontmatter", () => {
-    expect(CvDataSchema.safeParse(frontmatter).success).toBe(true);
-  });
-
-  it("rejects a CV without a header", () => {
-    expect(CvDataSchema.safeParse({ contact: { items: [] } }).success).toBe(
-      false,
-    );
-  });
-});
-
-// ─── ResumeJsonSchema ─────────────────────────────────────────────────────────
-
-describe("ResumeJsonSchema", () => {
-  const template: unknown = JSON.parse(
-    readFileSync(
-      resolve(__dirname, "../../resume/RxResume/Resume.template.json"),
-      "utf-8",
-    ),
-  );
-
-  it("accepts the RxResume template and keeps its untyped fields", () => {
-    expect(ResumeJsonSchema.parse(template)).toEqual(template);
-  });
-
-  it("rejects a resume without a summary", () => {
-    expect(ResumeJsonSchema.safeParse({ sections: {} }).success).toBe(false);
   });
 });

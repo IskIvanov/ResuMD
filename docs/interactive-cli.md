@@ -5,6 +5,26 @@ Linear:
 · Follow-up:
 [BAC-53](https://linear.app/bck123/issue/BAC-53/move-test-fixtures-into-one-mocksts-per-tool-folder)
 
+> **Revision (platforms):** the Reactive Resume tools now sit behind one
+> module, `src/rx-resume/index.ts`, with their tool files in
+> `src/cli/tools/rx-resume/`. The `generate-rx-resume/`, `update-rx-resume/`
+> and `cover-letter/` folders and their `run.ts` files are gone; the layout
+> below is current, and AGENTS.md has the rules. Later sections that mention
+> a domain `run.ts` or `apiConfigProblem` describe the earlier layout.
+
+> **Revision (inline fixtures):** there are no `mocks.ts` or `fixtures/`
+> files any more. Each test file declares its own doubles and synthetic data;
+> the CLI tests are one file, `src/cli/tools/rx-resume/cli.test.ts`, the
+> Reactive Resume tests `src/rx-resume/index.test.ts`. The Testing section
+> below is updated; generic types live in `src/utils/types.ts`.
+
+> **Revision (removals):** `encode-cv`, `decode-cv` and `apply-job` are gone,
+> with `src/cv-base64/`, `src/careers-api/` and `src/apply-job/`, along with
+> the `Site` and `Job Application` platforms and `CAREERS_API_URL`. The
+> site-CV merge (`sync-resume/run.ts`, `merger.ts`) is gone too:
+> `src/sync-resume/` is now only the `Resume.md` parser that
+> `src/rx-resume/resume/` imports. Every tool left is a Reactive Resume tool.
+
 > **Revision (single-file tools):** each tool is now one file in
 > `src/cli/tools/<tool>.ts` that declares its options once with `defineTool`,
 > and every tool runs directly as `bun run cli <tool id> [flags]`. This removed
@@ -57,38 +77,21 @@ still compiles and its tests still pass. Both layers may import from
 
 ```
 src/
-├── sync-resume/                  domain
-│   ├── parser.ts, merger.ts, render-json.ts, schema.ts, types.ts
-│   └── run.ts                    runSync(paths: SyncPaths, cwd: string): Promise<void>
-├── generate-rx-resume/           domain
-│   ├── generate.ts, types.ts
-│   └── run.ts                    runGenerate(options: GenerateOptions, env: Env): Promise<void>
-├── update-rx-resume/             domain
-│   ├── types.ts
-│   └── run.ts                    runUpdate(options: UpdateOptions, env: Env): Promise<void>
-├── rx-resume/                    Reactive Resume adapter: RxResumeApiClient (resumes and cover letters), config
-│                                 (incl. apiConfigProblem), schema, patch (patchResumeData: get → patch → put)
-├── cover-letter/                 domain
-│   ├── parser.ts, body.ts, schema.ts, types.ts   parseCoverLetter, toCreateBody, toUpdateBody
-│   ├── generate.ts, update.ts, delete.ts         create; get → put at the revision; get → trash → purge
-│   ├── errors.ts                 CoverLetterError (NOT_FREEFORM, LEFT_IN_TRASH)
-│   └── run.ts                    runGenerateCoverLetter, runUpdateCoverLetter, runDeleteCoverLetter
-├── cv-base64/                    domain, vendor-neutral
-│   ├── codec.ts, schema.ts, types.ts   encodeBase64, decodeBase64 (strict), encodeVerified (round trip)
-│   └── run.ts                    runEncode(options, cwd), runDecode(options, cwd)
-├── careers-api/                  careers API adapter: client, config (incl. careersConfigProblem),
-│                                 schema (ApplicationPayloadSchema, validateApplicationPayload)
-├── apply-job/                    domain
-│   ├── payload.ts, types.ts      buildApplicationPayload(applicant, cv, mode)
-│   └── run.ts                    runApply(options: ApplyOptions, env: Env): Promise<void>
+├── sync-resume/                  domain: the Resume.md parser
+│   └── parser.ts, schema.ts, types.ts   parseResume(markdown) → ParsedResume
+├── rx-resume/                    the Reactive Resume platform; only index.ts is imported from outside
+│   ├── index.ts                  connectRxResume(deps) → { resumes, coverLetters }, rxResumeProblem
+│   ├── client.ts, config.ts, errors.ts, schema.ts, types.ts, index.test.ts
+│   ├── resume/                   operations.ts, mapping.ts (ParsedResume → API data), layout.ts
+│   └── cover-letter/             operations.ts, parser.ts, body.ts, update.ts, delete.ts
 ├── utils/                        generic helpers, no domain or CLI imports
-│   ├── string.ts                 slugify, splitList, kebabToCamel (+ KebabToCamel type)
+│   ├── string.ts                 slugify, splitList, kebabToCamel
 │   ├── record.ts                 omitUndefined, pickNonEmptyStrings, fillDefaults, camelCaseKeys
 │   ├── markdown.ts               splitSections
 │   ├── schema.ts                 ValidationMessage, requiredText, formatIssuePath, parseOrThrow
 │   ├── url.ts                    trimTrailingSlashes, itemPath
-│   ├── error.ts                  ReasonedError, the base of every error the tools own
-│   └── type.ts                   ValueOf
+│   ├── error.ts                  ReasonedError, the base of every error the tools own; failureOf
+│   └── types.ts                  ValueOf, KebabToCamel, CamelCaseKeys, ErrorReason, Env, FetchFn
 └── cli/
     ├── types.ts                  ToolSpec, ToolDefinition, OptionSpec, OptionValues, Prompter, enums
     ├── define-tool.ts            defineTool(spec) → ToolDefinition with a typed parse, the one argv parser
@@ -98,19 +101,13 @@ src/
     ├── prompt-options.ts         required → checkbox → nested prompts → argv
     ├── menu.ts                   builds the menu choices from the registry
     ├── run-cli.ts                orchestrator: a tool by id, or the menu; returns an exit code
-    ├── registry.ts               TOOLS: readonly ToolDefinition[]
-    ├── mocks.ts                  fixtures for the CLI tests, built on the registered tools
+    ├── registry.ts               TOOLS: spreads each platform's tool list
     ├── index.ts                  `bun run cli`: wires @inquirer/prompts, argv, process.env, existsSync
+    ├── platforms.test.ts         fails on any import past a platform's seams
     └── tools/
-        ├── sync-resume.ts        options + run: (paths, { cwd }) => runSync(paths, cwd)
-        ├── generate-rx-resume.ts options + run: (options, { env }) => runGenerate(options, env)
-        ├── update-rx-resume.ts   options + run: (options, { env }) => runUpdate(options, env)
-        ├── delete-rx-resume.ts   options + run: client.deleteResume(id), no domain folder
-        ├── generate-cover-letter.ts, update-cover-letter.ts, delete-cover-letter.ts
-        │                         options + run: (values, { env }) => run…CoverLetter(camelCaseKeys(values), env)
-        ├── encode-cv.ts          options + run: (options, { cwd }) => runEncode(options, cwd)
-        ├── decode-cv.ts          options + run: (options, { cwd }) => runDecode(options, cwd)
-        └── apply-job.ts          options + run: (values, { env }) => runApply(camelCaseKeys(values), env)
+        ├── rx-resume/            RX_RESUME_TOOLS in index.ts; connect.ts, print.ts;
+        │                         one thin file per tool: read the file, call an operation, print;
+        │                         and cli.test.ts, which drives the CLI through these tools
 ```
 
 Rules:
@@ -138,9 +135,9 @@ bun run cli <id> [flags]:  process.argv ─────────────�
 ## Types
 
 ```ts
-enum Platform { Site = "Site", ReactiveResume = "Reactive Resume", JobApplication = "Job Application" } // where a tool writes
+enum Platform { ReactiveResume = "Reactive Resume" } // where a tool writes
 enum OptionKind { Path = "path", Text = "text", List = "list", Choice = "choice" }
-enum FileExtension { Markdown = ".md", Json = ".json", Pdf = ".pdf", Docx = ".docx", Text = ".txt" }
+enum FileExtension { Markdown = ".md" }
 enum ExitCode { Success = 0, Failure = 1, Cancelled = 130 }
 
 interface PathRule {
@@ -249,8 +246,6 @@ resume-tools cli needs an interactive terminal. Run a tool directly:
 per platform and an `Exit` entry at the end:
 
 ```
-── Site ──
-❯ Sync resume — update the site CV and RxResume JSON
 ── Reactive Resume ──
   Generate resume — create a resume via the API  Not available: Missing RXRESUME_API_KEY, …
 ```
@@ -264,7 +259,7 @@ A tool whose `preflight(env)` returns a reason is shown with that reason as
 2. If the tool has optional options, show a `checkbox`: "Set any optional
    flags?" Each entry shows its `default` when it has one.
 3. Prompt for each ticked option.
-4. Turn the answers into argv: `["--cv", "<abs path>", "--resume", …]`. Leave
+4. Turn the answers into argv: `["--id", "<id>", "--resume", …]`. Leave
    out unticked optional flags so the tool applies its own defaults.
 
 Per kind:
@@ -279,8 +274,7 @@ Per kind:
 A `Choice` declares its values in `choices`, and `run` receives their union,
 not `string`. In flag mode, `parseToolArgs` rejects any other value with
 `--template must be one of azurill, …`. The cover-letter tools' `--template`
-is the first one. `apply-job`'s `--mode` is plain `Text` instead: with two
-values, its domain checks it (`parseApplyMode`).
+is the only one.
 
 ### 4. Path schema (interactive only)
 
@@ -303,27 +297,14 @@ Rules per tool:
 
 | Tool                  | Option       | Extensions           | mustExist | Required |
 | --------------------- | ------------ | -------------------- | --------- | -------- |
-| sync                  | `--cv`       | `.md`                | yes       | yes      |
-| sync                  | `--resume`   | `.md`                | yes       | yes      |
-| sync                  | `--json`     | `.json`              | no        | no       |
-| sync                  | `--template` | `.json`              | yes       | no       |
 | generate-rx-resume    | `--resume`   | `.md`                | yes       | yes      |
 | update-rx-resume      | `--resume`   | `.md`                | yes       | yes      |
 | generate-cover-letter | `--letter`   | `.md`                | yes       | yes      |
 | update-cover-letter   | `--letter`   | `.md`                | yes       | yes      |
-| encode-cv             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
-| encode-cv             | `--out`      | `.txt`               | no        | no       |
-| decode-cv             | `--base64`   | `.txt`               | yes       | yes      |
-| decode-cv             | `--out`      | `.pdf` `.docx` `.md` | no        | yes      |
-| apply-job             | `--cv`       | `.pdf` `.docx` `.md` | yes       | yes      |
 
 Generate's other options: `--name` (`Text`, required), `--slug` (`Text`,
-optional, default `slugify(name)`) and `--tags` (`List`, optional). Sync's
-defaults for `--json` and `--template` are `DefaultPath` resolved from the
-package root. Update and delete each take `--id` (`Text`, required). Encode's
-`--out` defaults to `<cv>.base64.txt`. Apply's other options are `--vacancy` and
-one `Text` per applicant field, all required, then `--mode` (`Text`, required,
-`test` or `live`). The cover-letter tools take `--name`, `--resume-id`,
+optional, default `slugify(name)`) and `--tags` (`List`, optional). Update
+and delete each take `--id` (`Text`, required). The cover-letter tools take `--name`, `--resume-id`,
 `--application-id`, `--company` (`Text`) and `--template` (`Choice` of the 17
 template names); see [cover-letter.md](cover-letter.md#cli).
 
@@ -357,17 +338,11 @@ cover-letter tools use `apiConfigProblem(env)` from `src/rx-resume/config.ts`. I
 `undefined` when it doesn't. Bun loads `.env` from the package root, because
 `bun run cli` runs there.
 
-### Preflight: job applications
-
-`apply-job` uses `careersConfigProblem(env)` from `src/careers-api/config.ts`,
-which needs `CAREERS_API_URL`. `encode-cv` and `decode-cv` need no settings and
-are always available.
-
 ## Providers
 
 A **provider** is an external service that can be swapped for another one that
 does the same job, such as DeepL and Google Translate. A **destination** is
-where a tool writes, such as the site CV or Reactive Resume. Destinations get
+where a tool writes, such as Reactive Resume. Destinations get
 their own tools and their own `Platform` entry. Providers never appear in
 `Platform`, in a tool file or in a domain `run.ts`, so swapping one never
 touches them.
@@ -425,8 +400,6 @@ What a change touches:
 - One script in `package.json`: `"cli": "bun src/cli/index.ts"`. It opens the
   menu, or runs a tool directly when given its id.
 - Paths typed at the prompts resolve from the package root.
-- The portfolio's `resume:sync` script runs
-  `bun packages/resume-tools/src/cli/index.ts sync-resume --cv … --resume …`.
 
 ## Testing
 
@@ -434,41 +407,29 @@ Per AGENTS.md: write each test before its implementation (red → green), and ke
 tests next to their modules. **Cover base cases only**: one happy path and the
 main failure for each unit. Don't build exhaustive edge-case matrices.
 
-- One `mocks.ts` per folder: `src/cli/mocks.ts` for the CLI tests (fake
-  prompter, env objects, prompt scripts and expected usage lines for the
-  registered tools). They hold typed constants and small factories only: no
-  assertions and no `vi.fn()` setup. Tests import from them and never declare
-  fixtures inline.
+- No `mocks.ts` or fixture files: each test file declares its doubles and
+  synthetic data inline. Tests that would share them sit in one file per
+  surface, e.g. `cli/tools/rx-resume/cli.test.ts` holds the fake prompter,
+  harness, env objects, prompt scripts and expected usage lines.
 - CLI tests run the real tools from the registry, never tools built for the
   test. Where a test must not do a tool's work, `withRecordedRuns(tool)` keeps
   its declaration and records its argv instead.
 - The fake prompter answers from a script keyed by prompt message, and throws on
   any unscripted prompt.
-- There are no real-terminal tests. The domain `run.ts` files get no new unit
-  tests, because their logic is already covered by the parser, merger and
-  generate tests.
-- Tool files get no test files of their own. `registry.test.ts` checks every
+- There are no real-terminal tests. Tool files get no unit tests of their
+  own, because their logic is already covered by the parser and Reactive
+  Resume tests.
+- Tool files get no test files of their own. `cli.test.ts` checks every
   registered tool (usage line, menu placement, preflight, missing flags
-  rejected before any work), `define-tool.test.ts` covers parsing through
-  real tools, and the domain tests cover their work.
+  rejected before any work) and covers parsing through real tools, and the
+  domain tests cover their work.
 
 | Test file                                       | Base cases                                                                                                                            |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli/schema.test.ts`                            | valid path passes; wrong extension; not found                                                                                         |
+| `cli/tools/rx-resume/cli.test.ts`               | `pathSchema`; parse (defaults, lists, missing/unknown flag, choices, run); prompts; every tool's menu line, usage, preflight and missing flags; `runCli` exit codes |
 | `cli/command.test.ts`                           | argv appended; value with a space is quoted                                                                                           |
-| `cli/prompt-options.test.ts`                    | required only; one optional flag ticked; choice offered in a select                                                                   |
-| `cli/menu.test.ts`                              | platform separators; disabled reason; `Exit` entry                                                                                    |
-| `cli/define-tool.test.ts`                       | path + default; given value + list; missing flag; unknown flag; choice parsed and typed; invalid choice; usage; run parses first      |
-| `cli/registry.test.ts`                          | every tool: menu layout, usage line, disabled until `.env` has its settings, missing flags rejected; cover-letter tools in order      |
-| `cli/run-cli.test.ts`                           | non-TTY → 1; Exit → 0; success → 0; tool throws → 1; cancel → 130; direct run; unknown id                                             |
 | `rx-resume/config.test.ts` (`apiConfigProblem`) | returns the reason; returns `undefined` when set                                                                                      |
 | `rx-resume/patch.test.ts`                       | patched data saved under the same id; failed fetch saves nothing                                                                      |
-| `cv-base64/codec.test.ts`                       | encode; decode; data URL, bad character and empty rejected; round trip passes and fails                                               |
-| `careers-api/schema.test.ts`                    | valid payload; one failure per field rule; every failure listed; Dutch phone formats; request size at and over the limit              |
-| `careers-api/config.test.ts`                    | reads the URL; missing or empty throws; `careersConfigProblem`                                                                        |
-| `careers-api/client.test.ts`                    | POST body and headers; slug encoded; 200 tested; 201 applied; raw response kept; 404 meaning and full response; 429 Retry-After       |
-| `careers-api/response.test.ts`                  | JSON body pretty-printed; other text as received; empty body marked; `parseJson`                                                      |
-| `apply-job/payload.test.ts`                     | fields mapped; live sends `test: false`; extension case; every invalid field listed; mode                                             |
 
 ## Delivery
 

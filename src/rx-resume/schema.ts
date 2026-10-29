@@ -65,7 +65,7 @@ const SectionItemSchema = z.object({
   hidden: z.boolean(),
 });
 
-export const ExperienceRoleSchema = z.object({
+const ExperienceRoleSchema = z.object({
   id: z.string(),
   position: z.string(),
   period: z.string(),
@@ -150,37 +150,37 @@ export const ReferenceItemSchema = SectionItemSchema.extend({
   description: z.string(),
 });
 
-export const ExperienceSectionSchema = SectionLayoutSchema.extend({
+const ExperienceSectionSchema = SectionLayoutSchema.extend({
   items: z.array(ExperienceItemSchema),
 });
 
-export const SkillsSectionSchema = SectionLayoutSchema.extend({
+const SkillsSectionSchema = SectionLayoutSchema.extend({
   items: z.array(SkillItemSchema),
   keywordLayout: z.enum(SkillKeywordLayout).optional(),
   layout: z.enum(SkillLayout).optional(),
 });
 
-export const EducationSectionSchema = SectionLayoutSchema.extend({
+const EducationSectionSchema = SectionLayoutSchema.extend({
   items: z.array(EducationItemSchema),
 });
 
-export const ProjectsSectionSchema = SectionLayoutSchema.extend({
+const ProjectsSectionSchema = SectionLayoutSchema.extend({
   items: z.array(ProjectItemSchema),
 });
 
-export const CertificationsSectionSchema = SectionLayoutSchema.extend({
+const CertificationsSectionSchema = SectionLayoutSchema.extend({
   items: z.array(CertificationItemSchema),
 });
 
-export const LanguagesSectionSchema = SectionLayoutSchema.extend({
+const LanguagesSectionSchema = SectionLayoutSchema.extend({
   items: z.array(LanguageItemSchema),
 });
 
-export const InterestsSectionSchema = SectionLayoutSchema.extend({
+const InterestsSectionSchema = SectionLayoutSchema.extend({
   items: z.array(InterestItemSchema),
 });
 
-export const ReferencesSectionSchema = SectionLayoutSchema.extend({
+const ReferencesSectionSchema = SectionLayoutSchema.extend({
   items: z.array(ReferenceItemSchema),
 });
 
@@ -188,7 +188,7 @@ export const ReferencesSectionSchema = SectionLayoutSchema.extend({
  * The sections Resume.md feeds. The API requires every other section too;
  * they are carried through untyped so an update never drops them.
  */
-export const ResumeSectionsSchema = z.looseObject({
+const ResumeSectionsSchema = z.looseObject({
   experience: ExperienceSectionSchema,
   skills: SkillsSectionSchema,
   education: EducationSectionSchema,
@@ -201,7 +201,7 @@ export const ResumeSectionsSchema = z.looseObject({
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
-export const LayoutPageSchema = z.object({
+const LayoutPageSchema = z.object({
   /** True when the main column spans the page and the sidebar is empty. */
   fullWidth: z.boolean(),
   /** Section ids, in display order. */

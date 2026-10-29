@@ -4,25 +4,8 @@
  * Generic helpers that filter, fill or rename an object's entries.
  */
 
-import { type KebabToCamel, kebabToCamel } from "./string.ts";
-
-/** Builds a missing entry's value from the entries known so far. */
-export type DefaultBuilder = (
-  known: Readonly<Record<string, string>>,
-) => string | undefined;
-
-/** A key and the builder of its default, if it has one. */
-export type DefaultEntry = readonly [
-  key: string,
-  build: DefaultBuilder | undefined,
-];
-
-/** An object with each kebab-case key renamed to camelCase. */
-export type CamelCaseKeys<TObject extends object> = {
-  [TKey in keyof TObject as TKey extends string
-    ? KebabToCamel<`${TKey}`>
-    : TKey]: TObject[TKey];
-};
+import { kebabToCamel } from "./string.ts";
+import type { CamelCaseKeys, DefaultEntry } from "./types.ts";
 
 /**
  * Drops the fields that are undefined, e.g. so an optional value that wasn't
