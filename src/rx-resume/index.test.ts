@@ -17,6 +17,7 @@ import {
   deleteResumeTool,
   createCoverLetterTool,
   createResumeTool,
+  downloadResumeTool,
   updateCoverLetterTool,
   updateResumeTool,
 } from "./index.ts";
@@ -86,10 +87,14 @@ const LETTER_FILE = "letter.md";
 /** What every id a tool hands out starts with: `new-1`, `new-2`, … */
 const NEW_ID_PREFIX = "new-";
 
-/** What a tool printed while it ran. */
+/**
+ * What a tool printed while it ran, and the files it saved by path relative
+ * to WORKING_DIRECTORY.
+ */
 interface ToolOutput {
   output: string[];
   errors: string[];
+  savedFiles: Record<string, Uint8Array>;
 }
 
 /**
@@ -120,7 +125,7 @@ async function runTool(
     [LETTER_FILE]: COVER_LETTER_MD,
     ...doubles.files,
   };
-  const printed: ToolOutput = { output: [], errors: [] };
+  const printed: ToolOutput = { output: [], errors: [], savedFiles: {} };
   const clockReadings = [1000, 1084, 2000, 2042];
   let idsIssued = 0;
   const dependencies: ToolDependencies = {
@@ -137,6 +142,9 @@ async function runTool(
       const text = files[relative(WORKING_DIRECTORY, path)];
       if (text === undefined) throw new Error(`No such file: ${path}`);
       return text;
+    },
+    writeFile: (path, bytes) => {
+      printed.savedFiles[relative(WORKING_DIRECTORY, path)] = bytes;
     },
     log: (line) => printed.output.push(line),
     logError: (line) => printed.errors.push(line),
@@ -1115,6 +1123,50 @@ describe("delete-resume", () => {
     await expect(
       runTool(deleteResumeTool, ["--id", RESUME_ID], { fetch: api.fetch }),
     ).rejects.toMatchObject({ status: 403, code: "RESUME_LOCKED" });
+  });
+});
+
+describe("download-resume", () => {
+  it("saves the export's bytes unchanged as resume.<format>", async () => {
+    // "%PDF-" then bytes that aren't valid UTF-8, so decoding them as text
+    // would change them.
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0xff, 0xfe]);
+    const api = recordingFetch([new Response(pdfBytes)]);
+
+    const { output, savedFiles } = await runTool(
+      downloadResumeTool,
+      ["--id", RESUME_ID, "--format", "pdf"],
+      { fetch: api.fetch },
+    );
+
+    expect(api.receivedRequests).toEqual([
+      {
+        method: "GET",
+        url: `${RESUME_URL}/exports/pdf`,
+        apiKey: API_KEY,
+        sentJson: undefined,
+      },
+    ]);
+    expect(savedFiles).toEqual({ "resume.pdf": pdfBytes });
+    expect(output).toEqual([
+      `✓ Downloaded resume ${RESUME_ID} as pdf to /work/resume.pdf`,
+    ]);
+  });
+
+  it("saves to --output, resolved from the working directory", async () => {
+    const markdownBytes = new TextEncoder().encode("# Jane Doe\n");
+    const api = recordingFetch([new Response(markdownBytes)]);
+
+    const { output, savedFiles } = await runTool(
+      downloadResumeTool,
+      ["--id", RESUME_ID, "--format", "md", "--output", "cv/Jane-Doe.md"],
+      { fetch: api.fetch },
+    );
+
+    expect(savedFiles).toEqual({ "cv/Jane-Doe.md": markdownBytes });
+    expect(output).toEqual([
+      `✓ Downloaded resume ${RESUME_ID} as md to /work/cv/Jane-Doe.md`,
+    ]);
   });
 });
 

@@ -37,6 +37,10 @@ export enum OptionKind {
 /** File extensions a path option can accept. */
 export enum FileExtension {
   Markdown = ".md",
+  Pdf = ".pdf",
+  Docx = ".docx",
+  OpenDocument = ".odt",
+  Json = ".json",
 }
 
 export enum ExitCode {
@@ -153,6 +157,8 @@ export interface ToolDependencies {
   now: () => number;
   /** Reads a UTF-8 text file by its absolute path. */
   readFile: (absolutePath: string) => string;
+  /** Writes bytes to a file by its absolute path, replacing what's there. */
+  writeFile: (absolutePath: string, bytes: Uint8Array) => void;
   log: (line: string) => void;
   logError: (line: string) => void;
 }

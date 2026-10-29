@@ -14,6 +14,7 @@ import type {
   Resume,
   ResumeData,
 } from "../../api/types.ts";
+import { ResumeFormat } from "../../types.ts";
 import { applySectionOrder, SECTION_ORDER } from "./layout.ts";
 import { applyResumeMd } from "./mapping.ts";
 
@@ -109,5 +110,23 @@ export async function deleteResume(
     let failure = String(error);
     if (error instanceof Error) failure = error.message;
     throw new Error(`${failure}; resume ${id} is in Trash`, { cause: error });
+  }
+}
+
+export async function downloadResume(
+  client: RxResumeApiClient,
+  id: string,
+  format: ResumeFormat,
+): Promise<Uint8Array> {
+  try {
+    return await client.downloadResume(id, format);
+  } catch (error) {
+    console.error("Failed to download resume", error);
+    let failure = String(error);
+    if (error instanceof Error) failure = error.message;
+    throw new Error(
+      `Failed to download resume ${id} in format ${format}: ${failure}`,
+      { cause: error },
+    );
   }
 }

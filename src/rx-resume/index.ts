@@ -32,15 +32,28 @@ import {
 import {
   createResume,
   deleteResume,
+  downloadResume,
   updateResume,
 } from "./operations/resume/index.ts";
 import { CoverLetterIdSchema } from "./schema.ts";
-import type { LetterFields } from "./types.ts";
+import { ResumeFormat, type LetterFields } from "./types.ts";
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
 /** A Markdown file that must already exist. */
 const MARKDOWN_FILE = { extensions: [FileExtension.Markdown], mustExist: true };
+
+/** A file to save a resume export to, in any format the export comes in. */
+const RESUME_EXPORT_FILE = {
+  extensions: [
+    FileExtension.Pdf,
+    FileExtension.Docx,
+    FileExtension.OpenDocument,
+    FileExtension.Markdown,
+    FileExtension.Json,
+  ],
+  mustExist: false,
+};
 
 const RESUME_FILE_OPTION = {
   question: "Path to Resume.md",
@@ -222,6 +235,40 @@ export const deleteResumeTool = defineTool({
   },
 });
 
+export const downloadResumeTool = defineTool({
+  id: "download-resume",
+  title: "Download resume",
+  description:
+    "download a resume from Reactive Resume: format: pdf, md, docx, etc.",
+  options: {
+    id: {
+      question: "Id of the resume to download",
+      kind: OptionKind.Text,
+      required: true,
+    },
+    format: {
+      question: "Format to download the resume in",
+      kind: OptionKind.Choice,
+      choices: Object.values(ResumeFormat),
+      required: true,
+    },
+    output: {
+      question: "Path to save the resume to",
+      kind: OptionKind.Path,
+      path: RESUME_EXPORT_FILE,
+      required: false,
+      default: (answers) => `resume.${answers.format}`,
+    },
+  },
+  preflight: describeMissingSettings,
+  run: async ({ id, format, output }, dependencies) => {
+    const client = connect(dependencies);
+    const data = await downloadResume(client, id, format);
+    dependencies.writeFile(output, data);
+    dependencies.log(`✓ Downloaded resume ${id} as ${format} to ${output}`);
+  },
+});
+
 // ─── Cover letters ────────────────────────────────────────────────────────────
 
 /**
@@ -360,6 +407,7 @@ export const RX_RESUME_TOOLS: readonly ToolDefinition[] = [
   createResumeTool,
   updateResumeTool,
   deleteResumeTool,
+  downloadResumeTool,
   createCoverLetterTool,
   updateCoverLetterTool,
   deleteCoverLetterTool,

@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { checkbox, confirm, input, select } from "@inquirer/prompts";
 import { RX_RESUME_TOOLS } from "../rx-resume/index.ts";
 import { PromptCancelled, runCli } from "./run-cli.ts";
@@ -72,6 +72,7 @@ process.exit(
     today: localToday,
     now: () => performance.now(),
     readFile: (absolutePath) => readFileSync(absolutePath, "utf-8"),
+    writeFile: (absolutePath, bytes) => writeFileSync(absolutePath, bytes),
     log: (line) => console.log(line),
     logError: (line) => console.error(line),
   }),

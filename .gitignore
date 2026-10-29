@@ -26,3 +26,6 @@ resume/RxResume/Resume.json
 *.base64.txt
 *.pdf
 *.docx
+
+# Personal editor settings.
+.vscode/settings.json

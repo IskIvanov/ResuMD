@@ -26,3 +26,11 @@ export type LetterFields = Pick<
 
 /** A new letter's fields: it needs a name and a source resume. */
 export type NewLetterFields = LetterFields & { name: string; resumeId: string };
+
+export enum ResumeFormat {
+  Pdf = "pdf",
+  Docx = "docx",
+  Json = "json",
+  OpenDocument = "odt",
+  Markdown = "md",
+}

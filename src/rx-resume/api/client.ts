@@ -8,6 +8,7 @@
 
 import { describeCaught } from "../../utils/error.ts";
 import type { FetchFunction, ValueOf } from "../../utils/types.ts";
+import { ResumeFormat } from "../types.ts";
 import {
   type ApiCallLog,
   type ApiErrorDetails,
@@ -154,6 +155,19 @@ export class RxResumeApiClient {
     path: string,
     requestBody?: object,
   ): Promise<unknown> {
+    const httpResponse = await this.sendRequest(method, path, requestBody);
+    // DELETE answers with an empty body, which httpResponse.json() rejects.
+    const responseText = await httpResponse.text();
+    if (!responseText) return undefined;
+    return JSON.parse(responseText);
+  }
+
+  /** Calls one endpoint and returns its 2xx response, body unread. */
+  async sendRequest(
+    method: HttpMethod,
+    path: string,
+    requestBody?: object,
+  ): Promise<Response> {
     const headers = new Headers({ [ApiKeyHeader]: this.apiKey });
     const endpointUrl = `${this.apiUrl}${path}`;
 
@@ -187,10 +201,7 @@ export class RxResumeApiClient {
     }
 
     if (!httpResponse.ok) throw await toApiError(httpResponse);
-    // DELETE answers with an empty body, which httpResponse.json() rejects.
-    const responseText = await httpResponse.text();
-    if (!responseText) return undefined;
-    return JSON.parse(responseText);
+    return httpResponse;
   }
 
   /**
@@ -320,5 +331,15 @@ export class RxResumeApiClient {
       HttpMethod.Delete,
       documentPath(DocumentType.Letter, id),
     );
+  }
+
+  /**
+   * `GET /resumes/{id}/exports/{format}`; resolves to the file's bytes. Read
+   * as bytes, not text: decoding a PDF, DOCX or ODT as UTF-8 corrupts it.
+   */
+  async downloadResume(id: string, format: ResumeFormat): Promise<Uint8Array> {
+    const urlEndpoint = `${resumePath(id)}/exports/${format}`;
+    const httpResponse = await this.sendRequest(HttpMethod.Get, urlEndpoint);
+    return new Uint8Array(await httpResponse.arrayBuffer());
   }
 }

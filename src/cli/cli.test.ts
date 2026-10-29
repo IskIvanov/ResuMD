@@ -54,6 +54,7 @@ const toolDependencies: ToolDependencies = {
   today: unreachable,
   now: unreachable,
   readFile: unreachable,
+  writeFile: unreachable,
   log: unreachable,
   logError: unreachable,
 };
@@ -449,6 +450,8 @@ const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
     "Usage: bun run cli create-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
   "update-resume": "Usage: bun run cli update-resume --id <id> --resume <path>",
   "delete-resume": "Usage: bun run cli delete-resume --id <id>",
+  "download-resume":
+    "Usage: bun run cli download-resume --id <id> --format <format> [--output <path>]",
   "create-cover-letter":
     "Usage: bun run cli create-cover-letter --letter <path> --name <name> --resume-id <resume-id> [--application-id <application-id>] [--company <company>] [--template <template>]",
   "update-cover-letter":
@@ -476,6 +479,7 @@ describe("RX_RESUME_TOOLS", () => {
       "create-resume",
       "update-resume",
       "delete-resume",
+      "download-resume",
       "create-cover-letter",
       "update-cover-letter",
       "delete-cover-letter",
