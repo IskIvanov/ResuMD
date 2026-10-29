@@ -23,21 +23,32 @@ export const requiredText = z
   })
   .min(1, ValidationMessage.Required);
 
-/**
- * Formats a Zod issue path the way it is written in code.
- *
- * @param path - Object keys and array indices, outermost first.
- * @returns The path with keys joined by dots and indices in brackets.
- *
- * @example
- * formatIssuePath(["jobs", 2, "role"]); // "jobs[2].role"
- */
-export function formatIssuePath(path: readonly PropertyKey[]): string {
+/** A Zod issue path as code writes it: `jobs[2].role`. */
+function formatIssuePath(path: readonly PropertyKey[]): string {
   return path.reduce<string>((formatted, segment) => {
     if (typeof segment === "number") return `${formatted}[${segment}]`;
     const key = String(segment);
     return formatted ? `${formatted}.${key}` : key;
   }, "");
+}
+
+/**
+ * Checks a value against a schema and words its first failure.
+ *
+ * @param schema - Any schema.
+ * @param value - The value to check.
+ * @returns The first issue's message, or undefined when the value parses.
+ *
+ * @example
+ * firstIssue(z.uuid({ message: "not a UUID" }), "letter-1"); // "not a UUID"
+ */
+export function firstIssue(
+  schema: z.ZodType,
+  value: unknown,
+): string | undefined {
+  const result = schema.safeParse(value);
+  if (result.success) return undefined;
+  return result.error.issues[0].message;
 }
 
 /**

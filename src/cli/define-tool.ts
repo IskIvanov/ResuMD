@@ -16,12 +16,10 @@
 import { resolve } from "path";
 import { parseArgs } from "util";
 import { fillDefaults, pickNonEmptyStrings } from "../utils/record.ts";
+import { firstIssue } from "../utils/schema.ts";
 import { splitList } from "../utils/string.ts";
-import { CliError } from "./errors.ts";
 import {
   type Answers,
-  CliErrorCode,
-  CliLabel,
   OptionKind,
   type OptionDescriptor,
   type OptionSpecs,
@@ -56,8 +54,8 @@ function toOptionDescriptors(specs: OptionSpecs): OptionDescriptor[] {
  * shows `<flag>`, like text; its values are listed when one is rejected.
  */
 function placeholder(option: OptionDescriptor): string {
-  if (option.kind === OptionKind.Path) return CliLabel.PathPlaceholder;
-  if (option.kind === OptionKind.List) return CliLabel.ListPlaceholder;
+  if (option.kind === OptionKind.Path) return "<path>";
+  if (option.kind === OptionKind.List) return "<a,b>";
   return `<${option.flag}>`;
 }
 
@@ -71,7 +69,7 @@ function formatUsage(
     if (option.required) return flag;
     return `[${flag}]`;
   });
-  return [CliLabel.Usage, command, ...flags].join(" ");
+  return ["Usage:", command, ...flags].join(" ");
 }
 
 /** Step 1: the answers given on argv, then each missing option's default. */
@@ -91,29 +89,33 @@ function collectAnswers(
 }
 
 /**
- * Step 2: throws a CliError when an answer breaks its option's rules: a
- * required option without one, or a choice outside its choices.
+ * Step 2: throws when an answer breaks its option's rules: a
+ * required option without one, a choice outside its choices, or text its
+ * schema refuses. Paths are checked only at the prompt; here the tool's read
+ * reports a missing file.
  */
 function assertValidAnswer(
   option: OptionDescriptor,
   answer: string | undefined,
   usage: string,
 ): void {
+  const flag = `--${option.flag}`;
   if (!answer && option.required) {
-    throw new CliError({
-      code: CliErrorCode.MissingOption,
-      flag: option.flag,
-      placeholder: placeholder(option),
-      usage,
-    });
+    throw new Error(`${flag} ${placeholder(option)} is required\n${usage}`);
   }
-  if (answer === undefined || option.kind !== OptionKind.Choice) return;
-  if (option.choices.includes(answer)) return;
-  throw new CliError({
-    code: CliErrorCode.InvalidChoice,
-    flag: option.flag,
-    choices: option.choices,
-  });
+  if (answer === undefined) return;
+  switch (option.kind) {
+    case OptionKind.Choice:
+      if (option.choices.includes(answer)) return;
+      throw new Error(`${flag} must be one of ${option.choices.join(", ")}`);
+    case OptionKind.Text:
+    case OptionKind.List: {
+      if (!option.schema) return;
+      const issue = firstIssue(option.schema, answer);
+      if (issue === undefined) return;
+      throw new Error(`${flag}: ${issue}`);
+    }
+  }
 }
 
 /** Step 3: converts an answer into the value run receives for its kind. */
@@ -137,8 +139,9 @@ function toValue(
  * @param usage - Printed under a missing-option error.
  * @returns The typed values: paths absolute, lists split on commas, defaults
  *   applied in declaration order (each sees the answers before it).
- * @throws A CliError if a required option has no answer or a choice is given
- *   a value outside its choices, and parseArgs' error for an unknown flag.
+ * @throws If a required option has no answer, a choice is given a
+ *   value outside its choices or text breaks its schema, and parseArgs' error
+ *   for an unknown flag.
  */
 function parseToolArgs<TOptions extends OptionSpecs>(
   specs: TOptions,
@@ -170,13 +173,13 @@ function parseToolArgs<TOptions extends OptionSpecs>(
  *   `parse`, and an argv `run` that parses before calling `spec.run`.
  *
  * @example
- * export const deleteTool = defineTool({
+ * export const deleteResumeTool = defineTool({
  *   id: "delete-rx-resume",
  *   options: { id: { kind: OptionKind.Text, required: true, message: "Id" } },
  *   run: async ({ id }, { env }) => { … },
  *   …
  * });
- * deleteTool.parse(["--id", "r1"], cwd); // { id: "r1" }
+ * deleteResumeTool.parse(["--id", "r1"], cwd); // { id: "r1" }
  */
 export function defineTool<const TOptions extends OptionSpecs>(
   spec: ToolSpec<TOptions>,
@@ -193,7 +196,6 @@ export function defineTool<const TOptions extends OptionSpecs>(
     id: spec.id,
     title: spec.title,
     description: spec.description,
-    platform: spec.platform,
     command,
     usage,
     options,

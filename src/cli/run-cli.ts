@@ -9,20 +9,80 @@
  */
 
 import { describeCaught } from "../utils/error.ts";
-import { formatCommand } from "./command.ts";
-import { isCliError } from "./errors.ts";
-import { buildMenu } from "./menu.ts";
-import { promptOptions } from "./prompt-options.ts";
+import type { Env } from "../utils/types.ts";
+import { promptOptions } from "./prompt.ts";
 import {
+  type Choice,
   type CliDeps,
-  CliErrorCode,
-  CliLabel,
   ExitCode,
   MenuAction,
   type MenuValue,
-  type RunContext,
   type ToolDefinition,
 } from "./types.ts";
+
+/**
+ * Thrown when the user cancels a prompt (Ctrl+C), so runCli can exit with
+ * 130 without importing a prompt library.
+ *
+ * @example
+ * throw new PromptCancelled();
+ */
+export class PromptCancelled extends Error {
+  constructor() {
+    super("Prompt cancelled");
+    this.name = "PromptCancelled";
+  }
+}
+
+/** Characters that are safe in a shell word without quoting. */
+const SAFE_WORD = /^[\w@%+=:,./-]+$/;
+
+/** Wraps a value in double quotes when the shell would split or expand it. */
+function quote(value: string): string {
+  if (SAFE_WORD.test(value)) return value;
+  return `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
+}
+
+/**
+ * Joins a command and its argv into one copy-pasteable shell line, so the
+ * user sees (and can reuse) exactly what is about to run.
+ */
+function formatCommand(command: string, argv: readonly string[]): string {
+  return [command, ...argv.map(quote)].join(" ");
+}
+
+/** Lists a tool, disabled with the reason when its preflight fails. */
+function toToolChoice(tool: ToolDefinition, env: Env): Choice<MenuValue> {
+  const choice: Choice<MenuValue> = {
+    name: `${tool.title} — ${tool.description}`,
+    value: tool,
+  };
+  const reason = tool.preflight?.(env);
+  if (!reason) return choice;
+  return { ...choice, disabled: `Not available: ${reason}` };
+}
+
+/**
+ * Builds the select choices for the tool menu.
+ *
+ * @param tools - The registered tools, in menu order.
+ * @param env - Passed to each tool's preflight.
+ * @returns Each tool, disabled with the reason when it can't run, then Exit.
+ *
+ * @example
+ * buildMenu([deleteResumeTool], process.env);
+ * // [{ name: "Delete resume — …", value: deleteResumeTool },
+ * //  { name: "Exit", value: MenuAction.Exit }]
+ */
+export function buildMenu(
+  tools: readonly ToolDefinition[],
+  env: Env,
+): Choice<MenuValue>[] {
+  return [
+    ...tools.map((tool) => toToolChoice(tool, env)),
+    { name: "Exit", value: MenuAction.Exit },
+  ];
+}
 
 /** Lists every tool's usage under a heading. */
 function usageHelp(heading: string, tools: readonly ToolDefinition[]): string {
@@ -39,16 +99,11 @@ function describeFailure(error: unknown): string {
   while (cause !== undefined) {
     const line = describeCaught(cause);
     if (!lines.some((shown) => shown.includes(line))) {
-      lines.push(`  ${CliLabel.CausedBy} ${line}`);
+      lines.push(`  caused by: ${line}`);
     }
     cause = cause instanceof Error ? cause.cause : undefined;
   }
   return lines.join("\n");
-}
-
-/** The directory and environment a tool runs with. */
-function runContext(deps: CliDeps): RunContext {
-  return { cwd: deps.pathContext.cwd, env: deps.env };
 }
 
 /** Runs the tool named by the first argument with the remaining flags. */
@@ -56,36 +111,36 @@ async function runDirect(deps: CliDeps): Promise<ExitCode> {
   const [id, ...argv] = deps.argv;
   const tool = deps.tools.find((candidate) => candidate.id === id);
   if (!tool) {
-    const heading = `${CliLabel.UnknownTool} "${id}". ${CliLabel.RunOneOf}`;
+    const heading = `Unknown tool "${id}". Run one of:`;
     deps.logError(usageHelp(heading, deps.tools));
     return ExitCode.Failure;
   }
 
-  await tool.run(argv, runContext(deps));
+  await tool.run(argv, deps);
   return ExitCode.Success;
 }
 
 /** Runs the menu until a tool has run or the user exits. */
 async function menuLoop(deps: CliDeps): Promise<ExitCode> {
-  const { tools, prompter, env, pathContext, log } = deps;
+  const { tools, prompter, env, log } = deps;
 
   for (;;) {
     const picked = await prompter.select<MenuValue>({
-      message: CliLabel.PickTool,
+      message: "Which tool do you want to run?",
       choices: buildMenu(tools, env),
     });
     if (picked === MenuAction.Exit) return ExitCode.Success;
 
-    const argv = await promptOptions(picked.options, prompter, pathContext);
+    const argv = await promptOptions(picked.options, prompter, deps);
     log(formatCommand(picked.command, argv));
 
     const confirmed = await prompter.confirm({
-      message: CliLabel.RunIt,
+      message: "Run it?",
       default: true,
     });
     if (!confirmed) continue;
 
-    await picked.run(argv, runContext(deps));
+    await picked.run(argv, deps);
     return ExitCode.Success;
   }
 }
@@ -93,25 +148,31 @@ async function menuLoop(deps: CliDeps): Promise<ExitCode> {
 /**
  * Runs the CLI once: the named tool directly, or the interactive menu.
  *
- * @param deps - Arguments, tools, prompter, environment and output sinks.
+ * @param deps - Arguments, tools, prompter, environment and output sinks;
+ *   also the context each tool runs with.
  * @returns `Success` after a tool ran or Exit was picked, `Failure` for an
  *   unknown tool, a menu without a terminal, or a tool that threw, and
  *   `Cancelled` on Ctrl+C.
  *
  * @example
- * process.exit(await runCli({ argv: process.argv.slice(2), tools: TOOLS, … }));
+ * process.exit(await runCli({ argv: process.argv.slice(2), tools, … }));
  */
 export async function runCli(deps: CliDeps): Promise<ExitCode> {
   try {
     if (deps.argv.length > 0) return await runDirect(deps);
     if (!deps.isTTY) {
-      deps.logError(usageHelp(CliLabel.NeedsTerminal, deps.tools));
+      deps.logError(
+        usageHelp(
+          "resume-tools cli needs an interactive terminal. Run a tool directly:",
+          deps.tools,
+        ),
+      );
       return ExitCode.Failure;
     }
     return await menuLoop(deps);
   } catch (error) {
-    if (isCliError(error, CliErrorCode.PromptCancelled)) {
-      deps.logError(CliLabel.Cancelled);
+    if (error instanceof PromptCancelled) {
+      deps.logError("Cancelled.");
       return ExitCode.Cancelled;
     }
     deps.logError(describeFailure(error));

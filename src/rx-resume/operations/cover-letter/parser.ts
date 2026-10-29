@@ -6,13 +6,13 @@
  * written, since the API's `content` is plain text, not HTML.
  */
 
-import { splitSections } from "../../utils/markdown.ts";
-import { parseOrThrow } from "../../utils/schema.ts";
+import { splitSections } from "../../../utils/markdown.ts";
+import { parseOrThrow } from "../../../utils/schema.ts";
 import {
   CoverLetterSectionsSchema,
   ParsedCoverLetterSchema,
-} from "./schema.ts";
-import { CoverLetterLabel, type ParsedCoverLetter } from "./types.ts";
+} from "../../schema.ts";
+import type { ParsedCoverLetter } from "../../types.ts";
 
 /** `## Heading` names the parser reads; any other section is ignored. */
 const CoverLetterHeading = {
@@ -20,6 +20,9 @@ const CoverLetterHeading = {
   Letter: "Letter",
   Closing: "Closing",
 } as const;
+
+/** Heads the error for a letter missing a section or over the limits. */
+const INVALID_LETTER = "Invalid cover letter:";
 
 const RULE = "---";
 const PARAGRAPH_BREAK = "\n\n";
@@ -67,12 +70,12 @@ export function parseCoverLetter(md: string): ParsedCoverLetter {
       letter: sectionText(letterSection),
       closing: sectionText(closingSection),
     },
-    CoverLetterLabel.InvalidLetter,
+    INVALID_LETTER,
   );
 
   return parseOrThrow(
     ParsedCoverLetterSchema,
     { recipient: contact, content: [letter, closing].join(PARAGRAPH_BREAK) },
-    CoverLetterLabel.InvalidLetter,
+    INVALID_LETTER,
   );
 }

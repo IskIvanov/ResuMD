@@ -361,6 +361,16 @@ describe("parseResume", () => {
       );
     });
 
+    it("throws if the phone has a character the schema refuses", () => {
+      const header = HEADER_FIXTURE.replace(
+        "+31 6 12345678",
+        "+31 (6) 1234.5678",
+      );
+      expect(() => parseWith({ header })).toThrow(
+        "contact.phone: invalid phone number format",
+      );
+    });
+
     it("throws if the header is missing", () => {
       expect(() => parseWith({ header: "" })).toThrow(
         "contact.email: invalid email format",

@@ -5,16 +5,20 @@ Linear:
 · Follow-up:
 [BAC-53](https://linear.app/bck123/issue/BAC-53/move-test-fixtures-into-one-mocksts-per-tool-folder)
 
-> **Revision (platforms):** the Reactive Resume tools now sit behind one
-> module, `src/rx-resume/index.ts`, with their tool files in
-> `src/cli/tools/rx-resume/`. The `generate-rx-resume/`, `update-rx-resume/`
-> and `cover-letter/` folders and their `run.ts` files are gone; the layout
-> below is current, and AGENTS.md has the rules. Later sections that mention
-> a domain `run.ts` or `apiConfigProblem` describe the earlier layout.
+> **Revision (merged platforms):** a platform's tools now live in its own
+> folder: `src/rx-resume/index.ts` declares them, `api/` holds the client and
+> `operations/` the API calls. `RunContext` carries `fetch`, ids, the clock,
+> file reads and output, so tests drive each tool through its argv.
+> `src/cli/` is five files (`menu.ts`, `command.ts`, `schema.ts`,
+> `registry.ts`, `errors.ts` and `tools/` are gone), the menu has no platform
+> headings, argv checks a `Text` option's `schema` too, and errors are plain
+> `Error` messages (`PromptCancelled` aside). `sync-resume/` is now
+> `resume-md/`. The layout and rules below are current; later sections
+> describe the earlier design, and AGENTS.md has the rules.
 
 > **Revision (inline fixtures):** there are no `mocks.ts` or `fixtures/`
 > files any more. Each test file declares its own doubles and synthetic data;
-> the CLI tests are one file, `src/cli/tools/rx-resume/cli.test.ts`, the
+> the CLI tests are one file, `src/cli/cli.test.ts`, the
 > Reactive Resume tests `src/rx-resume/index.test.ts`. The Testing section
 > below is updated; generic types live in `src/utils/types.ts`.
 
@@ -22,16 +26,16 @@ Linear:
 > with `src/cv-base64/`, `src/careers-api/` and `src/apply-job/`, along with
 > the `Site` and `Job Application` platforms and `CAREERS_API_URL`. The
 > site-CV merge (`sync-resume/run.ts`, `merger.ts`) is gone too:
-> `src/sync-resume/` is now only the `Resume.md` parser that
-> `src/rx-resume/resume/` imports. Every tool left is a Reactive Resume tool.
+> `src/sync-resume/` (now `src/resume-md/`) is only the `Resume.md` parser
+> that the resume operations import. Every tool left is a Reactive Resume tool.
 
 > **Revision (single-file tools):** each tool is now one file in
 > `src/cli/tools/<tool>.ts` that declares its options once with `defineTool`,
 > and every tool runs directly as `bun run cli <tool id> [flags]`. This removed
 > each tool's `flags.ts`, `definition.ts`, `index.ts`, `mocks.ts` and
 > `package.json` script. Adding `delete-rx-resume` the old way took 12 files;
-> now a tool is one file plus a registry line. The sections below describe the
-> current design; [Delivery](#delivery) is kept as the original history.
+> now a tool is one file plus a registry line. [Delivery](#delivery) is kept
+> as the original history.
 
 ## Goal
 
@@ -77,37 +81,30 @@ still compiles and its tests still pass. Both layers may import from
 
 ```
 src/
-├── sync-resume/                  domain: the Resume.md parser
+├── resume-md/                    the Resume.md parser
 │   └── parser.ts, schema.ts, types.ts   parseResume(markdown) → ParsedResume
-├── rx-resume/                    the Reactive Resume platform; only index.ts is imported from outside
-│   ├── index.ts                  connectRxResume(deps) → { resumes, coverLetters }, rxResumeProblem
-│   ├── client.ts, config.ts, errors.ts, schema.ts, types.ts, index.test.ts
-│   ├── resume/                   operations.ts, mapping.ts (ParsedResume → API data), layout.ts
-│   └── cover-letter/             operations.ts, parser.ts, body.ts, update.ts, delete.ts
+├── rx-resume/                    the Reactive Resume platform and its tools
+│   ├── index.ts                  the six tools (defineTool), RX_RESUME_TOOLS
+│   ├── types.ts, schema.ts       letter metadata, CoverLetterIdSchema, the letter .md schemas
+│   ├── index.test.ts             every tool through its argv, with recordingFetch
+│   ├── api/                      client.ts (RxResumeApiClient), config.ts, schema.ts, types.ts
+│   └── operations/
+│       ├── resume/               index.ts (generate, update, delete), mapping.ts, layout.ts
+│       └── cover-letter/         index.ts (generate, update, delete), parser.ts
 ├── utils/                        generic helpers, no domain or CLI imports
-│   ├── string.ts                 slugify, splitList, kebabToCamel
-│   ├── record.ts                 omitUndefined, pickNonEmptyStrings, fillDefaults, camelCaseKeys
+│   ├── string.ts                 slugify, splitList
+│   ├── record.ts                 omitUndefined, pickNonEmptyStrings, fillDefaults
 │   ├── markdown.ts               splitSections
-│   ├── schema.ts                 ValidationMessage, requiredText, formatIssuePath, parseOrThrow
-│   ├── url.ts                    trimTrailingSlashes, itemPath
-│   ├── error.ts                  ReasonedError, the base of every error the tools own; failureOf
-│   └── types.ts                  ValueOf, KebabToCamel, CamelCaseKeys, ErrorReason, Env, FetchFn
+│   ├── schema.ts                 ValidationMessage, requiredText, firstIssue, parseOrThrow
+│   ├── error.ts                  describeCaught
+│   └── types.ts                  ValueOf, DefaultEntry, Env, FetchFn
 └── cli/
-    ├── types.ts                  ToolSpec, ToolDefinition, OptionSpec, OptionValues, Prompter, enums
+    ├── types.ts                  ToolSpec, ToolDefinition, OptionSpec, OptionValues, RunContext, Prompter
     ├── define-tool.ts            defineTool(spec) → ToolDefinition with a typed parse, the one argv parser
-    ├── errors.ts                 CliError (one class, a typed reason per CliErrorCode), isCliError
-    ├── schema.ts                 pathSchema
-    ├── command.ts                formats the equivalent direct command
-    ├── prompt-options.ts         required → checkbox → nested prompts → argv
-    ├── menu.ts                   builds the menu choices from the registry
-    ├── run-cli.ts                orchestrator: a tool by id, or the menu; returns an exit code
-    ├── registry.ts               TOOLS: spreads each platform's tool list
-    ├── index.ts                  `bun run cli`: wires @inquirer/prompts, argv, process.env, existsSync
-    ├── platforms.test.ts         fails on any import past a platform's seams
-    └── tools/
-        ├── rx-resume/            RX_RESUME_TOOLS in index.ts; connect.ts, print.ts;
-        │                         one thin file per tool: read the file, call an operation, print;
-        │                         and cli.test.ts, which drives the CLI through these tools
+    ├── prompt.ts                 required → checkbox → nested prompts → argv, checking each answer
+    ├── run-cli.ts                runCli: a tool by id, or the menu; returns an exit code; PromptCancelled
+    ├── index.ts                  `bun run cli`: wires @inquirer/prompts, argv, env, fetch, clock, files; lists the tools
+    └── cli.test.ts               drives the CLI through the registered tools
 ```
 
 Rules:
@@ -116,11 +113,10 @@ Rules:
   The tool's `parse` is the only place that turns argv into values. The menu
   and the direct command both go through it, so the two modes can't drift
   apart.
-- The CLI throws only `CliError`, with a typed reason, never a bare `Error`.
-  The message is worded in `errors.ts` from the reason.
-- A domain `run.ts` takes typed options, throws errors, and never reads argv or
-  calls `process.exit`. A tool that only calls one API endpoint needs no domain
-  folder.
+- Errors are plain `Error`s whose message says what to do. Only
+  `PromptCancelled` is a class, so `runCli` can tell Ctrl+C apart.
+- An operation takes the client and typed inputs, throws errors, and never
+  reads argv, files or `process`.
 - Only `src/cli/index.ts` exits the process.
 
 Data flow for one run:

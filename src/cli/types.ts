@@ -15,17 +15,12 @@
  * - values: the answers converted for each kind, as run receives them
  *   (OptionValues): absolute paths, split lists, checked choices.
  * - context: what a step needs from outside, never option data. RunContext
- *   is the cwd and env a tool runs with; PathContext is the cwd and existence
- *   check that path prompts validate against.
+ *   is the cwd, env and outside world a tool runs with; PathContext is the
+ *   cwd and existence check that path prompts validate against.
  */
 
 import type { z } from "zod";
-import type { Env } from "../utils/types.ts";
-
-/** Menu groups. Names what a tool does or where it writes, never a vendor. */
-export enum Platform {
-  ReactiveResume = "Reactive Resume",
-}
+import type { Env, FetchFn } from "../utils/types.ts";
 
 /** How an option is prompted for, validated and parsed. */
 export enum OptionKind {
@@ -50,71 +45,6 @@ export enum ExitCode {
 export enum MenuAction {
   Exit = "exit",
 }
-
-/** Every UI string the CLI prints; the single extraction point for i18n. */
-export enum CliLabel {
-  PickTool = "Which tool do you want to run?",
-  Exit = "Exit",
-  OptionalFlags = "Set any optional flags?",
-  Default = "default",
-  RunIt = "Run it?",
-  Cancelled = "Cancelled.",
-  CausedBy = "caused by:",
-  Unavailable = "Not available",
-  NeedsTerminal = "resume-tools cli needs an interactive terminal. Run a tool directly:",
-  UnknownTool = "Unknown tool",
-  RunOneOf = "Run one of:",
-  Usage = "Usage:",
-  IsRequired = "is required",
-  PathPlaceholder = "<path>",
-  ListPlaceholder = "<a,b>",
-  ValueRequired = "A value is required",
-  PathRequired = "A path is required",
-  MissingExtension = "Missing file extension",
-  UnsupportedFormat = "Unsupported format",
-  Expected = "expected",
-  FileNotFound = "File not found",
-  MustBeOneOf = "must be one of",
-  PromptCancelled = "Prompt cancelled",
-  CannotDerive = "Cannot derive",
-  From = "from",
-  Pass = "pass",
-}
-
-/** Why the CLI stopped; each code's details are in CliErrorReason. */
-export enum CliErrorCode {
-  /** A required option has no answer. */
-  MissingOption = "MISSING_OPTION",
-  /** A choice option's answer isn't one of its choices. */
-  InvalidChoice = "INVALID_CHOICE",
-  /** An option's default couldn't be built from the answers it reads. */
-  UnderivableDefault = "UNDERIVABLE_DEFAULT",
-  /** The user cancelled a prompt (Ctrl+C). */
-  PromptCancelled = "PROMPT_CANCELLED",
-}
-
-/** A CliError's code with what its message needs, one shape per code. */
-export type CliErrorReason =
-  | {
-      code: CliErrorCode.MissingOption;
-      flag: string;
-      /** The value hint shown after the flag, e.g. `<path>`. */
-      placeholder: string;
-      /** The tool's usage line, printed under the error. */
-      usage: string;
-    }
-  | {
-      code: CliErrorCode.InvalidChoice;
-      flag: string;
-      choices: readonly string[];
-    }
-  | {
-      code: CliErrorCode.UnderivableDefault;
-      flag: string;
-      /** The answer the default was built from. */
-      source: string;
-    }
-  | { code: CliErrorCode.PromptCancelled };
 
 /** Answers so far, keyed by option flag: given, typed or defaulted strings. */
 export type Answers = Readonly<Record<string, string>>;
@@ -203,10 +133,24 @@ type ResolvedValues = Readonly<Record<string, ResolvedValue>>;
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
-/** Where a tool runs: the base directory for relative paths, and the environment. */
+/**
+ * What a tool runs with: the base directory for relative paths, the
+ * environment, and the outside world it reads from and writes to.
+ */
 export interface RunContext {
   cwd: string;
   env: Env;
+  fetch: FetchFn;
+  /** A unique id per call; `crypto.randomUUID` in production. */
+  newId: () => string;
+  /** Today's date in the local time zone, as `YYYY-MM-DD`. */
+  today: () => string;
+  /** Milliseconds on a monotonic clock, to time requests. */
+  now: () => number;
+  /** Reads a UTF-8 text file by its absolute path. */
+  readFile: (absolutePath: string) => string;
+  log: (line: string) => void;
+  logError: (line: string) => void;
 }
 
 /** What a tool file declares; defineTool turns it into a ToolDefinition. */
@@ -215,7 +159,6 @@ export interface ToolSpec<TOptions extends OptionSpecs> {
   id: string;
   title: string;
   description: string;
-  platform: Platform;
   options: TOptions;
   /** Returns why the tool can't run, or undefined when it can. */
   preflight?: (env: Env) => string | undefined;
@@ -234,7 +177,6 @@ export interface ToolDefinition<
   id: string;
   title: string;
   description: string;
-  platform: Platform;
   /** The direct command, e.g. "bun run cli generate-rx-resume"; used in the printed command. */
   command: string;
   /** One line listing every flag. */
@@ -245,7 +187,8 @@ export interface ToolDefinition<
   preflight?: (env: Env) => string | undefined;
   /**
    * Parses argv into the values run receives, without running the tool.
-   * Throws a CliError for a missing option or an invalid choice.
+   * Throws for a missing option, an invalid choice or a value its schema
+   * refuses.
    */
   parse(argv: readonly string[], cwd: string): TValues;
   /** Parses argv against the options, then runs the tool. */
@@ -261,12 +204,6 @@ export interface Choice<TValue> {
   disabled?: string;
 }
 
-interface SeparatorItem {
-  separator: string;
-}
-
-export type MenuItem<TValue> = Choice<TValue> | SeparatorItem;
-
 /** A menu entry's value: the tool to run, or a non-tool action. */
 export type MenuValue = ToolDefinition | MenuAction;
 
@@ -280,7 +217,7 @@ export type Validator = (value: string) => true | string;
 export interface Prompter {
   select<TValue>(config: {
     message: string;
-    choices: readonly MenuItem<TValue>[];
+    choices: readonly Choice<TValue>[];
   }): Promise<TValue>;
   input(config: { message: string; validate?: Validator }): Promise<string>;
   checkbox<TValue>(config: {
@@ -292,15 +229,16 @@ export interface Prompter {
 
 // ─── runCli ───────────────────────────────────────────────────────────────────
 
-/** Everything runCli reads from or writes to the outside world. */
-export interface CliDeps {
+/**
+ * Everything runCli reads from or writes to the outside world. A tool runs
+ * with the same context, so runCli passes these deps on as its RunContext.
+ */
+export interface CliDeps extends RunContext {
   /** Arguments after the script name; empty opens the menu. */
   argv: readonly string[];
   tools: readonly ToolDefinition[];
   prompter: Prompter;
-  env: Env;
   isTTY: boolean;
-  pathContext: PathContext;
-  log: (line: string) => void;
-  logError: (line: string) => void;
+  /** Checks a path typed at a prompt. */
+  exists: (absolutePath: string) => boolean;
 }

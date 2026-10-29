@@ -1,7 +1,7 @@
 /**
  * types.ts
  *
- * Every type sync-resume uses, in one place. Data shapes are inferred from the
+ * Every type resume-md uses, in one place. Data shapes are inferred from the
  * Zod schemas in schema.ts, which are the source of truth; only the shapes
  * that are not data (the Resume.md document model) are declared here by hand.
  */

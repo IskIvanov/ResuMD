@@ -1,21 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { relative } from "path";
+import type { RunContext, ToolDefinition } from "../cli/types.ts";
 import type { Env, FetchFn } from "../utils/types.ts";
-import {
-  connectRxResume,
-  CoverLetterTemplate,
-  RxResumeErrorCode,
-  rxResumeProblem,
-} from "./index.ts";
-import { CoverLetterLimit } from "./schema.ts";
+import { CoverLetterLimit } from "./api/schema.ts";
 import {
   type CoverLetter,
   CoverLetterLayout,
+  CoverLetterTemplate,
   EnvVar,
   type Resume,
   type ResumeData,
-  type RxResume,
   type Section,
-} from "./types.ts";
+} from "./api/types.ts";
+import {
+  deleteCoverLetterTool,
+  deleteResumeTool,
+  generateCoverLetterTool,
+  generateResumeTool,
+  updateCoverLetterTool,
+  updateResumeTool,
+} from "./index.ts";
 
 // ─── Recording fetch ──────────────────────────────────────────────────────────
 
@@ -70,26 +74,73 @@ function recordingFetch(responses: readonly Response[]): {
   return { fetch, requests };
 }
 
-/** What every id connect hands out starts with: `new-1`, `new-2`, … */
+// ─── Running a tool ───────────────────────────────────────────────────────────
+
+const CWD = "/work";
+const RESUME_FILE = "Resume.md";
+const LETTER_FILE = "letter.md";
+
+/** What every id a tool hands out starts with: `new-1`, `new-2`, … */
 const NEW_ID_PREFIX = "new-";
 
-function connect(fetch: FetchFn, env: Env = RX_RESUME_ENV): RxResume {
+/** What a tool printed while it ran. */
+interface ToolOutput {
+  output: string[];
+  errors: string[];
+}
+
+/**
+ * Runs a tool from CWD with argv, as `bun run cli <id> …` would, against a
+ * recording fetch and an in-memory file system.
+ *
+ * @param tool - A registered tool.
+ * @param argv - Its flags.
+ * @param world - The fetch to send requests with, the env (Reactive Resume
+ *   settings by default) and files by path relative to CWD, over Resume.md
+ *   and letter.md.
+ * @returns The lines it printed to stdout and stderr.
+ * @throws Whatever the tool throws.
+ */
+async function runTool(
+  tool: ToolDefinition,
+  argv: readonly string[],
+  world: { fetch: FetchFn; env?: Env; files?: Record<string, string> },
+): Promise<ToolOutput> {
+  const files: Record<string, string> = {
+    [RESUME_FILE]: RESUME_MD,
+    [LETTER_FILE]: COVER_LETTER_MD,
+    ...world.files,
+  };
+  const printed: ToolOutput = { output: [], errors: [] };
+  const times = [1000, 1084];
   let count = 0;
-  return connectRxResume({
-    env,
-    fetch,
+  const context: RunContext = {
+    cwd: CWD,
+    env: world.env ?? RX_RESUME_ENV,
+    fetch: world.fetch,
     newId: () => {
       count += 1;
       return `${NEW_ID_PREFIX}${count}`;
     },
     today: () => TODAY,
-  });
+    now: () => times.shift() ?? 0,
+    readFile: (path) => {
+      const text = files[relative(CWD, path)];
+      if (text === undefined) throw new Error(`No such file: ${path}`);
+      return text;
+    },
+    log: (line) => printed.output.push(line),
+    logError: (line) => printed.errors.push(line),
+  };
+  await tool.run(argv, context);
+  return printed;
 }
 
 // ─── Resumes ──────────────────────────────────────────────────────────────────
 
 const RESUME_ID = "resume-1";
 const RESUME_URL = `${API_URL}/resumes/${RESUME_ID}`;
+const UPDATE_ARGV = ["--id", RESUME_ID, "--resume", RESUME_FILE];
 
 /** Jane Doe, one job, every section. */
 const RESUME_MD = `# Jane Doe
@@ -294,6 +345,17 @@ function storedResume(data: ResumeData): Resume {
   };
 }
 
+/** The API serving a stored resume, then the same resume once it's saved. */
+function apiServingResume() {
+  const stored = storedResume(storedResumeData());
+  return recordingFetch([Response.json(stored), Response.json(stored)]);
+}
+
+/** The `data` the second request (the PUT) sent. */
+function savedData(requests: RecordedRequest[]): ResumeData {
+  return (requests[1].body as { data: ResumeData }).data;
+}
+
 // ─── Cover letters ────────────────────────────────────────────────────────────
 
 /** Jane Doe writing to Acme BV. */
@@ -330,20 +392,30 @@ Jane Doe
 Not part of the letter: send before Friday.
 `;
 
-const LETTER_ID = "letter-1";
+/** Reactive Resume gives cover letters UUIDs. */
+const LETTER_ID = "3f2b8c1e-5d4a-4e7b-9a6c-1d2e3f4a5b6c";
 const LETTER_REVISION = 3;
 const LETTER_URL = `${API_URL}/cover-letters/${LETTER_ID}`;
+const LETTER_NAME = "Acme — Frontend";
 
-const recipient = "Alex Smith\nAcme BV\nAmsterdam, Netherlands";
-const content = "Dear Alex,\n\nI'd like to apply.\n\nKind regards,\nJane Doe";
+/** generate-cover-letter's required flags. */
+const GENERATE_LETTER_ARGV = [
+  "--letter",
+  LETTER_FILE,
+  "--name",
+  LETTER_NAME,
+  "--resume-id",
+  RESUME_ID,
+];
+const UPDATE_LETTER_ARGV = ["--id", LETTER_ID, "--letter", LETTER_FILE];
 
 /** The letter as `GET /cover-letters/{id}` returns it, sender linked. */
 const coverLetter: CoverLetter = {
   id: LETTER_ID,
-  name: "Acme — Frontend",
+  name: LETTER_NAME,
   revision: LETTER_REVISION,
-  recipient,
-  content,
+  recipient: "Alex Smith\nAcme BV\nAmsterdam, Netherlands",
+  content: "Dear Alex,\n\nI'd like to apply.\n\nKind regards,\nJane Doe",
   layout: CoverLetterLayout.Freeform,
   recipientCompany: "",
   letterDate: "2026-10-06",
@@ -399,73 +471,59 @@ function letterMd(
     .join("\n");
 }
 
-describe("connectRxResume", () => {
-  it("names every missing setting and where they go", () => {
+describe("every tool", () => {
+  it("names every missing setting and where they go", async () => {
     const missing =
       "Missing RXRESUME_API_KEY, RXRESUME_API_URL, RXRESUME_APP_URL. " +
       "Copy .env.example to .env and fill it in.";
 
-    expect(rxResumeProblem({ RXRESUME_API_KEY: "" })).toBe(missing);
-    expect(() => connect(recordingFetch([]).fetch, {})).toThrow(
-      expect.objectContaining({
-        message: missing,
-        reason: expect.objectContaining({
-          code: RxResumeErrorCode.MissingSettings,
-        }),
-      }),
+    expect(deleteResumeTool.preflight?.({ RXRESUME_API_KEY: "" })).toBe(
+      missing,
     );
+    await expect(
+      runTool(deleteResumeTool, ["--id", RESUME_ID], {
+        fetch: recordingFetch([]).fetch,
+        env: {},
+      }),
+    ).rejects.toThrow(missing);
   });
 
   it("has no problem once every setting is there", () => {
-    expect(rxResumeProblem(RX_RESUME_ENV)).toBeUndefined();
+    expect(deleteResumeTool.preflight?.(RX_RESUME_ENV)).toBeUndefined();
   });
 
   it("links to the builder when the app URL ends in a slash", async () => {
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
     const env = { ...RX_RESUME_ENV, RXRESUME_APP_URL: "https://rx.example/" };
 
-    const result = await connect(api.fetch, env).resumes.update({
-      id: RESUME_ID,
-      markdown: RESUME_MD,
+    const { output } = await runTool(updateResumeTool, UPDATE_ARGV, {
+      fetch: api.fetch,
+      env,
     });
 
-    expect(result.builderUrl).toBe(`https://rx.example/builder/${RESUME_ID}`);
+    expect(output).toContain(
+      `  builder: https://rx.example/builder/${RESUME_ID}`,
+    );
   });
 
   it("passes on an error the API sent without JSON, with its status", async () => {
     const api = recordingFetch([new Response("Bad gateway", { status: 502 })]);
 
     await expect(
-      connect(api.fetch).resumes.delete(RESUME_ID),
+      runTool(deleteResumeTool, ["--id", RESUME_ID], { fetch: api.fetch }),
     ).rejects.toMatchObject({ status: 502, code: undefined });
   });
-
-  /** Connects with a request log that records lines, on a fake clock. */
-  function connectLogging(fetch: FetchFn, env: Env) {
-    const lines: string[] = [];
-    const times = [1000, 1084];
-    const rx = connectRxResume({
-      env,
-      fetch,
-      newId: () => NEW_ID_PREFIX,
-      today: () => "2026-10-27",
-      requestLog: {
-        write: (line) => lines.push(line),
-        now: () => times.shift() ?? 0,
-      },
-    });
-    return { rx, lines };
-  }
 
   it("logs each request with its status and time when RXRESUME_DEBUG is set", async () => {
     const api = recordingFetch([new Response(null)]);
     const env = { ...RX_RESUME_ENV, RXRESUME_DEBUG: "1" };
-    const { rx, lines } = connectLogging(api.fetch, env);
 
-    await rx.resumes.delete(RESUME_ID);
+    const { errors } = await runTool(deleteResumeTool, ["--id", RESUME_ID], {
+      fetch: api.fetch,
+      env,
+    });
 
-    expect(lines).toEqual([
+    expect(errors).toEqual([
       `→ DELETE ${RESUME_URL}`,
       `← 200 DELETE ${RESUME_URL} (84ms)`,
     ]);
@@ -476,11 +534,13 @@ describe("connectRxResume", () => {
     async (debug) => {
       const api = recordingFetch([new Response(null)]);
       const env = { ...RX_RESUME_ENV, RXRESUME_DEBUG: debug };
-      const { rx, lines } = connectLogging(api.fetch, env);
 
-      await rx.resumes.delete(RESUME_ID);
+      const { errors } = await runTool(deleteResumeTool, ["--id", RESUME_ID], {
+        fetch: api.fetch,
+        env,
+      });
 
-      expect(lines).toEqual([]);
+      expect(errors).toEqual([]);
     },
   );
 
@@ -495,13 +555,8 @@ describe("connectRxResume", () => {
     };
 
     await expect(
-      connect(fetch).resumes.delete(RESUME_ID),
+      runTool(deleteResumeTool, ["--id", RESUME_ID], { fetch }),
     ).rejects.toMatchObject({
-      reason: {
-        code: RxResumeErrorCode.Unreachable,
-        method: "DELETE",
-        url: RESUME_URL,
-      },
       cause: refused,
       message:
         `DELETE ${RESUME_URL} failed: ConnectionRefused: Unable to ` +
@@ -512,26 +567,22 @@ describe("connectRxResume", () => {
   });
 });
 
-describe("resumes.update", () => {
+describe("update-rx-resume", () => {
   it("reads the resume, saves it under the same id and links to it", async () => {
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
 
-    const result = await connect(api.fetch).resumes.update({
-      id: RESUME_ID,
-      markdown: RESUME_MD,
+    const { output } = await runTool(updateResumeTool, UPDATE_ARGV, {
+      fetch: api.fetch,
     });
 
     expect(api.requests.map(({ method, url }) => [method, url])).toEqual([
       ["GET", RESUME_URL],
       ["PUT", RESUME_URL],
     ]);
-    expect(result).toEqual({
-      id: RESUME_ID,
-      name: "Jane Doe",
-      slug: "jane-doe",
-      builderUrl: `https://rx.example/builder/${RESUME_ID}`,
-    });
+    expect(output).toEqual([
+      `✓ Updated "Jane Doe" (slug jane-doe, id ${RESUME_ID})`,
+      `  builder: https://rx.example/builder/${RESUME_ID}`,
+    ]);
   });
 
   it("writes Resume.md into the data, keeping what it doesn't feed", async () => {
@@ -541,10 +592,7 @@ describe("resumes.update", () => {
       Response.json(storedResume(stored)),
     ]);
 
-    await connect(api.fetch).resumes.update({
-      id: RESUME_ID,
-      markdown: RESUME_MD,
-    });
+    await runTool(updateResumeTool, UPDATE_ARGV, { fetch: api.fetch });
 
     const id = expect.any(String);
     const { sections } = stored;
@@ -748,12 +796,14 @@ describe("resumes.update", () => {
           "https://example-corp.com\n\n" +
           "**Reference:** alex@example.com, sam@example.com",
       );
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
 
-    await connect(api.fetch).resumes.update({ id: RESUME_ID, markdown });
+    await runTool(updateResumeTool, UPDATE_ARGV, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: markdown },
+    });
 
-    const { data } = api.requests[1].body as { data: ResumeData };
+    const data = savedData(api.requests);
     expect(data.basics.website).toEqual({
       url: "https://example.com",
       label: "",
@@ -779,13 +829,14 @@ describe("resumes.update", () => {
       "**Bachelor's degree, Computer Science** | 2012 – 2016",
       "**Bachelor's degree, Computer Science** | 2012 – 2016\n\n**Grade:** 9.0 / 10",
     );
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
 
-    await connect(api.fetch).resumes.update({ id: RESUME_ID, markdown });
+    await runTool(updateResumeTool, UPDATE_ARGV, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: markdown },
+    });
 
-    const { data } = api.requests[1].body as { data: ResumeData };
-    expect(data.sections.education.items[0]).toMatchObject({
+    expect(savedData(api.requests).sections.education.items[0]).toMatchObject({
       degree: "Bachelor's degree",
       area: "Computer Science",
       grade: "9.0 / 10",
@@ -797,13 +848,14 @@ describe("resumes.update", () => {
       "- English — Native",
       "- English — Native (5/5)",
     );
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
 
-    await connect(api.fetch).resumes.update({ id: RESUME_ID, markdown });
+    await runTool(updateResumeTool, UPDATE_ARGV, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: markdown },
+    });
 
-    const { data } = api.requests[1].body as { data: ResumeData };
-    expect(data.sections.languages.items[0]).toMatchObject({
+    expect(savedData(api.requests).sections.languages.items[0]).toMatchObject({
       language: "English",
       fluency: "Native",
       level: 5,
@@ -811,16 +863,11 @@ describe("resumes.update", () => {
   });
 
   it("gives every item it writes a new id", async () => {
-    const stored = storedResume(storedResumeData());
-    const api = recordingFetch([Response.json(stored), Response.json(stored)]);
+    const api = apiServingResume();
 
-    await connect(api.fetch).resumes.update({
-      id: RESUME_ID,
-      markdown: RESUME_MD,
-    });
+    await runTool(updateResumeTool, UPDATE_ARGV, { fetch: api.fetch });
 
-    const { basics, sections } = (api.requests[1].body as { data: ResumeData })
-      .data;
+    const { basics, sections } = savedData(api.requests);
     const ids = [
       ...basics.customFields,
       ...sections.experience.items,
@@ -843,9 +890,11 @@ describe("resumes.update", () => {
     const api = recordingFetch([]);
 
     await expect(
-      connect(api.fetch).resumes.update({
-        id: RESUME_ID,
-        markdown: RESUME_MD.replace(/## Summary\n[\s\S]*?---/, ""),
+      runTool(updateResumeTool, UPDATE_ARGV, {
+        fetch: api.fetch,
+        files: {
+          [RESUME_FILE]: RESUME_MD.replace(/## Summary\n[\s\S]*?---/, ""),
+        },
       }),
     ).rejects.toThrow(/summary: required/);
     expect(api.requests).toEqual([]);
@@ -860,22 +909,14 @@ describe("resumes.update", () => {
     ]);
 
     await expect(
-      connect(api.fetch).resumes.update({
-        id: RESUME_ID,
-        markdown: RESUME_MD,
-      }),
+      runTool(updateResumeTool, UPDATE_ARGV, { fetch: api.fetch }),
     ).rejects.toMatchObject({ status: 404 });
     expect(api.requests).toHaveLength(1);
   });
 });
 
-describe("resumes.generate", () => {
-  const input = {
-    markdown: RESUME_MD,
-    name: "Jane Doe",
-    slug: "jane-doe",
-    tags: ["cv"],
-  };
+describe("generate-rx-resume", () => {
+  const argv = ["--resume", RESUME_FILE, "--name", "Jane Doe", "--tags", "cv"];
 
   /** The API creating a resume, then serving its defaults and the update. */
   function apiCreatingResume() {
@@ -890,7 +931,9 @@ describe("resumes.generate", () => {
   it("creates the resume, fills in Resume.md and links to it", async () => {
     const api = apiCreatingResume();
 
-    const result = await connect(api.fetch).resumes.generate(input);
+    const { output } = await runTool(generateResumeTool, argv, {
+      fetch: api.fetch,
+    });
 
     expect(api.requests.map(({ method, url }) => [method, url])).toEqual([
       ["POST", `${API_URL}/resumes`],
@@ -906,18 +949,16 @@ describe("resumes.generate", () => {
     expect(data.sections.experience.items).toEqual([
       expect.objectContaining({ company: "Example Corp" }),
     ]);
-    expect(result).toEqual({
-      id: RESUME_ID,
-      name: "Jane Doe",
-      slug: "jane-doe",
-      builderUrl: `https://rx.example/builder/${RESUME_ID}`,
-    });
+    expect(output).toEqual([
+      `✓ Created "Jane Doe" (slug jane-doe, id ${RESUME_ID})`,
+      `  builder: https://rx.example/builder/${RESUME_ID}`,
+    ]);
   });
 
   it("lays the sections out on one full-width page, in reading order", async () => {
     const api = apiCreatingResume();
 
-    await connect(api.fetch).resumes.generate(input);
+    await runTool(generateResumeTool, argv, { fetch: api.fetch });
 
     const { data } = api.requests[2].body as { data: ResumeData };
     expect(data.metadata.layout).toEqual({
@@ -947,7 +988,10 @@ describe("resumes.generate", () => {
     const api = recordingFetch([]);
 
     await expect(
-      connect(api.fetch).resumes.generate({ ...input, markdown: "# Jane" }),
+      runTool(generateResumeTool, argv, {
+        fetch: api.fetch,
+        files: { [RESUME_FILE]: "# Jane" },
+      }),
     ).rejects.toThrow(/summary: required/);
     expect(api.requests).toEqual([]);
   });
@@ -955,9 +999,9 @@ describe("resumes.generate", () => {
   it("stops when creating doesn't answer with an id", async () => {
     const api = recordingFetch([Response.json({ id: RESUME_ID })]);
 
-    await expect(connect(api.fetch).resumes.generate(input)).rejects.toThrow(
-      /expected a resume id/,
-    );
+    await expect(
+      runTool(generateResumeTool, argv, { fetch: api.fetch }),
+    ).rejects.toThrow(/expected a resume id/);
     expect(api.requests).toHaveLength(1);
   });
 
@@ -970,7 +1014,7 @@ describe("resumes.generate", () => {
     ]);
 
     await expect(
-      connect(api.fetch).resumes.generate(input),
+      runTool(generateResumeTool, argv, { fetch: api.fetch }),
     ).rejects.toMatchObject({
       status: 400,
       code: "RESUME_SLUG_ALREADY_EXISTS",
@@ -979,21 +1023,24 @@ describe("resumes.generate", () => {
   });
 });
 
-describe("resumes.delete", () => {
+describe("delete-rx-resume", () => {
   it("sends DELETE /resumes/{id} with the API key", async () => {
     const api = recordingFetch([new Response(null)]);
 
-    await connect(api.fetch).resumes.delete(RESUME_ID);
+    const { output } = await runTool(deleteResumeTool, ["--id", RESUME_ID], {
+      fetch: api.fetch,
+    });
 
     expect(api.requests).toEqual([
       { method: "DELETE", url: RESUME_URL, apiKey: API_KEY, body: undefined },
     ]);
+    expect(output).toEqual([`✓ Deleted resume ${RESUME_ID}`]);
   });
 
   it("URL-encodes the id", async () => {
     const api = recordingFetch([new Response(null)]);
 
-    await connect(api.fetch).resumes.delete("a/b");
+    await runTool(deleteResumeTool, ["--id", "a/b"], { fetch: api.fetch });
 
     expect(api.requests[0].url).toBe(`${API_URL}/resumes/a%2Fb`);
   });
@@ -1007,32 +1054,30 @@ describe("resumes.delete", () => {
     ]);
 
     await expect(
-      connect(api.fetch).resumes.delete(RESUME_ID),
+      runTool(deleteResumeTool, ["--id", RESUME_ID], { fetch: api.fetch }),
     ).rejects.toMatchObject({ status: 403, code: "RESUME_LOCKED" });
   });
 });
 
-describe("coverLetters.generate", () => {
-  const required = {
-    markdown: COVER_LETTER_MD,
-    name: "Acme — Frontend",
-    resumeId: "resume-1",
-  };
-
+describe("generate-cover-letter", () => {
   it("posts the letter freeform, dated today, linked to the resume", async () => {
     const api = recordingFetch([
-      Response.json({ ...coverLetter, name: required.name, revision: 1 }),
+      Response.json({ ...coverLetter, revision: 1 }),
     ]);
 
-    const result = await connect(api.fetch).coverLetters.generate(required);
+    const { output } = await runTool(
+      generateCoverLetterTool,
+      GENERATE_LETTER_ARGV,
+      { fetch: api.fetch },
+    );
 
     expect(api.requests).toEqual([
       expect.objectContaining({
         method: "POST",
         url: `${API_URL}/cover-letters`,
         body: {
-          name: "Acme — Frontend",
-          resumeId: "resume-1",
+          name: LETTER_NAME,
+          resumeId: RESUME_ID,
           recipient: RECIPIENT,
           content: CONTENT,
           layout: CoverLetterLayout.Freeform,
@@ -1040,29 +1085,35 @@ describe("coverLetters.generate", () => {
         },
       }),
     ]);
-    expect(result).toEqual({
-      id: LETTER_ID,
-      name: "Acme — Frontend",
-      revision: 1,
-      dashboardUrl: `https://rx.example/dashboard/${LETTER_ID}`,
-    });
+    expect(output).toEqual([
+      `✓ Created cover letter "${LETTER_NAME}" (id ${LETTER_ID}, revision 1)`,
+      `  letter: https://rx.example/dashboard/${LETTER_ID}`,
+    ]);
   });
 
   it("sends company as recipientCompany, with the other optional fields", async () => {
     const api = recordingFetch([Response.json(coverLetter)]);
 
-    await connect(api.fetch).coverLetters.generate({
-      ...required,
-      applicationId: "application-1",
-      company: "Acme BV",
-      template: CoverLetterTemplate.Onyx,
-    });
+    const { output } = await runTool(
+      generateCoverLetterTool,
+      [
+        ...GENERATE_LETTER_ARGV,
+        "--application-id",
+        "application-1",
+        "--company",
+        "Acme BV",
+        "--template",
+        CoverLetterTemplate.Onyx,
+      ],
+      { fetch: api.fetch },
+    );
 
     expect(api.requests[0].body).toMatchObject({
       applicationId: "application-1",
       recipientCompany: "Acme BV",
       template: CoverLetterTemplate.Onyx,
     });
+    expect(output[0]).toContain(`template ${CoverLetterTemplate.Onyx}`);
   });
 
   it.each([
@@ -1073,14 +1124,16 @@ describe("coverLetters.generate", () => {
     "names ## %s when it's missing or empty, before any request",
     async (heading, path) => {
       const api = recordingFetch([]);
-      const rx = connect(api.fetch);
 
       for (const markdown of [
         letterMd({ [heading]: undefined }),
         letterMd({ [heading]: "---" }),
       ]) {
         await expect(
-          rx.coverLetters.generate({ ...required, markdown }),
+          runTool(generateCoverLetterTool, GENERATE_LETTER_ARGV, {
+            fetch: api.fetch,
+            files: { [LETTER_FILE]: markdown },
+          }),
         ).rejects.toThrow(`${path}: required`);
       }
       expect(api.requests).toEqual([]);
@@ -1089,48 +1142,53 @@ describe("coverLetters.generate", () => {
 
   it("rejects text and a name over the API's limits, before any request", async () => {
     const api = recordingFetch([]);
-    const rx = connect(api.fetch);
     const closing = "Jane";
+    const generate = (
+      files: Record<string, string>,
+      argv = GENERATE_LETTER_ARGV,
+    ) => runTool(generateCoverLetterTool, argv, { fetch: api.fetch, files });
 
     await expect(
-      rx.coverLetters.generate({
-        ...required,
-        markdown: letterMd({
+      generate({
+        [LETTER_FILE]: letterMd({
           Contact: "x".repeat(CoverLetterLimit.RecipientMax + 1),
         }),
       }),
     ).rejects.toThrow("recipient: Too big");
     await expect(
-      rx.coverLetters.generate({
-        ...required,
+      generate({
         // The letter alone fits; with the blank line and closing it doesn't.
-        markdown: letterMd({
+        [LETTER_FILE]: letterMd({
           Letter: "x".repeat(CoverLetterLimit.ContentMax - closing.length),
           Closing: closing,
         }),
       }),
     ).rejects.toThrow("content: Too big");
     await expect(
-      rx.coverLetters.generate({
-        ...required,
-        name: "x".repeat(CoverLetterLimit.NameMax + 1),
-      }),
+      generate({}, [
+        ...GENERATE_LETTER_ARGV,
+        "--name",
+        "x".repeat(CoverLetterLimit.NameMax + 1),
+      ]),
     ).rejects.toThrow(/name:/);
     expect(api.requests).toEqual([]);
   });
 });
 
-describe("coverLetters.update", () => {
+describe("update-cover-letter", () => {
   it("reads the letter, then puts the text at its revision, dated today", async () => {
     const api = recordingFetch([
       Response.json(coverLetter),
       Response.json({ ...coverLetter, revision: LETTER_REVISION + 1 }),
     ]);
 
-    const result = await connect(api.fetch).coverLetters.update({
-      id: LETTER_ID,
-      markdown: COVER_LETTER_MD,
-    });
+    const { output } = await runTool(
+      updateCoverLetterTool,
+      UPDATE_LETTER_ARGV,
+      {
+        fetch: api.fetch,
+      },
+    );
 
     expect(api.requests.map(({ method, url }) => [method, url])).toEqual([
       ["GET", LETTER_URL],
@@ -1143,7 +1201,10 @@ describe("coverLetters.update", () => {
       content: CONTENT,
       letterDate: TODAY,
     });
-    expect(result.revision).toBe(LETTER_REVISION + 1);
+    expect(output).toEqual([
+      `✓ Updated cover letter "${LETTER_NAME}" (id ${LETTER_ID}, revision ${LETTER_REVISION + 1})`,
+      `  letter: https://rx.example/dashboard/${LETTER_ID}`,
+    ]);
   });
 
   it("sends the fields given, company as recipientCompany", async () => {
@@ -1152,13 +1213,19 @@ describe("coverLetters.update", () => {
       Response.json(coverLetter),
     ]);
 
-    await connect(api.fetch).coverLetters.update({
-      id: LETTER_ID,
-      markdown: COVER_LETTER_MD,
-      name: "Renamed",
-      company: "Acme BV",
-      resumeId: "resume-2",
-    });
+    await runTool(
+      updateCoverLetterTool,
+      [
+        ...UPDATE_LETTER_ARGV,
+        "--name",
+        "Renamed",
+        "--company",
+        "Acme BV",
+        "--resume-id",
+        "resume-2",
+      ],
+      { fetch: api.fetch },
+    );
 
     expect(api.requests[1].body).toMatchObject({
       name: "Renamed",
@@ -1173,17 +1240,12 @@ describe("coverLetters.update", () => {
     ]);
 
     await expect(
-      connect(api.fetch).coverLetters.update({
-        id: LETTER_ID,
-        markdown: COVER_LETTER_MD,
-      }),
-    ).rejects.toMatchObject({
-      reason: {
-        code: RxResumeErrorCode.NotFreeform,
-        id: LETTER_ID,
-        layout: CoverLetterLayout.Structured,
-      },
-    });
+      runTool(updateCoverLetterTool, UPDATE_LETTER_ARGV, { fetch: api.fetch }),
+    ).rejects.toThrow(
+      `Cover letter ${LETTER_ID} is laid out "structured"; only a freeform ` +
+        "letter can be updated, since the .md writes its own greeting and " +
+        "sign-off",
+    );
     expect(api.requests).toHaveLength(1);
   });
 
@@ -1191,10 +1253,7 @@ describe("coverLetters.update", () => {
     const api = recordingFetch([Response.json(coverLetter), conflict()]);
 
     await expect(
-      connect(api.fetch).coverLetters.update({
-        id: LETTER_ID,
-        markdown: COVER_LETTER_MD,
-      }),
+      runTool(updateCoverLetterTool, UPDATE_LETTER_ARGV, { fetch: api.fetch }),
     ).rejects.toMatchObject({
       status: 409,
       code: "COVER_LETTER_REVISION_CONFLICT",
@@ -1203,7 +1262,9 @@ describe("coverLetters.update", () => {
   });
 });
 
-describe("coverLetters.delete", () => {
+describe("delete-cover-letter", () => {
+  const argv = ["--id", LETTER_ID];
+
   it("reads the letter, moves it to Trash at its revision, then purges it", async () => {
     const api = recordingFetch([
       Response.json(coverLetter),
@@ -1211,7 +1272,9 @@ describe("coverLetters.delete", () => {
       new Response(null),
     ]);
 
-    await connect(api.fetch).coverLetters.delete(LETTER_ID);
+    const { output } = await runTool(deleteCoverLetterTool, argv, {
+      fetch: api.fetch,
+    });
 
     expect(
       api.requests.map(({ method, url, body }) => [method, url, body]),
@@ -1220,6 +1283,7 @@ describe("coverLetters.delete", () => {
       ["DELETE", LETTER_URL, { expectedRevision: LETTER_REVISION }],
       ["DELETE", `${API_URL}/documents/letter/${LETTER_ID}`, undefined],
     ]);
+    expect(output).toEqual([`✓ Permanently deleted cover letter ${LETTER_ID}`]);
   });
 
   it("says the letter is in Trash when the purge fails", async () => {
@@ -1230,18 +1294,17 @@ describe("coverLetters.delete", () => {
     ]);
 
     await expect(
-      connect(api.fetch).coverLetters.delete(LETTER_ID),
-    ).rejects.toMatchObject({
-      reason: { code: RxResumeErrorCode.LeftInTrash, id: LETTER_ID },
-      message: expect.stringMatching(`letter ${LETTER_ID} is in Trash$`),
-    });
+      runTool(deleteCoverLetterTool, argv, { fetch: api.fetch }),
+    ).rejects.toThrow(
+      new RegExp(`Changed since read; letter ${LETTER_ID} is in Trash$`),
+    );
   });
 
   it("never purges when moving to Trash fails", async () => {
     const api = recordingFetch([Response.json(coverLetter), conflict()]);
 
     await expect(
-      connect(api.fetch).coverLetters.delete(LETTER_ID),
+      runTool(deleteCoverLetterTool, argv, { fetch: api.fetch }),
     ).rejects.toMatchObject({ status: 409 });
     expect(api.requests).toHaveLength(2);
   });

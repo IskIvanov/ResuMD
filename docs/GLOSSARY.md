@@ -26,7 +26,7 @@ continues the previous one.
 **Line kind**
 : What a logical line is: rule, bullet, reference, tech stack, title
 (`**Role** | dates`), labelled (`**Label** rest`), markup, URL, links or
-paragraph. `classifyLine` in `sync-resume/parser.ts` is the only place that
+paragraph. `classifyLine` in `resume-md/parser.ts` is the only place that
 decides it.
 
 **Job reference**
@@ -40,12 +40,17 @@ when there is no `## References` section. Never a job reference.
 ## Platforms
 
 **Platform**
-: A destination the tools write to, e.g. Reactive Resume. Lives in two
-folders: a domain module (`src/rx-resume/`), imported only through its
-`index.ts`, and its tool files (`src/cli/tools/rx-resume/`), registered with
-one line in `TOOLS`. Deleting both folders and that line removes it.
+: A destination the tools write to, e.g. Reactive Resume. One folder,
+`src/rx-resume/`: its tools in `index.ts`, its API client in `api/`, its
+operations in `operations/`. Its tool list is spread into the CLI's tools in
+`src/cli/index.ts`; deleting the folder and that line removes it.
+
+**Tool**
+: One command a platform offers, e.g. `update-rx-resume`, declared with
+`defineTool`. It runs from the menu or as `bun run cli <id> [flags]`, reads
+its file, calls an operation and prints the result.
 
 **Operation**
-: One thing a platform does, exposed as a method on its connected handle,
-e.g. `connectRxResume(deps).resumes.update(input)`. Takes Markdown text and
-returns a result; the tool file reads the file and prints.
+: One thing a platform does through its API, e.g.
+`updateResume(client, id, markdown, newId)`. Takes the client and Markdown
+text and returns what the API saved; it never reads files or argv.

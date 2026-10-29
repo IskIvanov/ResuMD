@@ -31,66 +31,73 @@ Imports use explicit `.ts` extensions.
 
 ## Architecture
 
-Two layers:
+Two layers, on shared utilities:
 
-- `src/cli/` — argv/menu plumbing. Never holds domain logic beyond a thin tool
-  file.
-  - `tools/<platform>/<tool>.ts` declares one tool with `defineTool({ id, title,
-    description, platform, options, preflight?, run })`. Each option is
-    declared once, keyed by flag, with a `kind` (`Path`, `Text`, `List`,
-    `Choice`), `required`, optional `default(given)`, path rules or
-    `choices`. A `Choice` is a select in the menu, rejected in argv unless
-    it's one of `choices`, and `run` gets the union of its values. A `Text`
-    option can add a Zod `schema`, checked at the prompt and in argv.
-  - `define-tool.ts` derives the menu prompts, usage line and argv parser from
-    that declaration, so the menu and `bun run cli <tool>` can't drift.
-  - `tools/<platform>/index.ts` exports that platform's tools in menu order
-    (`RX_RESUME_TOOLS`); `registry.ts` spreads each list into `TOOLS`.
-  - `menu.ts`, `run-cli.ts`, `command.ts`, `prompt-options.ts`, `schema.ts`,
-    `errors.ts`, `types.ts` (`Platform`, `OptionKind`, `CliLabel` enums).
+- `src/cli/`: the CLI engine. It knows nothing about resumes or letters.
+  - `define-tool.ts`: `defineTool({ id, title, description, options,
+    preflight?, run })` turns one declaration into the menu prompts, the
+    usage line and the argv parser, so the menu and `bun run cli <tool>`
+    can't drift. Each option is declared once, keyed by flag, with a `kind`
+    (`Path`, `Text`, `List`, `Choice`), `required`, optional
+    `default(answers)`, path rules or `choices`. A `Choice` is a select in the
+    menu, rejected in argv unless it's one of `choices`, and `run` gets the
+    union of its values. A `Text` option can add a Zod `schema`, checked at
+    the prompt and in argv.
+  - `prompt.ts` (answers → argv, checking paths and schemas as typed),
+    `run-cli.ts` (`runCli`: a tool by id, or the menu; `PromptCancelled`),
+    `types.ts` (`OptionKind`, `RunContext`, `CliDeps`, …).
+  - `index.ts` is the entry point and the registry: the only file that
+    touches the real terminal, network, clock and file system, and the one
+    place each platform's tool list is spread in.
+  - A tool's `run(values, context)` gets a `RunContext`: `cwd`, `env`,
+    `fetch`, `newId`, `today`, `now`, `readFile`, `log`, `logError`.
   - `preflight(env)` returns a reason string when a tool can't run (e.g.
     missing API key); the menu lists it as disabled.
   - Exit codes: `0` ok, `1` failure, `130` cancelled.
-- `src/<domain>/` — testable logic. Must not read argv or import from
-  `src/cli/`. A **platform** (a destination such as Reactive Resume) is a
-  domain module imported only through its `index.ts`, plus its tools in
-  `src/cli/tools/<platform>/`; see Platform and Operation in
-  `docs/GLOSSARY.md`. `src/cli/platforms.test.ts` fails on any import that
-  reaches past those seams.
+- `src/<platform>/`: a destination such as Reactive Resume, together with its
+  tools; see Platform and Operation in `docs/GLOSSARY.md`. It imports the CLI
+  only for `defineTool` and its types.
+  - `index.ts` declares the platform's tools and exports their list
+    (`RX_RESUME_TOOLS`); `types.ts` and `schema.ts` hold what the tools and
+    operations share.
+  - `api/`: the client, `.env` config, and the API's schemas and types.
+  - `operations/<thing>/`: create, update and delete, as functions that take
+    the client. They never read argv, files or `process`.
+- `src/resume-md/`: the `Resume.md` parser, shared by any platform.
 
 Both layers sit on `src/utils/`: generic helpers (strings, records, Markdown,
 Zod) that know nothing about resumes, letters or the CLI. It imports only
 Node built-ins and libraries, never `src/cli/` or a domain folder. One file
 per topic (`string.ts`, `record.ts`, `markdown.ts`, `schema.ts`), tests
-colocated. Helpers are migrating here gradually: when you touch a domain or
-CLI file and find a generic helper in it, or one domain importing a helper
-from another, move it to `src/utils/` and update its callers (no re-exports).
+colocated. A helper belongs here once two folders use it; a helper with one
+caller stays in that caller's file.
 
-| Folder                | Role                                                                                                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sync-resume/`        | `parser.ts` (only `parseResume`: reads Resume.md once into typed logical lines, see `docs/GLOSSARY.md`), `schema.ts` (Zod validation), `types.ts` |
-| `rx-resume/`          | The Reactive Resume platform. `index.ts` is the only import path from outside: `connectRxResume({ env, fetch, newId, today })` returns `{ resumes, coverLetters }`, each with `generate`, `update` and `delete`; `rxResumeProblem` is the preflight. Behind it: `client.ts` (`RxResumeApiClient`, injected `fetch`), `config.ts` (`.env`), `errors.ts` (`RxResumeError`), `schema.ts` (API shapes), `resume/` (`operations.ts`, `mapping.ts`: ParsedResume → API `data`, `layout.ts`), `cover-letter/` (`operations.ts`, `parser.ts`, `body.ts`, `update.ts`, `delete.ts`), `index.test.ts` (every operation through `connectRxResume`, with `recordingFetch` and the synthetic resume and letter) |
-| `utils/`              | `string.ts` (`slugify`, `splitList`, `kebabToCamel`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`, `camelCaseKeys`), `markdown.ts` (`splitSections`), `schema.ts` (`ValidationMessage`, `requiredText`, `formatIssuePath`, `parseOrThrow`), `url.ts` (`trimTrailingSlashes`, `itemPath`), `error.ts` (`ReasonedError`, `describeCaught`, `failureOf`), `types.ts` (`ValueOf`, `KebabToCamel`, `CamelCaseKeys`, `DefaultEntry`, `ErrorReason`, `Env`, `FetchFn`) |
+| Folder       | Role |
+| ------------ | ---- |
+| `resume-md/` | `parser.ts` (only `parseResume`: reads Resume.md once into typed logical lines, see `docs/GLOSSARY.md`), `schema.ts` (Zod validation), `types.ts` |
+| `rx-resume/` | The Reactive Resume platform. `index.ts` (the six tools, `RX_RESUME_TOOLS`), `types.ts` (letter metadata), `schema.ts` (`CoverLetterIdSchema`, the letter `.md` schemas). `api/`: `client.ts` (`RxResumeApiClient` with builder and dashboard links, `RxResumeApiError`), `config.ts` (`apiConfigProblem`, `connectRxResume(env, fetch, requestLog)`), `schema.ts` (API shapes), `types.ts`. `operations/resume/`: `index.ts` (`generateResume`, `updateResume`, `deleteResume`), `mapping.ts` (ParsedResume → API `data`), `layout.ts`. `operations/cover-letter/`: `index.ts` (generate, update, delete), `parser.ts`. `index.test.ts`: every tool through its argv, with `recordingFetch` and in-memory files |
+| `utils/`     | `string.ts` (`slugify`, `splitList`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`), `markdown.ts` (`splitSections`), `schema.ts` (`ValidationMessage`, `requiredText`, `firstIssue`, `parseOrThrow`), `error.ts` (`describeCaught`), `types.ts` (`ValueOf`, `DefaultEntry`, `Env`, `FetchFn`) |
 
-Data flow: `Resume.md` → `parseResume` (Zod-validated; errors name paths like
-`jobs[2].role: required`) → `rx.resumes.generate` / `update` →
-`applyResume` → Reactive Resume API. A
-cover-letter `.md` → `rx.coverLetters.generate` / `update` → `parseCoverLetter`
-(`## Contact`, `## Letter`, `## Closing`; errors like `closing: required`) →
-`toCreateBody` / `toUpdateBody` (checked against the API's schemas) → the
-cover-letter endpoints.
+Data flow: `Resume.md` → `generate-rx-resume` / `update-rx-resume` →
+`generateResume` / `updateResume` → `parseResume` (Zod-validated; errors name
+paths like `jobs[2].role: required`) → `applyResume` → Reactive Resume API. A
+cover-letter `.md` → `generate-cover-letter` / `update-cover-letter` →
+`parseCoverLetter` (`## Contact`, `## Letter`, `## Closing`; errors like
+`closing: required`) → the request body, checked against the API's schema →
+the cover-letter endpoints.
 
 Gotchas:
 
-- `sync-resume/` is not a tool: it is the `Resume.md` parser that
-  `rx-resume/resume/` imports.
-- The CLI tests that drive the menu, argv parsing, prompts, registry and
-  `runCli` live in one file, `src/cli/tools/rx-resume/cli.test.ts`, with
-  their doubles (fake prompter, harness, `withRecordedRuns`).
+- `resume-md/` is not a tool: it is the `Resume.md` parser that
+  `rx-resume/operations/resume/` imports.
+- The CLI tests that drive the menu, argv parsing, prompts and `runCli` live
+  in one file, `src/cli/cli.test.ts`, with their doubles (fake prompter,
+  harness, `withRecordedRuns`). They use the Reactive Resume tools, so
+  removing that platform means pointing them at another one.
 - `.env` (see `.env.example`): `RXRESUME_API_KEY`, `RXRESUME_API_URL`,
   `RXRESUME_APP_URL`, optional `RXRESUME_DEBUG` (logs every
-  request to stderr). Bun loads it; config modules take an
-  injected `env` object.
+  request to stderr). Bun loads it; `cli/index.ts` passes `process.env` on
+  as the run context's `env`.
 - `.gitignore` blocks every `*.md` except `README.md`, `docs/`, `AGENTS.md`,
   `CLAUDE.md` and `.claude/skills/`.
 - Gitignored personal data: `resume/RxResume/Resume.json`, `*.base64.txt`,
@@ -100,15 +107,18 @@ Gotchas:
 
 - Zod schemas live in each folder's `schema.ts`; infer data types with
   `z.infer` in `types.ts`. Hand-write types only for non-data (options, clients).
-- Fixed value sets use enums or `as const` objects, and UI strings live in a
-  `*Label` enum at the top of the file. No magic strings.
+- Fixed value sets (option kinds, env variable names, API values) use enums or
+  `as const` objects. UI strings are written inline where they're used; give
+  one a constant only when two places must agree.
 - Explicit parameter and return types; every exported function gets JSDoc with
   `@param`, `@returns`, `@example`, and `@throws` where relevant.
-- Inject dependencies (`fetch`, `env`, `cwd`) rather than reading globals.
+- Inject dependencies (`fetch`, `env`, `cwd`, the clock, file reads) through
+  `RunContext` rather than reading globals.
 - No ternaries: use `if`/`else` (early returns) or `switch`.
-- Throw a `ReasonedError` subclass with a typed reason (`CliError`,
-  `RxResumeError`), never a bare `Error`; word the message in that class's
-  `describe…` switch.
+- Throw `Error` with a message that says what went wrong and what to do, and
+  pass the underlying error as `cause`. The only error classes are
+  `PromptCancelled` (Ctrl+C) and `RxResumeApiError` (the API's `status` and
+  `code`), since callers tell those apart.
 - Descriptive names: no `stub`, single-letter or catch-all names
   (`context`, `given`). The CLI's terms (spec, option, answers, values,
   context) are defined at the top of `src/cli/types.ts`.
@@ -126,21 +136,20 @@ Gotchas:
 
 ## Adding a tool
 
-1. `src/cli/tools/<platform>/<tool>.ts` exporting `defineTool(...)`; `run`
-   throws on failure, and imports from the platform only through
-   `src/<platform>/index.ts`.
-2. Append it to the platform's list in `src/cli/tools/<platform>/index.ts`.
-   A new platform's list is spread into `TOOLS` in `src/cli/registry.ts`.
-3. Put real logic behind `src/<platform>/index.ts` as an operation, tested
-   first through that interface (for Reactive Resume: `connectRxResume` with
+1. Declare it with `defineTool(...)` in `src/<platform>/index.ts` and append
+   it to the platform's tool list. `run` throws on failure, reads files with
+   `context.readFile` and prints with `context.log`.
+2. Put its API calls in `src/<platform>/operations/<thing>/index.ts`, as
+   functions that take the client.
+3. Test it first through its argv (for Reactive Resume: `runTool` with
    `recordingFetch`, in `src/rx-resume/index.test.ts`).
-4. Add a `Platform` entry only for a new destination or kind of job, never a
-   vendor.
+4. A new platform's tool list is spread into `tools` in `src/cli/index.ts`.
 
 ## Removing a platform
 
-1. `rm -r src/<platform> src/cli/tools/<platform>`.
-2. Drop its spread and import from `TOOLS` in `src/cli/registry.ts`.
-3. Drop its `Platform` entry in `src/cli/types.ts` and its `.env.example`
+1. `rm -r src/<platform>`.
+2. Drop its import and spread in `src/cli/index.ts`, and its `.env.example`
    variables.
+3. If it was the platform `src/cli/cli.test.ts` drives, point those tests at
+   another platform's tools.
 4. `bun run typecheck && bunx vitest run` pass with nothing else changed.

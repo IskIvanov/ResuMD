@@ -1,11 +1,10 @@
 /**
  * record.ts
  *
- * Generic helpers that filter, fill or rename an object's entries.
+ * Generic helpers that filter or fill an object's entries.
  */
 
-import { kebabToCamel } from "./string.ts";
-import type { CamelCaseKeys, DefaultEntry } from "./types.ts";
+import type { DefaultEntry } from "./types.ts";
 
 /**
  * Drops the fields that are undefined, e.g. so an optional value that wasn't
@@ -71,26 +70,4 @@ export function fillDefaults(
     },
     { ...given },
   );
-}
-
-/**
- * Renames an object's kebab-case keys to camelCase, e.g. parsed CLI flags to
- * the option fields a domain function takes.
- *
- * @param object - Any plain object.
- * @returns A copy with each key passed through kebabToCamel. Its type maps
- *   each key the same way, so a flag that doesn't match a field fails to
- *   compile where the copy is used.
- *
- * @example
- * camelCaseKeys({ "resume-id": "r1", name: "Acme" }); // { resumeId: "r1", name: "Acme" }
- */
-export function camelCaseKeys<TObject extends object>(
-  object: TObject,
-): CamelCaseKeys<TObject> {
-  // Each key goes through kebabToCamel, which CamelCaseKeys mirrors; the
-  // compiler can't follow keys through Object.entries.
-  return Object.fromEntries(
-    Object.entries(object).map(([key, value]) => [kebabToCamel(key), value]),
-  ) as CamelCaseKeys<TObject>;
 }

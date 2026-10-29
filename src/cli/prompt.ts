@@ -1,38 +1,71 @@
 /**
- * prompt-options.ts
+ * prompt.ts
  *
  * Asks for a tool's options and turns the answers into argv: required options
  * first, then a checkbox of optional flags, then a prompt for each one ticked.
+ * Each typed answer is checked as it's entered, so the menu can't build argv
+ * the tool would reject.
  */
 
-import { answerSchema, toValidator } from "./schema.ts";
+import { extname, resolve } from "path";
+import { firstIssue } from "../utils/schema.ts";
 import {
-  CliLabel,
-  OptionKind,
   type Answers,
   type Choice,
+  OptionKind,
   type OptionDescriptor,
   type PathContext,
+  type PathRule,
   type Prompter,
   type Validator,
 } from "./types.ts";
 
-/** Rejects a blank answer. */
-const rejectBlankAnswer: Validator = (answer) => {
-  if (answer.trim()) return true;
-  return CliLabel.ValueRequired;
-};
-
 /** Accepts any answer. */
 const acceptAnyAnswer: Validator = () => true;
 
-/** Checks a typed answer: its schema, else not blank if required. */
+/** Rejects a blank answer. */
+const rejectBlankAnswer: Validator = (answer) => {
+  if (answer.trim()) return true;
+  return "A value is required";
+};
+
+/**
+ * Checks a typed path, in order: not empty, has an extension, the extension
+ * is allowed, and (when the rule requires it) the file exists. Only the
+ * first failure is reported.
+ */
+function pathValidator(rule: PathRule, context: PathContext): Validator {
+  const expected = `expected ${rule.extensions.join(" or ")}`;
+  return (raw) => {
+    const path = raw.trim();
+    const extension = extname(path);
+
+    if (!path) return "A path is required";
+    if (!extension) return `Missing file extension — ${expected}`;
+    if (!rule.extensions.some((allowed) => allowed === extension)) {
+      return `Unsupported format "${extension}" — ${expected}`;
+    }
+    if (rule.mustExist && !context.exists(resolve(context.cwd, path))) {
+      return `File not found: ${path}`;
+    }
+    return true;
+  };
+}
+
+/** Checks a typed answer: a path by its rule, text by its schema, else not blank if required. */
 function answerValidator(
   option: OptionDescriptor,
   pathContext: PathContext,
 ): Validator {
-  const schema = answerSchema(option, pathContext);
-  if (schema) return toValidator(schema);
+  switch (option.kind) {
+    case OptionKind.Path:
+      return pathValidator(option.path, pathContext);
+    case OptionKind.Text:
+    case OptionKind.List: {
+      const { schema } = option;
+      if (schema) return (answer) => firstIssue(schema, answer) ?? true;
+    }
+  }
   if (option.required) return rejectBlankAnswer;
   return acceptAnyAnswer;
 }
@@ -51,7 +84,7 @@ function toOptionalFlagEntry(
   const defaultAnswer = option.default?.(answers);
   if (!defaultAnswer) return { name: flag, value: option.flag };
   return {
-    name: `${flag} (${CliLabel.Default}: ${defaultAnswer})`,
+    name: `${flag} (default: ${defaultAnswer})`,
     value: option.flag,
   };
 }
@@ -88,7 +121,7 @@ async function askForAnswer(
  *   typed: the tool resolves relative paths from the same working directory.
  *
  * @example
- * await promptOptions(deleteTool.options, prompter, pathContext);
+ * await promptOptions(deleteResumeTool.options, prompter, pathContext);
  * // ["--id", "resume-1"]
  */
 export async function promptOptions(
@@ -110,7 +143,7 @@ export async function promptOptions(
   const optionalOptions = options.filter((option) => !option.required);
   if (optionalOptions.length > 0) {
     const tickedFlags = await prompter.checkbox({
-      message: CliLabel.OptionalFlags,
+      message: "Set any optional flags?",
       choices: optionalOptions.map((option) =>
         toOptionalFlagEntry(option, answers),
       ),

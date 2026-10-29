@@ -6,8 +6,8 @@
  * ids per page and column.
  */
 
-import type { ValueOf } from "../../utils/types.ts";
-import type { Layout, ResumeData } from "../types.ts";
+import type { ValueOf } from "../../../utils/types.ts";
+import type { Layout, ResumeData } from "../../api/types.ts";
 
 /** Ids of the built-in sections, as used in `metadata.layout`. */
 const SectionId = {

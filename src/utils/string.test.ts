@@ -1,5 +1,5 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
-import { kebabToCamel, slugify, splitList } from "./string.ts";
+import { describe, it, expect } from "vitest";
+import { slugify, splitList } from "./string.ts";
 
 describe("slugify", () => {
   it("lowercases and joins words with dashes", () => {
@@ -27,18 +27,5 @@ describe("splitList", () => {
   it("returns an empty list for an absent or empty value", () => {
     expect(splitList(undefined)).toEqual([]);
     expect(splitList("")).toEqual([]);
-  });
-});
-
-describe("kebabToCamel", () => {
-  it("joins kebab-case words in camelCase, at the type level too", () => {
-    const name = kebabToCamel("linkedin-profile-url");
-
-    expect(name).toBe("linkedinProfileUrl");
-    expectTypeOf(name).toEqualTypeOf<"linkedinProfileUrl">();
-  });
-
-  it("leaves a name without dashes as it is", () => {
-    expect(kebabToCamel("letter")).toBe("letter");
   });
 });

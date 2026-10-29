@@ -158,30 +158,32 @@ real resume or letter.
 
 ### Layout
 
-A tool is one file, `src/cli/tools/<tool>.ts`. It declares each option once with
-`defineTool`, keyed by flag, and its `run` receives typed values: paths
-resolved, lists split, defaults applied. From that one declaration, `defineTool`
-builds the menu prompts, the usage line and the argv parser, so the menu and
-`bun run cli <tool>` can't drift apart.
+A platform such as Reactive Resume is one folder, `src/<platform>/`:
 
-Logic worth testing on its own lives in a domain folder, `src/<tool>/`, which
-never reads argv or imports from `src/cli/`. A platform such as Reactive
-Resume exposes its operations through one `src/<platform>/index.ts`, and its
-tools live together in `src/cli/tools/<platform>/`. The design is in
-[docs/interactive-cli.md](docs/interactive-cli.md).
+- `index.ts` declares its tools. Each declares its options once with
+  `defineTool`, keyed by flag, and its `run` receives typed values: paths
+  resolved, lists split, defaults applied. From that one declaration,
+  `defineTool` builds the menu prompts, the usage line and the argv parser, so
+  the menu and `bun run cli <tool>` can't drift apart.
+- `api/` holds the API client and its config, schemas and types.
+- `operations/` holds the calls each tool makes, as functions that take the
+  client.
+
+A tool reaches the outside world (network, clock, files, output) only through
+the context its `run` receives, which `src/cli/index.ts` fills in. Tests pass
+their own, so each tool is tested through its argv without a network or
+files. `src/cli/` is the menu and argv engine; `src/resume-md/` parses
+`Resume.md`. The rules are in [AGENTS.md](AGENTS.md).
 
 ### Adding a tool
 
-1. Create `src/cli/tools/<platform>/<tool>.ts`, exporting
-   `defineTool({ id, title, description, platform, options, preflight?, run })`.
-   `run` throws on failure.
-2. Append it to the list in `src/cli/tools/<platform>/index.ts`, which
-   `src/cli/registry.ts` spreads into `TOOLS`. It then shows up in the menu and
-   runs as `bun run cli <id>`.
-3. Put its logic behind `src/<platform>/index.ts` as an operation, tested
-   first through that interface.
-4. Add a `Platform` entry only for a new destination or kind of job, never for a
-   vendor.
+1. Declare it in `src/<platform>/index.ts` with
+   `defineTool({ id, title, description, options, preflight?, run })` and
+   append it to the platform's tool list. `run` throws on failure. It then
+   shows up in the menu and runs as `bun run cli <id>`.
+2. Put its API calls in `src/<platform>/operations/`, tested first through
+   the tool's argv.
+3. A new platform's tool list is spread into `tools` in `src/cli/index.ts`.
 
 ### Adding a provider
 

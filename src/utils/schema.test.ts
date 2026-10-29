@@ -1,25 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import {
-  formatIssuePath,
-  parseOrThrow,
-  requiredText,
-  ValidationMessage,
-} from "./schema.ts";
-
-describe("formatIssuePath", () => {
-  it("joins keys with dots and wraps indices in brackets", () => {
-    expect(formatIssuePath(["jobs", 2, "role"])).toBe("jobs[2].role");
-  });
-
-  it("formats a top-level key as-is", () => {
-    expect(formatIssuePath(["summary"])).toBe("summary");
-  });
-
-  it("formats an empty path as an empty string", () => {
-    expect(formatIssuePath([])).toBe("");
-  });
-});
+import { parseOrThrow, requiredText, ValidationMessage } from "./schema.ts";
 
 describe("requiredText", () => {
   it("accepts a non-empty string", () => {
@@ -43,6 +24,14 @@ describe("parseOrThrow", () => {
       name: "a",
       tags: ["b"],
     });
+  });
+
+  it("writes a nested path as code does: keys dotted, indices bracketed", () => {
+    const jobs = z.object({ jobs: z.array(z.object({ role: requiredText })) });
+
+    expect(() =>
+      parseOrThrow(jobs, { jobs: [{ role: "a" }, { role: "" }] }, "Bad:"),
+    ).toThrow("Bad:\n  jobs[1].role: required");
   });
 
   it("lists every failure with its path under the heading", () => {

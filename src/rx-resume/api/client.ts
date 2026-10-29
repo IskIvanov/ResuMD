@@ -6,20 +6,16 @@
  * tested without a network.
  */
 
-import { describeCaught } from "../utils/error.ts";
-import type { FetchFn, ValueOf } from "../utils/types.ts";
-import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
-import { RxResumeError } from "./errors.ts";
+import { describeCaught } from "../../utils/error.ts";
+import type { FetchFn, ValueOf } from "../../utils/types.ts";
 import {
-  ErrorMessages,
-  RxResumeErrorCode,
   type ApiErrorBody,
   type CoverLetter,
   type CreateCoverLetterBody,
   type CreateResumeBody,
+  EnvVar,
   type RequestLog,
   type Resume,
-  type RxResumeClient,
   type RxResumeClientConfig,
   type UpdateCoverLetterBody,
   type UpdateResumeBody,
@@ -42,9 +38,26 @@ const HttpMethod = {
 type HttpMethod = ValueOf<typeof HttpMethod>;
 
 const RESUMES_PATH = "/resumes";
+/** Where the web app opens a resume. */
+const BUILDER_PATH = "/builder";
+/** Where the web app lists a cover letter. */
+const LETTER_DASHBOARD_PATH = "/dashboard";
 const COVER_LETTERS_PATH = "/cover-letters";
 /** Where a letter already in Trash is deleted for good. */
 const LETTER_DOCUMENTS_PATH = "/documents/letter";
+
+/** One or more slashes at the end of a URL. */
+const TRAILING_SLASHES = /\/+$/;
+
+/** Drops the slashes at the end of a URL, so a path can be appended. */
+function trimTrailingSlashes(url: string): string {
+  return url.replace(TRAILING_SLASHES, "");
+}
+
+/** `collection/id`, with the id URL-encoded. */
+function itemPath(collection: string, id: string): string {
+  return `${collection}/${encodeURIComponent(id)}`;
+}
 
 /** A non-2xx response, with the API's error code when it sent one. */
 export class RxResumeApiError extends Error {
@@ -53,9 +66,9 @@ export class RxResumeApiError extends Error {
 
   constructor(status: number, code: string | undefined, message: string) {
     super(
-      `${ErrorMessages.RxResumeApiError} ${status}${code ? ` ${code}` : ""}: ${message}`,
+      `Reactive Resume API error ${status}${code ? ` ${code}` : ""}: ${message}`,
     );
-    this.name = ErrorMessages.RxResumeApiError;
+    this.name = "RxResumeApiError";
     this.status = status;
     this.code = code;
   }
@@ -97,19 +110,22 @@ function letterPath(id: string): string {
  * const client = new RxResumeApiClient({ baseUrl, apiKey, fetch });
  * const id = await client.createResume({ name: "CV", slug: "cv", tags: [] });
  */
-export class RxResumeApiClient implements RxResumeClient {
+export class RxResumeApiClient {
   readonly baseUrl: string;
+  readonly appUrl: string;
   readonly apiKey: string;
   readonly fetch: FetchFn;
   readonly requestLog: RequestLog | undefined;
 
   /**
-   * @param config - Base URL (e.g. `https://rxresu.me/api/openapi`), API key,
-   *   the `fetch` implementation to send requests with, and an optional log
-   *   for every request.
+   * @param config - Base URL (e.g. `https://rxresu.me/api/openapi`), app URL
+   *   (e.g. `https://rxresu.me`) for links, API key, the `fetch`
+   *   implementation to send requests with, and an optional log for every
+   *   request.
    */
   constructor(config: RxResumeClientConfig) {
     this.baseUrl = trimTrailingSlashes(config.baseUrl);
+    this.appUrl = trimTrailingSlashes(config.appUrl);
     this.apiKey = config.apiKey;
     this.fetch = config.fetch;
     this.requestLog = config.requestLog;
@@ -139,13 +155,10 @@ export class RxResumeApiClient implements RxResumeClient {
     try {
       response = await this.fetch(url, options);
     } catch (error) {
-      throw new RxResumeError(
-        {
-          code: RxResumeErrorCode.Unreachable,
-          method,
-          url,
-          detail: describeCaught(error),
-        },
+      throw new Error(
+        `${method} ${url} failed: ${describeCaught(error)}\n` +
+          `Check ${EnvVar.BaseUrl} (http or https, host, port) and that the ` +
+          "server is running.",
         { cause: error },
       );
     }
@@ -163,6 +176,33 @@ export class RxResumeApiClient implements RxResumeClient {
     return text ? JSON.parse(text) : undefined;
   }
 
+  /**
+   * Builds the link that opens a resume in the web app's builder.
+   *
+   * @param resumeId - The resume's id.
+   * @returns The builder URL, with the id URL-encoded.
+   *
+   * @example
+   * client.builderUrl("abc"); // "https://rxresu.me/builder/abc"
+   */
+  builderUrl(resumeId: string): string {
+    return itemPath(`${this.appUrl}${BUILDER_PATH}`, resumeId);
+  }
+
+  /**
+   * Builds the link to a cover letter on the web app's dashboard.
+   *
+   * @param letterId - The cover letter's id.
+   * @returns The dashboard URL, with the id URL-encoded.
+   *
+   * @example
+   * client.letterUrl("abc"); // "https://rxresu.me/dashboard/abc"
+   */
+  letterUrl(letterId: string): string {
+    return itemPath(`${this.appUrl}${LETTER_DASHBOARD_PATH}`, letterId);
+  }
+
+  /** `POST /resumes`; resolves to the new resume's id. */
   async createResume(body: CreateResumeBody): Promise<string> {
     const id = await this.request(HttpMethod.Post, RESUMES_PATH, body);
     if (typeof id !== "string") {
@@ -173,20 +213,24 @@ export class RxResumeApiClient implements RxResumeClient {
     return id;
   }
 
+  /** `GET /resumes/{id}`. */
   async getResume(id: string): Promise<Resume> {
     // Trusts the API's documented response shape; not validated at runtime.
     return (await this.request(HttpMethod.Get, resumePath(id))) as Resume;
   }
 
+  /** `PUT /resumes/{id}`; resolves to the updated resume. */
   async updateResume(id: string, body: UpdateResumeBody): Promise<Resume> {
     // Trusts the API's documented response shape; not validated at runtime.
     return (await this.request(HttpMethod.Put, resumePath(id), body)) as Resume;
   }
 
+  /** `DELETE /resumes/{id}`; permanent, and rejected for a locked resume. */
   async deleteResume(id: string): Promise<void> {
     await this.request(HttpMethod.Delete, resumePath(id));
   }
 
+  /** `POST /cover-letters`; resolves to the new letter. */
   async createCoverLetter(body: CreateCoverLetterBody): Promise<CoverLetter> {
     // Unlike POST /resumes, this returns the whole letter, not only its id.
     // Trusts the API's documented response shape; not validated at runtime.
@@ -198,11 +242,16 @@ export class RxResumeApiClient implements RxResumeClient {
     return coverLetterPostRequest;
   }
 
+  /** `GET /cover-letters/{id}`. */
   async getCoverLetter(id: string): Promise<CoverLetter> {
     // Trusts the API's documented response shape; not validated at runtime.
     return (await this.request(HttpMethod.Get, letterPath(id))) as CoverLetter;
   }
 
+  /**
+   * `PUT /cover-letters/{id}`; resolves to the updated letter. Rejected when
+   * `expectedRevision` is no longer the letter's revision.
+   */
   async updateCoverLetter(
     id: string,
     body: UpdateCoverLetterBody,
@@ -217,12 +266,17 @@ export class RxResumeApiClient implements RxResumeClient {
     return coverLetterUpdateRequest;
   }
 
+  /**
+   * `DELETE /cover-letters/{id}`; moves the letter to Trash. Rejected for a
+   * locked letter or a stale revision.
+   */
   async trashCoverLetter(id: string, expectedRevision: number): Promise<void> {
     await this.request(HttpMethod.Delete, letterPath(id), {
       expectedRevision,
     });
   }
 
+  /** `DELETE /documents/letter/{id}`; permanent, only for a letter in Trash. */
   async removeCoverLetter(id: string): Promise<void> {
     await this.request(HttpMethod.Delete, itemPath(LETTER_DOCUMENTS_PATH, id));
   }

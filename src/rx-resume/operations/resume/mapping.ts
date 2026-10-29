@@ -18,7 +18,7 @@ import type {
   ParsedProject,
   ParsedResume,
   ParsedSkillGroup,
-} from "../../sync-resume/types.ts";
+} from "../../../resume-md/types.ts";
 import type {
   Basics,
   BasicsCustomField,
@@ -33,7 +33,7 @@ import type {
   ResumeData,
   SkillItem,
   Website,
-} from "../types.ts";
+} from "../../api/types.ts";
 
 const PROTOCOL_REGEX = /^https?:\/\//i;
 const DEFAULT_PROTOCOL = "https://";

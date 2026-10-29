@@ -6,13 +6,15 @@ Linear:
 for where the code differs from or adds to the plan. Risk 3 below is
 resolved; the others are still open.
 
-> **Revision (platforms):** the cover-letter code has since moved behind the
-> Reactive Resume platform: `src/rx-resume/cover-letter/`, reached only
-> through `connectRxResume(…).coverLetters` in `src/rx-resume/index.ts`.
-> `run.ts`, `generate.ts` and `CoverLetterError` are gone (the error is now
-> `RxResumeError`), printing moved to `src/cli/tools/rx-resume/print.ts`, and
-> the tests go through the interface with `recordingFetch`. Paths below
-> describe the original layout.
+> **Revision (merged platforms):** the cover-letter code now lives in
+> `src/rx-resume/operations/cover-letter/` (`index.ts`: generate, update and
+> delete, taking the API client; `parser.ts`), and the three tools are
+> declared in `src/rx-resume/index.ts`, which also prints. `body.ts`,
+> `update.ts`, `delete.ts`, `CoverLetterError` and `camelCaseKeys` are gone:
+> failures are plain `Error` messages, and the tools map flags to API field
+> names directly. `letterDate` comes from the run context's `today`; luxon is
+> gone. The tests drive each tool through its argv with `recordingFetch`.
+> Paths below describe the original layout.
 
 ## Goal
 

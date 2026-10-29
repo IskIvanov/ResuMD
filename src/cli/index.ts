@@ -2,24 +2,26 @@
  * cli/index.ts
  *
  * Entry point for `bun run cli`. The only file that imports the prompt library
- * or touches the real terminal, environment and file system; everything else
- * runs through runCli with injected dependencies.
+ * or touches the real terminal, environment, network, clock and file system;
+ * everything else runs through runCli with injected dependencies.
  *
  * Run: bun src/cli/index.ts                      (interactive menu)
  *      bun src/cli/index.ts <tool id> [flags]    (one tool, no prompts)
  */
 
-import { existsSync } from "fs";
-import { checkbox, confirm, input, select, Separator } from "@inquirer/prompts";
-import { CliError } from "./errors.ts";
-import { TOOLS } from "./registry.ts";
-import { runCli } from "./run-cli.ts";
-import {
-  CliErrorCode,
-  type Choice,
-  type MenuItem,
-  type Prompter,
-} from "./types.ts";
+import { randomUUID } from "crypto";
+import { existsSync, readFileSync } from "fs";
+import { checkbox, confirm, input, select } from "@inquirer/prompts";
+import { RX_RESUME_TOOLS } from "../rx-resume/index.ts";
+import { PromptCancelled, runCli } from "./run-cli.ts";
+import type { Prompter } from "./types.ts";
+
+/** Today's date in the local time zone, as `YYYY-MM-DD`. */
+function localToday(): string {
+  const now = new Date();
+  const pad = (part: number): string => String(part).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 /** Error names the prompt library uses. Its README checks Ctrl+C by name. */
 enum InquirerError {
@@ -32,22 +34,15 @@ async function cancellable<TValue>(prompt: Promise<TValue>): Promise<TValue> {
     return await prompt;
   } catch (error) {
     if (error instanceof Error && error.name === InquirerError.Exit) {
-      throw new CliError({ code: CliErrorCode.PromptCancelled });
+      throw new PromptCancelled();
     }
     throw error;
   }
 }
 
-/** Maps a CLI menu item to the library's choice or Separator. */
-function toSelectItem<TValue>(
-  item: MenuItem<TValue>,
-): Choice<TValue> | Separator {
-  return "separator" in item ? new Separator(item.separator) : item;
-}
-
 const prompter: Prompter = {
   select: ({ message, choices }) =>
-    cancellable(select({ message, choices: choices.map(toSelectItem) })),
+    cancellable(select({ message, choices: [...choices] })),
   input: ({ message, validate }) => cancellable(input({ message, validate })),
   checkbox: ({ message, choices }) =>
     cancellable(checkbox({ message, choices: [...choices] })),
@@ -58,11 +53,17 @@ const prompter: Prompter = {
 process.exit(
   await runCli({
     argv: process.argv.slice(2),
-    tools: TOOLS,
+    tools: RX_RESUME_TOOLS,
     prompter,
     env: process.env,
     isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-    pathContext: { cwd: process.cwd(), exists: existsSync },
+    cwd: process.cwd(),
+    exists: existsSync,
+    fetch: globalThis.fetch,
+    newId: randomUUID,
+    today: localToday,
+    now: () => performance.now(),
+    readFile: (absolutePath) => readFileSync(absolutePath, "utf-8"),
     log: (line) => console.log(line),
     logError: (line) => console.error(line),
   }),

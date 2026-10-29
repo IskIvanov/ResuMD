@@ -1,10 +1,5 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
-import {
-  camelCaseKeys,
-  fillDefaults,
-  omitUndefined,
-  pickNonEmptyStrings,
-} from "./record.ts";
+import { describe, it, expect } from "vitest";
+import { fillDefaults, omitUndefined, pickNonEmptyStrings } from "./record.ts";
 
 describe("omitUndefined", () => {
   it("drops undefined fields and keeps every other value", () => {
@@ -36,17 +31,5 @@ describe("fillDefaults", () => {
 
   it("leaves a key out when its default builds nothing", () => {
     expect(fillDefaults({}, [["slug", () => undefined]])).toEqual({});
-  });
-});
-
-describe("camelCaseKeys", () => {
-  it("renames kebab-case keys to camelCase, keeping each value's type", () => {
-    const fields = camelCaseKeys({ "resume-id": "r1", company: undefined });
-
-    expect(fields).toEqual({ resumeId: "r1", company: undefined });
-    expectTypeOf(fields).toEqualTypeOf<{
-      resumeId: string;
-      company: undefined;
-    }>();
   });
 });
