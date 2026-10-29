@@ -167,10 +167,19 @@ export type ItemCompleter<TParsed, TItem> = (
 /** The subset of `fetch` the client uses; `globalThis.fetch` satisfies it. */
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
+/** Where the client writes a line per request and response, and its clock. */
+export interface RequestLog {
+  write: (line: string) => void;
+  /** Milliseconds, for the time a request took. */
+  now: () => number;
+}
+
 export interface RxResumeClientConfig {
   baseUrl: string;
   apiKey: string;
   fetch: FetchFn;
+  /** Set to log every request; left out, the client writes nothing. */
+  requestLog?: RequestLog;
 }
 
 export interface RxResumeClient {
@@ -221,7 +230,24 @@ export enum ErrorMessages {
   MissingApiKey = "Missing API key",
   RxResumeApiError = "Reactive Resume API error",
   MissingBody = "Missing request body",
+  Failed = "failed:",
+  CheckApiUrl = "(http or https, host, port) and that the server is running.",
 }
+
+/** Why a request to Reactive Resume stopped; details in RxResumeErrorReason. */
+export enum RxResumeErrorCode {
+  /** fetch rejected before any response: wrong URL, server down, TLS. */
+  Unreachable = "UNREACHABLE",
+}
+
+/** An RxResumeError's code with what its message needs, one shape per code. */
+export type RxResumeErrorReason = {
+  code: RxResumeErrorCode.Unreachable;
+  method: string;
+  url: string;
+  /** The network error, with its code when the runtime gave one. */
+  detail: string;
+};
 
 /** Environment variables, usually `process.env` after Bun has loaded `.env`. */
 export type Env = Record<string, string | undefined>;

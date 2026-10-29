@@ -64,6 +64,7 @@ export enum CliLabel {
   Default = "default",
   RunIt = "Run it?",
   Cancelled = "Cancelled.",
+  CausedBy = "caused by:",
   Unavailable = "Not available",
   NeedsTerminal = "resume-tools cli needs an interactive terminal. Run a tool directly:",
   UnknownTool = "Unknown tool",

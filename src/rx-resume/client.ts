@@ -6,15 +6,19 @@
  * tested without a network.
  */
 
+import { describeCaught } from "../utils/error.ts";
 import type { ValueOf } from "../utils/type.ts";
 import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
+import { RxResumeError } from "./errors.ts";
 import {
   ErrorMessages,
+  RxResumeErrorCode,
   type ApiErrorBody,
   type CoverLetter,
   type CreateCoverLetterBody,
   type CreateResumeBody,
   type FetchFn,
+  type RequestLog,
   type Resume,
   type RxResumeClient,
   type RxResumeClientConfig,
@@ -98,15 +102,18 @@ export class RxResumeApiClient implements RxResumeClient {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly fetch: FetchFn;
+  readonly requestLog: RequestLog | undefined;
 
   /**
-   * @param config - Base URL (e.g. `https://rxresu.me/api/openapi`), API key
-   *   and the `fetch` implementation to send requests with.
+   * @param config - Base URL (e.g. `https://rxresu.me/api/openapi`), API key,
+   *   the `fetch` implementation to send requests with, and an optional log
+   *   for every request.
    */
   constructor(config: RxResumeClientConfig) {
     this.baseUrl = trimTrailingSlashes(config.baseUrl);
     this.apiKey = config.apiKey;
     this.fetch = config.fetch;
+    this.requestLog = config.requestLog;
   }
 
   /** Sends one request and returns its JSON body, or undefined if empty. */
@@ -126,7 +133,30 @@ export class RxResumeApiClient implements RxResumeClient {
       body: body ? JSON.stringify(body) : undefined,
     };
 
-    const response = await this.fetch(url, options);
+    const startedAt = this.requestLog?.now();
+    this.requestLog?.write(`→ ${method} ${url}`);
+
+    let response: Response;
+    try {
+      response = await this.fetch(url, options);
+    } catch (error) {
+      throw new RxResumeError(
+        {
+          code: RxResumeErrorCode.Unreachable,
+          method,
+          url,
+          detail: describeCaught(error),
+        },
+        { cause: error },
+      );
+    }
+
+    if (this.requestLog && startedAt !== undefined) {
+      const took = Math.round(this.requestLog.now() - startedAt);
+      this.requestLog.write(
+        `← ${response.status} ${method} ${url} (${took}ms)`,
+      );
+    }
 
     if (!response.ok) throw await toApiError(response);
     // DELETE replies with an empty body, which response.json() rejects.

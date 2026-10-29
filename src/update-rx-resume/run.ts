@@ -14,7 +14,12 @@ import { randomUUID } from "crypto";
 import { parseResume } from "../sync-resume/parser.ts";
 import { applyResumeData } from "../rx-resume/apply-data.ts";
 import { RxResumeApiClient } from "../rx-resume/client.ts";
-import { resolveApiConfig, resolveBuilderUrl } from "../rx-resume/config.ts";
+import {
+  resolveApiConfig,
+  resolveBuilderUrl,
+  resolveRequestLog,
+  STDERR_REQUEST_LOG,
+} from "../rx-resume/config.ts";
 import { patchResumeData } from "../rx-resume/patch.ts";
 import { toResumeData } from "../rx-resume/resume-data.ts";
 import type { Env } from "../rx-resume/types.ts";
@@ -44,6 +49,7 @@ export async function runUpdate(
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     fetch: globalThis.fetch,
+    requestLog: resolveRequestLog(env, STDERR_REQUEST_LOG),
   });
   const resume = await patchResumeData(client, options.id, (current) =>
     applyResumeData(current, data, randomUUID),

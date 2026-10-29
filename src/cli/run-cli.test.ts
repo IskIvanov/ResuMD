@@ -4,6 +4,7 @@ import {
   createCancellingPrompter,
   createCliHarness,
   runEncodeScript,
+  withFailingRun,
   withRecordedRuns,
 } from "./mocks.ts";
 import { deleteCoverLetterTool } from "./tools/delete-cover-letter.ts";
@@ -53,6 +54,42 @@ describe("runCli", () => {
     expect(errors).toEqual([
       expect.stringContaining("Missing RXRESUME_API_KEY"),
     ]);
+  });
+
+  it("prints each cause under the error", async () => {
+    const refused = new Error("Unable to connect.");
+    const tool = withFailingRun(
+      encodeTool,
+      new Error("Upload failed", {
+        cause: new Error("POST failed", { cause: refused }),
+      }),
+    );
+    const { deps, errors } = createCliHarness(
+      [tool],
+      {},
+      { argv: ["encode-cv"] },
+    );
+
+    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(errors).toEqual([
+      "Upload failed\n  caused by: POST failed\n  caused by: Unable to connect.",
+    ]);
+  });
+
+  it("skips a cause the message already states", async () => {
+    const refused = new Error("Unable to connect.");
+    const tool = withFailingRun(
+      encodeTool,
+      new Error("POST failed: Unable to connect.", { cause: refused }),
+    );
+    const { deps, errors } = createCliHarness(
+      [tool],
+      {},
+      { argv: ["encode-cv"] },
+    );
+
+    expect(await runCli(deps)).toBe(ExitCode.Failure);
+    expect(errors).toEqual(["POST failed: Unable to connect."]);
   });
 
   it("runs the tool named by the first argument, without the menu", async () => {
