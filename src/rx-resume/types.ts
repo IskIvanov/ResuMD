@@ -110,7 +110,7 @@ export type ParsedSkillItem = Pick<SkillItem, "name" | "keywords">;
 
 export type ParsedEducationItem = Pick<
   EducationItem,
-  "school" | "degree" | "location" | "period" | "description"
+  "school" | "degree" | "area" | "grade" | "location" | "period" | "description"
 >;
 
 /** `website` is set only when the project has a link. */

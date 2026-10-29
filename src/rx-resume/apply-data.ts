@@ -97,9 +97,10 @@ export function toApiSkillItem(item: ParsedSkillItem, id: string): SkillItem {
 /**
  * Completes a parsed education item into a full API item.
  *
- * @param item - The parsed school, degree, location, period and description.
+ * @param item - The parsed school, degree, area, grade, location, period and
+ *   description.
  * @param id - The id to give the new item.
- * @returns A visible item with empty area, grade and website.
+ * @returns A visible item with an empty website.
  */
 export function toApiEducationItem(
   item: ParsedEducationItem,
@@ -108,8 +109,6 @@ export function toApiEducationItem(
   return {
     id,
     hidden: false,
-    area: "",
-    grade: "",
     website: emptyWebsite(),
     ...item,
   };

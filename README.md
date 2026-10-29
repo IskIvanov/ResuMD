@@ -130,6 +130,23 @@ format`. `generate-rx-resume` and `update-rx-resume` add them as a bold
 description. The site CV has no references, so the JSON written from it has
 none either.
 
+An education item's `**Degree, Area** | dates` line is split on its first
+comma into the Reactive Resume degree and area of study. Optional lines set
+the other fields, each on its own line:
+
+```md
+### Example University — City
+
+**Bachelor's degree, Computer Science** | 2012 – 2016
+
+**Grade:** 9.0 / 10
+**Location:** Amsterdam
+```
+
+`**Location:**` overrides the location in the heading. When the degree name
+itself has a comma, add an `**Area:**` line and the whole title stays the
+degree. Without these lines, the area, grade and location are left empty.
+
 ## Development
 
 ```bash

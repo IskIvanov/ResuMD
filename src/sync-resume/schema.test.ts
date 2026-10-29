@@ -55,7 +55,9 @@ const skillGroup: ParsedSkillGroup = {
 const eduItem: ParsedEduItem = {
   school: "University A",
   location: "Springfield",
-  degree: "Master's degree, Engineering",
+  degree: "Master's degree",
+  area: "Engineering",
+  grade: "",
   period: "2018 – 2019",
   context: "Coursework completed.",
   bullets: ["Thesis"],

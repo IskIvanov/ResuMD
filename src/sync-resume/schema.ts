@@ -74,6 +74,8 @@ export const ParsedEduItemSchema = z.object({
   school: requiredText,
   location: z.string(),
   degree: requiredText,
+  area: z.string(),
+  grade: z.string(),
   period: requiredText,
   context: z.string(),
   bullets: z.array(z.string()),

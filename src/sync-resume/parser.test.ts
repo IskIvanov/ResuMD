@@ -312,7 +312,9 @@ describe("parseResume", () => {
         {
           school: "Example University",
           location: "City",
-          degree: "Bachelor's degree, Computer Science",
+          degree: "Bachelor's degree",
+          area: "Computer Science",
+          grade: "",
           period: "2012 – 2016",
           context: "Graduated with honours.",
           bullets: [
@@ -737,9 +739,10 @@ describe("parseResume", () => {
       });
     });
 
-    it("reads degree and period from the degree line", () => {
+    it("reads degree, area and period from the degree line", () => {
       expect(parseWith().eduItems[0]).toMatchObject({
-        degree: "Master's degree, Engineering",
+        degree: "Master's degree",
+        area: "Engineering",
         period: "2018 – 2019",
       });
     });

@@ -179,13 +179,15 @@ export function toSkillItem(group: ParsedSkillGroup): ParsedSkillItem {
  * Maps a parsed education entry onto a Reactive Resume education item.
  *
  * @param edu - An entry parsed from `## Education`.
- * @returns The school, degree, location, period and HTML description
- *   (context + bullets).
+ * @returns The school, degree, area, grade, location, period and HTML
+ *   description (context + bullets).
  */
 export function toEducationItem(edu: ParsedEduItem): ParsedEducationItem {
   return {
     school: edu.school,
     degree: edu.degree,
+    area: edu.area,
+    grade: edu.grade,
     location: edu.location,
     period: edu.period,
     description: renderEducationDescriptionHtml({

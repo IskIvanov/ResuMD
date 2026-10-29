@@ -43,12 +43,21 @@ const HEADING_MARKER = "#";
 const NAME_PREFIX = "# ";
 const TECH_STACK_PREFIX = "**Tech Stack:**";
 const CREDENTIAL_ID_LABEL = "Credential ID:";
+/** Bold labels of the optional `**Label:** value` lines of an education entry. */
+const EducationLabel = {
+  Area: "Area:",
+  Grade: "Grade:",
+  Location: "Location:",
+} as const;
+const EDUCATION_LABELS: readonly string[] = Object.values(EducationLabel);
 /** Ends the bold label of a `**Heading:** a, b` skill group. */
 const SKILL_LABEL_SUFFIX = ":";
 const SKILL_SEPARATOR = ", ";
 const CREDENTIAL_SEPARATOR = ",";
 /** Separates a name from its qualifier: `Company — Location`. */
 const NAME_SEPARATOR = " — ";
+/** Separates a degree from its area of study: `Degree, Area`. */
+const DEGREE_SEPARATOR = ", ";
 const CONTACT_SEPARATOR = "|";
 const INTEREST_SEPARATOR = "·";
 
@@ -139,15 +148,24 @@ function classifyLine(text: string): Line {
   return { kind: LineKind.Paragraph, text };
 }
 
+/** True for an education entry's `**Grade:** value`-style line. */
+function isEducationField(line: Line): boolean {
+  return (
+    line.kind === LineKind.Labelled && EDUCATION_LABELS.includes(line.label)
+  );
+}
+
 /**
  * True when a raw line opens a new logical line rather than continuing a
- * hard-wrapped one: a bullet, heading or rule at the start of the line, or a
- * reference line.
+ * hard-wrapped one: a bullet, heading or rule at the start of the line, a
+ * reference line or an education field line.
  */
 function startsLogicalLine(raw: string): boolean {
+  const line = classifyLine(raw);
   return (
     BLOCK_START_PREFIXES.some((prefix) => raw.startsWith(prefix)) ||
-    classifyLine(raw).kind === LineKind.Reference
+    line.kind === LineKind.Reference ||
+    isEducationField(line)
   );
 }
 
@@ -276,6 +294,38 @@ function splitQualified(text: string): { name: string; qualifier: string } {
   };
 }
 
+/** The value of the first `**Label** value` line with this label, or "". */
+function labelledValue(lines: Line[], label: string): string {
+  const line = linesOfKind(lines, LineKind.Labelled).find(
+    (labelled) => labelled.label === label,
+  );
+  return line?.rest.trim() ?? "";
+}
+
+/**
+ * Splits `Degree, Area` on its first `, `; the area is empty without one.
+ */
+function splitDegree(title: string): { degree: string; area: string } {
+  const separatorIdx = title.indexOf(DEGREE_SEPARATOR);
+  if (separatorIdx < 0) return { degree: title.trim(), area: "" };
+  return {
+    degree: title.slice(0, separatorIdx).trim(),
+    area: title.slice(separatorIdx + DEGREE_SEPARATOR.length).trim(),
+  };
+}
+
+/**
+ * The degree and area of study: an `**Area:**` line keeps the whole title as
+ * the degree; without one, the title splits as `Degree, Area`.
+ */
+function readDegree(
+  title: string,
+  areaField: string,
+): { degree: string; area: string } {
+  if (areaField !== "") return { degree: title.trim(), area: areaField };
+  return splitDegree(title);
+}
+
 /** Every markdown link with an http(s) URL, in document order. */
 function parseLinks(text: string): ParsedLink[] {
   return [...text.matchAll(MARKDOWN_LINK_REGEX)].map((match) => ({
@@ -343,15 +393,27 @@ function readJob({ heading, lines }: Entry): ParsedJob {
   };
 }
 
-/** A `### School — Location` entry of `## Education`. */
+/**
+ * A `### School — Location` entry of `## Education`. Optional `**Area:**`,
+ * `**Grade:**` and `**Location:**` lines set those fields; the location line
+ * overrides the heading's.
+ */
 function readEducation({ heading, lines }: Entry): ParsedEduItem {
   const { name, qualifier } = splitQualified(heading);
   const title = firstOfKind(lines, LineKind.Title);
+  const { degree, area } = readDegree(
+    title?.title ?? "",
+    labelledValue(lines, EducationLabel.Area),
+  );
+  let location = labelledValue(lines, EducationLabel.Location);
+  if (location === "") location = qualifier;
 
   return {
     school: name,
-    location: qualifier,
-    degree: title?.title ?? "",
+    location,
+    degree,
+    area,
+    grade: labelledValue(lines, EducationLabel.Grade),
     period: title?.period ?? "",
     context: contextAfterTitle(lines),
     bullets: bulletItems(lines),

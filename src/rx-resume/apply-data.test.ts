@@ -1,4 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import { parseResume } from "../sync-resume/parser.ts";
+import { toResumeData } from "./resume-data.ts";
 import {
   applyResumeData,
   toApiCertificationItem,
@@ -11,7 +16,12 @@ import {
   toApiReferenceItem,
   toApiSkillItem,
 } from "./apply-data.ts";
-import type { ParsedResumeData, ResumeData, Section } from "./types.ts";
+import type {
+  EducationItem,
+  ParsedResumeData,
+  ResumeData,
+  Section,
+} from "./types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -113,7 +123,9 @@ const parsed: ParsedResumeData = {
       items: [
         {
           school: "Example University",
-          degree: "Master's degree, Engineering",
+          degree: "Master's degree",
+          area: "Engineering",
+          grade: "9.0 / 10",
           location: "Springfield",
           period: "2018 – 2019",
           description: "<p>• Thesis</p>",
@@ -198,9 +210,9 @@ describe("toApiEducationItem", () => {
       id: "id-1",
       hidden: false,
       school: "Example University",
-      degree: "Master's degree, Engineering",
-      area: "",
-      grade: "",
+      degree: "Master's degree",
+      area: "Engineering",
+      grade: "9.0 / 10",
       location: "Springfield",
       period: "2018 – 2019",
       website: EMPTY_WEBSITE,
@@ -426,5 +438,68 @@ describe("applyResumeData", () => {
     const base = makeResumeData();
     applyResumeData(base, parsed, sequentialIds());
     expect(base).toEqual(makeResumeData());
+  });
+});
+
+// ─── applyResumeData from Resume.md ───────────────────────────────────────────
+
+describe("applyResumeData education from Resume.md", () => {
+  const RESUME_FIXTURE = readFileSync(
+    resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../sync-resume/fixtures/Resume.md",
+    ),
+    "utf-8",
+  );
+  const EDUCATION_TITLE_LINE =
+    "**Bachelor's degree, Computer Science** | 2012 – 2016";
+
+  /** Updates a fresh resume from the fixture with its title line replaced. */
+  function updatedEducation(titleLines: string): EducationItem {
+    const markdown = RESUME_FIXTURE.replace(EDUCATION_TITLE_LINE, titleLines);
+    const data = toResumeData(parseResume(markdown));
+    const { sections } = applyResumeData(
+      makeResumeData(),
+      data,
+      sequentialIds(),
+    );
+    return sections.education.items[0];
+  }
+
+  it("splits the title on its first comma into degree and area", () => {
+    expect(updatedEducation(EDUCATION_TITLE_LINE)).toMatchObject({
+      degree: "Bachelor's degree",
+      area: "Computer Science",
+    });
+  });
+
+  it("reads the grade from a **Grade:** line", () => {
+    const titleLines = `${EDUCATION_TITLE_LINE}\n\n**Grade:** 9.0 / 10`;
+    expect(updatedEducation(titleLines).grade).toBe("9.0 / 10");
+  });
+
+  it("reads grade and location from adjacent lines, the location over the heading's", () => {
+    const titleLines = [
+      EDUCATION_TITLE_LINE,
+      "",
+      "**Grade:** 9.0 / 10",
+      "**Location:** Amsterdam",
+    ].join("\n");
+    expect(updatedEducation(titleLines)).toMatchObject({
+      grade: "9.0 / 10",
+      location: "Amsterdam",
+    });
+  });
+
+  it("reads the area from an **Area:** line and keeps the whole title as the degree", () => {
+    const titleLines = [
+      "**Master of Science, Honours** | 2016 – 2018",
+      "",
+      "**Area:** Computer Science",
+    ].join("\n");
+    expect(updatedEducation(titleLines)).toMatchObject({
+      degree: "Master of Science, Honours",
+      area: "Computer Science",
+    });
   });
 });

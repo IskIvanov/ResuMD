@@ -55,7 +55,9 @@ const skillGroup: ParsedSkillGroup = {
 const eduItem: ParsedEduItem = {
   school: "Example University",
   location: "Springfield",
-  degree: "Master's degree, Engineering",
+  degree: "Master's degree",
+  area: "Engineering",
+  grade: "",
   period: "2018 – 2019",
   context: "Graduated with honours.",
   bullets: ["(link) Degree course", "Thesis: Foo Bar"],
@@ -224,10 +226,11 @@ describe("toSkillItem", () => {
 // ─── toEducationItem ──────────────────────────────────────────────────────────
 
 describe("toEducationItem", () => {
-  it("maps school, degree, location and period", () => {
+  it("maps school, degree, area, location and period", () => {
     expect(toEducationItem(eduItem)).toMatchObject({
       school: "Example University",
-      degree: "Master's degree, Engineering",
+      degree: "Master's degree",
+      area: "Engineering",
       location: "Springfield",
       period: "2018 – 2019",
     });
