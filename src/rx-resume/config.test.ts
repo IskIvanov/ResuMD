@@ -3,9 +3,11 @@ import {
   apiConfigProblem,
   ENV_FILE,
   EnvVar,
+  OptionalEnvVar,
   resolveApiConfig,
   resolveBuilderUrl,
   resolveLetterDashboardUrl,
+  resolveRequestLog,
 } from "./config.ts";
 
 const env = {
@@ -101,5 +103,21 @@ describe("apiConfigProblem", () => {
 
   it("returns undefined when every variable is set", () => {
     expect(apiConfigProblem(env)).toBeUndefined();
+  });
+});
+
+describe("resolveRequestLog", () => {
+  const requestLog = { write: () => {}, now: () => 0 };
+
+  it("returns the log when RXRESUME_DEBUG is set", () => {
+    expect(resolveRequestLog({ [OptionalEnvVar.Debug]: "1" }, requestLog)).toBe(
+      requestLog,
+    );
+  });
+
+  it.each([undefined, ""])("returns undefined when it is %j", (value) => {
+    expect(
+      resolveRequestLog({ [OptionalEnvVar.Debug]: value }, requestLog),
+    ).toBeUndefined();
   });
 });

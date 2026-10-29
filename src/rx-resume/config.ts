@@ -7,7 +7,7 @@
  */
 
 import { itemPath, trimTrailingSlashes } from "../utils/url.ts";
-import type { ApiConfig, Env } from "./types.ts";
+import type { ApiConfig, Env, RequestLog } from "./types.ts";
 
 /** Variables the Reactive Resume tools need from `.env`. */
 export enum EnvVar {
@@ -15,6 +15,18 @@ export enum EnvVar {
   BaseUrl = "RXRESUME_API_URL",
   AppUrl = "RXRESUME_APP_URL",
 }
+
+/** Variables the tools read when set, and never ask for. */
+export enum OptionalEnvVar {
+  /** Any non-empty value logs every API request to stderr. */
+  Debug = "RXRESUME_DEBUG",
+}
+
+/** Writes request lines to stderr, timed with the process clock. */
+export const STDERR_REQUEST_LOG: RequestLog = {
+  write: (line) => console.error(line),
+  now: () => performance.now(),
+};
 
 /** The file the variables belong in. */
 export const ENV_FILE = ".env";
@@ -67,6 +79,25 @@ export function apiConfigProblem(env: Env): string | undefined {
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
+}
+
+/**
+ * Turns the client's request log on when RXRESUME_DEBUG is set.
+ *
+ * @param env - The environment to read.
+ * @param requestLog - Where the lines go when debugging is on.
+ * @returns `requestLog` when RXRESUME_DEBUG is non-empty, else undefined.
+ *
+ * @example
+ * resolveRequestLog({ RXRESUME_DEBUG: "1" }, STDERR_REQUEST_LOG);
+ * // STDERR_REQUEST_LOG
+ */
+export function resolveRequestLog(
+  env: Env,
+  requestLog: RequestLog,
+): RequestLog | undefined {
+  if (!env[OptionalEnvVar.Debug]) return undefined;
+  return requestLog;
 }
 
 /**

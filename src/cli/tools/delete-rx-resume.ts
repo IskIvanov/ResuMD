@@ -7,7 +7,12 @@
  */
 
 import { RxResumeApiClient } from "../../rx-resume/client.ts";
-import { apiConfigProblem, resolveApiConfig } from "../../rx-resume/config.ts";
+import {
+  apiConfigProblem,
+  resolveApiConfig,
+  resolveRequestLog,
+  STDERR_REQUEST_LOG,
+} from "../../rx-resume/config.ts";
 import type { Env, RxResumeClientConfig } from "../../rx-resume/types.ts";
 import { defineTool } from "../define-tool.ts";
 import { OptionKind, Platform } from "../types.ts";
@@ -37,6 +42,7 @@ const runDeleteClient = async (id: string, env: Env): Promise<void> => {
   const config: RxResumeClientConfig = {
     ...resolveApiConfig(env),
     fetch: globalThis.fetch,
+    requestLog: resolveRequestLog(env, STDERR_REQUEST_LOG),
   };
   const client = new RxResumeApiClient(config);
   await client.deleteResume(id);

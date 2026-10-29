@@ -53,7 +53,6 @@ const EDUCATION_LABELS: readonly string[] = Object.values(EducationLabel);
 /** Ends the bold label of a `**Heading:** a, b` skill group. */
 const SKILL_LABEL_SUFFIX = ":";
 const SKILL_SEPARATOR = ", ";
-const CREDENTIAL_SEPARATOR = ",";
 /** Separates a name from its qualifier: `Company — Location`. */
 const NAME_SEPARATOR = " — ";
 /** Separates a degree from its area of study: `Degree, Area`. */
@@ -454,19 +453,22 @@ function readSkillGroups(lines: Line[]): ParsedSkillGroup[] {
     }));
 }
 
-/** Each `**Title** Issuer Credential ID: a, b` line; the ids are optional. */
-function readCertifications(lines: Line[]): ParsedCertification[] {
-  return linesOfKind(lines, LineKind.Labelled).map((line) => {
-    const [issuer, ids = ""] = line.rest.split(CREDENTIAL_ID_LABEL);
-    return {
-      title: line.label,
-      issuer: issuer.trim(),
-      credentialIds: ids
-        .split(CREDENTIAL_SEPARATOR)
-        .map((id) => id.trim())
-        .filter(Boolean),
-    };
-  });
+/**
+ * A `### Title — Issuer` entry of `## Certifications`. A description
+ * paragraph, a `**Credential ID:** a, b` line and a markdown link are each
+ * optional; only the first link is kept.
+ */
+function readCertification({ heading, lines }: Entry): ParsedCertification {
+  const { name, qualifier } = splitQualified(heading);
+  const [link] = lines.flatMap((line) => parseLinks(line.text));
+
+  return {
+    title: name,
+    issuer: qualifier,
+    description: firstParagraph(lines),
+    credentialIds: splitList(labelledValue(lines, CREDENTIAL_ID_LABEL)),
+    ...(link !== undefined && { link }),
+  };
 }
 
 /**
@@ -549,8 +551,8 @@ export function parseResume(markdown: string): ParsedResume {
     skillGroups: readSkillGroups(section(SectionHeading.Skills).lines),
     eduItems: section(SectionHeading.Education).entries.map(readEducation),
     projects: section(SectionHeading.Projects).entries.map(readProject),
-    certifications: readCertifications(
-      section(SectionHeading.Certifications).lines,
+    certifications: section(SectionHeading.Certifications).entries.map(
+      readCertification,
     ),
     languages: readLanguages(section(SectionHeading.Languages).lines),
     interests: readInterests(section(SectionHeading.Interests).lines),

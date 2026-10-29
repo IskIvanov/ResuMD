@@ -115,10 +115,17 @@ GitHub | Demo
 const CERTIFICATIONS_FIXTURE = `
 ## Certifications
 
-**Example Security Essentials** Example Issuer Credential ID:
-EX-0001, EX-0002
+### Example Security Essentials — Example Issuer
 
-**Plain Certificate** Other Issuer
+Covers threat modelling and secure
+defaults.
+
+**Credential ID:** EX-0001,
+EX-0002
+
+[Credential](https://example.com/cert/EX-0001)
+
+### Plain Certificate — Other Issuer
 `.trim();
 
 const LANGUAGES_FIXTURE = `
@@ -342,7 +349,12 @@ describe("parseResume", () => {
         {
           title: "Example Certification",
           issuer: "Example Issuer",
+          description: "Short description of what it covers.",
           credentialIds: ["EX-0001"],
+          link: {
+            label: "Credential",
+            url: "https://example.com/cert/EX-0001",
+          },
         },
       ],
       languages: [
@@ -856,20 +868,40 @@ describe("parseResume", () => {
   // ─── Certifications ─────────────────────────────────────────────────────────
 
   describe("## Certifications", () => {
-    it("reads title, issuer and credential ids", () => {
-      expect(parseWith().certifications[0]).toEqual({
-        title: "Example Security Essentials",
-        issuer: "Example Issuer",
-        credentialIds: ["EX-0001", "EX-0002"],
-      });
-    });
-
-    it("returns no credential ids when the line has none", () => {
+    it("reads title and issuer from a `### Title — Issuer` heading alone", () => {
       expect(parseWith().certifications[1]).toEqual({
         title: "Plain Certificate",
         issuer: "Other Issuer",
+        description: "",
         credentialIds: [],
       });
+    });
+
+    it("reads the description from the paragraph under the heading", () => {
+      expect(parseWith().certifications[0].description).toBe(
+        "Covers threat modelling and secure defaults.",
+      );
+    });
+
+    it("reads credential ids from a hard-wrapped **Credential ID:** line", () => {
+      expect(parseWith().certifications[0].credentialIds).toEqual([
+        "EX-0001",
+        "EX-0002",
+      ]);
+    });
+
+    it("reads the link from a markdown link line", () => {
+      expect(parseWith().certifications[0].link).toEqual({
+        label: "Credential",
+        url: "https://example.com/cert/EX-0001",
+      });
+    });
+
+    it("throws when a heading has no issuer", () => {
+      const certifications = "## Certifications\n\n### Plain Certificate";
+      expect(() => parseWith({ certifications })).toThrow(
+        "certifications[0].issuer: required",
+      );
     });
 
     it("returns an empty list when the section is missing", () => {

@@ -8,6 +8,7 @@
  * a terminal or process.exit.
  */
 
+import { describeCaught } from "../utils/error.ts";
 import { formatCommand } from "./command.ts";
 import { isCliError } from "./errors.ts";
 import { buildMenu, type MenuValue } from "./menu.ts";
@@ -40,6 +41,23 @@ export interface CliDeps {
 /** Lists every tool's usage under a heading. */
 function usageHelp(heading: string, tools: readonly ToolDefinition[]): string {
   return [heading, ...tools.map((tool) => `  ${tool.usage}`)].join("\n");
+}
+
+/**
+ * A thrown value's message, then each `cause` under it, skipping a cause the
+ * lines above already state.
+ */
+function describeFailure(error: unknown): string {
+  const lines = [describeCaught(error)];
+  let cause = error instanceof Error ? error.cause : undefined;
+  while (cause !== undefined) {
+    const line = describeCaught(cause);
+    if (!lines.some((shown) => shown.includes(line))) {
+      lines.push(`  ${CliLabel.CausedBy} ${line}`);
+    }
+    cause = cause instanceof Error ? cause.cause : undefined;
+  }
+  return lines.join("\n");
 }
 
 /** The directory and environment a tool runs with. */
@@ -110,7 +128,7 @@ export async function runCli(deps: CliDeps): Promise<ExitCode> {
       deps.logError(CliLabel.Cancelled);
       return ExitCode.Cancelled;
     }
-    deps.logError(error instanceof Error ? error.message : String(error));
+    deps.logError(describeFailure(error));
     return ExitCode.Failure;
   }
 }

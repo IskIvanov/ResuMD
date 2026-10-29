@@ -72,7 +72,7 @@ from another, move it to `src/utils/` and update its callers (no re-exports).
 | `cv-base64/`          | encode/decode a CV (`.pdf`/`.docx`/`.md`) as bare base64 with round-trip check                                                                                                                                            |
 | `apply-job/`          | build/validate application payload, send in `test` or `live` mode                                                                                                                                                         |
 | `careers-api/`        | careers API client, config, response formatting                                                                                                                                                                           |
-| `utils/`              | `string.ts` (`slugify`, `splitList`, `kebabToCamel`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`, `camelCaseKeys`), `markdown.ts` (`splitSections`), `schema.ts` (`ValidationMessage`, `requiredText`, `idText`, `formatIssuePath`, `parseOrThrow`), `url.ts` (`trimTrailingSlashes`, `itemPath`), `error.ts` (`ReasonedError`), `type.ts` (`ValueOf`) |
+| `utils/`              | `string.ts` (`slugify`, `splitList`, `kebabToCamel`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`, `camelCaseKeys`), `markdown.ts` (`splitSections`), `schema.ts` (`ValidationMessage`, `requiredText`, `idText`, `formatIssuePath`, `parseOrThrow`), `url.ts` (`trimTrailingSlashes`, `itemPath`), `error.ts` (`ReasonedError`, `describeCaught`), `type.ts` (`ValueOf`) |
 
 Data flow: `Resume.md` → `parseResume` (Zod-validated; errors name paths like
 `jobs[2].role: required`) → either `merge` into the site CV frontmatter
@@ -88,7 +88,8 @@ Gotchas:
   `TOOLS`, although the README lists it.
 - `delete-rx-resume` has no domain folder; it calls the API in the tool file.
 - `.env` (see `.env.example`): `RXRESUME_API_KEY`, `RXRESUME_API_URL`,
-  `RXRESUME_APP_URL`, `CAREERS_API_URL`. Bun loads it; config modules take an
+  `RXRESUME_APP_URL`, `CAREERS_API_URL`, optional `RXRESUME_DEBUG` (logs every
+  request to stderr). Bun loads it; config modules take an
   injected `env` object.
 - `.gitignore` blocks every `*.md` except `README.md`, fixtures, `docs/`,
   `CLAUDE.md` and `.claude/skills/`.

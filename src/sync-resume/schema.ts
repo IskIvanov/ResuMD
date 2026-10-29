@@ -90,9 +90,12 @@ export const ParsedProjectSchema = z.object({
 });
 
 export const ParsedCertificationSchema = z.object({
-  title: z.string(),
-  issuer: z.string(),
+  title: requiredText,
+  issuer: requiredText,
+  description: z.string(),
   credentialIds: z.array(z.string()),
+  /** The first markdown link in the entry; absent without one. */
+  link: ParsedLinkSchema.optional(),
 });
 
 export const ParsedLanguageSchema = z.object({

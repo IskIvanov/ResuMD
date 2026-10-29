@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ApiKeyHeader, RxResumeApiClient, RxResumeApiError } from "./client.ts";
+import { RxResumeError } from "./errors.ts";
 import {
   coverLetter,
   createCoverLetterBody,
@@ -7,7 +8,12 @@ import {
   LETTER_REVISION,
   updateCoverLetterBody,
 } from "./mocks.ts";
-import type { FetchFn, Resume, ResumeData } from "./types.ts";
+import {
+  RxResumeErrorCode,
+  type FetchFn,
+  type Resume,
+  type ResumeData,
+} from "./types.ts";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -235,5 +241,60 @@ describe("transport", () => {
 
     expect(error).toBeInstanceOf(RxResumeApiError);
     expect(error).toMatchObject({ status: 502, code: undefined });
+  });
+
+  it("logs each request and its status and time when given a request log", async () => {
+    const lines: string[] = [];
+    const times = [1000, 1084];
+    const client = new RxResumeApiClient({
+      baseUrl: BASE_URL,
+      apiKey: API_KEY,
+      fetch: vi.fn<FetchFn>().mockResolvedValue(jsonResponse("resume-1", 201)),
+      requestLog: {
+        write: (line) => lines.push(line),
+        now: () => times.shift() ?? 0,
+      },
+    });
+    await client.createResume({ name: "Jane", slug: "jane", tags: [] });
+
+    expect(lines).toEqual([
+      `→ POST ${BASE_URL}/resumes`,
+      `← 201 POST ${BASE_URL}/resumes (84ms)`,
+    ]);
+  });
+
+  it("names the request and the network code when the API is unreachable", async () => {
+    // The shape Bun's fetch rejects with when nothing answers at the URL.
+    const refused = Object.assign(
+      new Error("Unable to connect. Is the computer able to access the url?"),
+      { code: "ConnectionRefused" },
+    );
+    const fetch = vi.fn<FetchFn>().mockRejectedValue(refused);
+    const client = new RxResumeApiClient({
+      baseUrl: BASE_URL,
+      apiKey: API_KEY,
+      fetch,
+    });
+    const error = await client
+      .createResume({ name: "Jane", slug: "jane", tags: [] })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(RxResumeError);
+    expect(error).toMatchObject({
+      reason: {
+        code: RxResumeErrorCode.Unreachable,
+        method: "POST",
+        url: `${BASE_URL}/resumes`,
+        detail:
+          "ConnectionRefused: Unable to connect. Is the computer able to access the url?",
+      },
+      cause: refused,
+    });
+    expect((error as Error).message).toBe(
+      `POST ${BASE_URL}/resumes failed: ConnectionRefused: Unable to ` +
+        "connect. Is the computer able to access the url?\n" +
+        "Check RXRESUME_API_URL (http or https, host, port) and that the " +
+        "server is running.",
+    );
   });
 });

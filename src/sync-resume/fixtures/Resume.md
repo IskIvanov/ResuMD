@@ -65,7 +65,13 @@ A small example project that shows how the resume tools fit together.
 
 ## Certifications
 
-**Example Certification** Example Issuer Credential ID: EX-0001
+### Example Certification — Example Issuer
+
+Short description of what it covers.
+
+**Credential ID:** EX-0001
+
+[Credential](https://example.com/cert/EX-0001)
 
 ---
 

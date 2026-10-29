@@ -73,6 +73,7 @@ const project: ParsedProject = {
 const certification: ParsedCertification = {
   title: "Example Security Essentials",
   issuer: "Example Issuer",
+  description: "",
   credentialIds: ["EX-0001", "EX-0002"],
 };
 
@@ -290,6 +291,36 @@ describe("toProjectItem", () => {
         '<p><a target="_blank" rel="noopener noreferrer nofollow" href="https://widgets.example/">Demo</a>' +
         ' | <a target="_blank" rel="noopener noreferrer nofollow" href="https://docs.example/">Docs</a></p>',
     );
+  });
+});
+
+// ─── toCertificationItem ──────────────────────────────────────────────────────
+
+describe("toCertificationItem", () => {
+  it("renders the description before the credential ids", () => {
+    const item = toCertificationItem({
+      ...certification,
+      description: "Covers threat modelling.",
+    });
+    expect(item.description).toBe(
+      "<p>Covers threat modelling.</p><p>Credential ID: EX-0001, EX-0002</p>",
+    );
+  });
+
+  it("maps the link to the website, with its label", () => {
+    const item = toCertificationItem({
+      ...certification,
+      link: { label: "Credential", url: "https://example.com/cert/EX-0001" },
+    });
+    expect(item.website).toEqual({
+      url: "https://example.com/cert/EX-0001",
+      label: "Credential",
+      inlineLink: false,
+    });
+  });
+
+  it("leaves the website out when there is no link", () => {
+    expect(toCertificationItem(certification)).not.toHaveProperty("website");
   });
 });
 

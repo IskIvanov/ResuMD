@@ -15,6 +15,8 @@ import { RxResumeApiClient } from "../rx-resume/client.ts";
 import {
   resolveApiConfig,
   resolveLetterDashboardUrl,
+  resolveRequestLog,
+  STDERR_REQUEST_LOG,
 } from "../rx-resume/config.ts";
 import type {
   CoverLetter,
@@ -49,6 +51,7 @@ function connect(env: Env): { client: RxResumeClient; appUrl: string } {
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     fetch: globalThis.fetch,
+    requestLog: resolveRequestLog(env, STDERR_REQUEST_LOG),
   };
   const client = new RxResumeApiClient(clientConfig);
   return { client, appUrl: config.appUrl };

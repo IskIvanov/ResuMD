@@ -176,6 +176,25 @@ export function withRecordedRuns(tool: ToolDefinition): RecordedTool {
   };
 }
 
+/**
+ * Keeps a tool's id, options and usage, and replaces only its run with one
+ * that throws `error`, so a test can see how the CLI reports a failure.
+ *
+ * @example
+ * const tool = withFailingRun(encodeTool, new Error("boom"));
+ */
+export function withFailingRun(
+  tool: ToolDefinition,
+  error: unknown,
+): ToolDefinition {
+  return {
+    ...tool,
+    run: async () => {
+      throw error;
+    },
+  };
+}
+
 /** generate-cover-letter's required flags; the letter needn't exist to parse. */
 export const GENERATE_LETTER_ARGV: readonly string[] = [
   "--letter",

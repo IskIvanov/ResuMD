@@ -6,6 +6,27 @@
  * details without parsing the message.
  */
 
+/**
+ * Words a caught value as one line, led by its `code` when it has one, as
+ * Bun's network errors do (`ConnectionRefused`, `CERT_HAS_EXPIRED`, …).
+ *
+ * @param error - Anything caught.
+ * @returns `code: message`, the message alone, or the value as a string.
+ *
+ * @example
+ * describeCaught(Object.assign(new Error("Unable to connect."), {
+ *   code: "ConnectionRefused",
+ * }));
+ * // "ConnectionRefused: Unable to connect."
+ */
+export function describeCaught(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  if ("code" in error && typeof error.code === "string") {
+    return `${error.code}: ${error.message}`;
+  }
+  return error.message;
+}
+
 /** What went wrong: a code naming the failure, plus what its message needs. */
 export interface ErrorReason {
   readonly code: string;

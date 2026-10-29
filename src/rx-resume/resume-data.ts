@@ -225,21 +225,31 @@ export function toProjectItem(project: ParsedProject): ParsedProjectItem {
 /**
  * Maps a parsed certification onto a Reactive Resume certification item.
  *
- * @param certification - A line parsed from `## Certifications`.
- * @returns The title, issuer and an HTML description listing the credential
- *   ids, empty when there are none.
+ * @param certification - An entry parsed from `## Certifications`.
+ * @returns The title, issuer and an HTML description: the description
+ *   paragraph, then the credential ids; empty when there are neither. The
+ *   link, when there is one, becomes the website.
  */
 export function toCertificationItem(
   certification: ParsedCertification,
 ): ParsedCertificationItem {
+  let description = renderCertDescriptionHtml({
+    title: certification.title,
+    issuer: certification.issuer,
+    // The renderer reads only the ids; the link is the item's website.
+    credentials: certification.credentialIds.map((id) => ({ id, href: "" })),
+  });
+  if (certification.description) {
+    description = `<p>${certification.description}</p>${description}`;
+  }
+
+  const { link } = certification;
   return {
     title: certification.title,
     issuer: certification.issuer,
-    description: renderCertDescriptionHtml({
-      title: certification.title,
-      issuer: certification.issuer,
-      // The renderer reads only the ids; Resume.md has no credential links.
-      credentials: certification.credentialIds.map((id) => ({ id, href: "" })),
+    description,
+    ...(link && {
+      website: { url: link.url, label: link.label, inlineLink: false },
     }),
   };
 }
