@@ -33,8 +33,10 @@ import {
   createResume,
   deleteResume,
   downloadResume,
+  previewResumeUpdate,
   updateResume,
 } from "./operations/resume/index.ts";
+import type { SectionChange } from "./operations/resume/changes.ts";
 import { CoverLetterIdSchema } from "./schema.ts";
 import { ResumeFormat, type LetterFields } from "./types.ts";
 
@@ -88,6 +90,15 @@ function connect(dependencies: ToolDependencies): RxResumeApiClient {
     dependencies.fetch,
     { write: dependencies.logError, now: dependencies.now },
   );
+}
+
+/** One line of a dry run: a section's visible items, before and after. */
+function describeChange(change: SectionChange): string {
+  const { section, before, after, hiddenKept, emptied } = change;
+  const line = `  ${section}: ${before} → ${after}`;
+  if (emptied) return `${line} (blocked: a real run would refuse this)`;
+  if (hiddenKept > 0) return `${line} (${hiddenKept} hidden kept)`;
+  return line;
 }
 
 /** Prints a written resume and the link that opens it in the editor. */
@@ -194,12 +205,29 @@ export const updateResumeTool = defineTool({
       required: true,
     },
     resume: RESUME_FILE_OPTION,
+    "dry-run": {
+      question: "Show what would change, without saving?",
+      kind: OptionKind.Choice,
+      choices: ["yes", "no"],
+      required: false,
+    },
   },
   preflight: describeMissingSettings,
-  run: async ({ id, resume }, dependencies) => {
+  run: async ({ id, resume, "dry-run": dryRun }, dependencies) => {
     // Settings are checked before the file is read.
     const client = connect(dependencies);
     const markdown = dependencies.readFile(resume);
+    if (dryRun === "yes") {
+      const changes = await previewResumeUpdate(
+        client,
+        id,
+        markdown,
+        dependencies.newId,
+      );
+      dependencies.log(`Dry run for resume ${id}: nothing was saved.`);
+      for (const change of changes) dependencies.log(describeChange(change));
+      return;
+    }
     const updated = await updateResume(
       client,
       id,

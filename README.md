@@ -22,7 +22,7 @@ Each platform brings its own tools, and the menu groups them by by the amount of
 | Tool                  | What it does                                                                                 |
 | --------------------- | -------------------------------------------------------------------------------------------- |
 | `create-resume`       | Creates a resume from `Resume.md` and prints its id.                                         |
-| `update-resume`       | Rewrites a resume from `Resume.md`, by id. Layout, template and picture are kept.            |
+| `update-resume`       | Rewrites a resume from `Resume.md`, by id. Layout, template, picture and hidden items are kept; `--dry-run yes` shows the changes without saving. |
 | `download-resume`     | Saves a resume as PDF, DOCX, ODT, JSON or Markdown.                                          |
 | `delete-resume`       | Deletes a resume for good: moves it to Trash, then purges it.                                |
 | `create-cover-letter` | Creates a cover letter from a `.md`, linked to a resume for the sender details and design.   |
@@ -47,8 +47,8 @@ it runs. Without a terminal, `bun run cli` prints every tool's usage line.
 
 ## Documentation
 
-- [Writing Resume.md](docs/resume-md.md): where it lives, what's required and
-  the optional lines for jobs, schools and certifications.
+- [Writing Resume.md](docs/resume-md.md): where it lives, what's required, the
+  optional lines, Reactive Resume's export and what an update keeps.
 - [Cover letters](docs/cover-letter.md): the cover-letter `.md`, the flags and
   what each tool prints.
 - [Interactive CLI](docs/interactive-cli.md): how the menu, prompts, tool

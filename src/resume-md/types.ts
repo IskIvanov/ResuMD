@@ -12,6 +12,7 @@ import type { ValueOf } from "../utils/types.ts";
 import type {
   CertificationSchema,
   HeaderSchema,
+  InterestSchema,
   JobSchema,
   LanguageSchema,
   LinkSchema,
@@ -31,6 +32,7 @@ export type School = z.infer<typeof SchoolSchema>;
 export type Project = z.infer<typeof ProjectSchema>;
 export type Certification = z.infer<typeof CertificationSchema>;
 export type Language = z.infer<typeof LanguageSchema>;
+export type Interest = z.infer<typeof InterestSchema>;
 export type ResumeMd = z.infer<typeof ResumeMdSchema>;
 
 // ─── The Resume.md outline ───────────────────────────────────────────────────
@@ -43,6 +45,8 @@ export const SectionHeading = {
   Summary: "Summary",
   Experience: "Experience",
   Skills: "Technical Skills",
+  /** What Reactive Resume's export calls `## Technical Skills`. */
+  ExportedSkills: "Skills",
   Education: "Education",
   Projects: "Projects",
   Certifications: "Certifications",
@@ -72,6 +76,8 @@ export enum LineKind {
   Url = "url",
   /** Only markdown links and `|` separators. */
   Links = "links",
+  /** `_text_`: the details line under an exported entry's heading. */
+  Italic = "italic",
   /** Any other text. */
   Paragraph = "paragraph",
 }
@@ -110,6 +116,13 @@ interface LabelledLine {
   value: string;
 }
 
+interface ItalicLine {
+  kind: LineKind.Italic;
+  text: string;
+  /** The text without its underscores. */
+  italicText: string;
+}
+
 interface PlainLine<TKind extends LineKind> {
   kind: TKind;
   text: string;
@@ -122,6 +135,7 @@ export type Line =
   | TechStackLine
   | TitleLine
   | LabelledLine
+  | ItalicLine
   | PlainLine<LineKind.Rule>
   | PlainLine<LineKind.Markup>
   | PlainLine<LineKind.Url>
@@ -134,6 +148,17 @@ export interface Entry {
   heading: string;
   /** The lines under the heading, without rules. */
   lines: Line[];
+}
+
+/** A job's or school's dated entry, whichever way it was written. */
+export interface DatedEntry {
+  name: string;
+  /** The role or degree. */
+  title: string;
+  period: string;
+  /** The heading's qualifier, or an exported entry's italic details line. */
+  details: string;
+  intro: string;
 }
 
 export interface Section {

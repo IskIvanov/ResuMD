@@ -32,6 +32,8 @@ export const HeaderSchema = z.object({
   location: z.string(),
   /** As written in Resume.md, with or without a protocol. */
   website: z.string(),
+  /** The real URL when the website was a link; absent for a bare one. */
+  websiteUrl: z.string().optional(),
   /** Markdown links in the header, e.g. `[GitHub](https://github.com/me)`. */
   profiles: z.array(LinkSchema),
 });
@@ -61,6 +63,8 @@ export const JobSchema = z.object({
 export const SkillGroupSchema = z.object({
   /** The bold label, without its colon. */
   label: requiredText,
+  /** From an exported `**Label** — Proficiency: a, b`; absent without one. */
+  proficiency: z.string().optional(),
   skills: z.array(z.string()).min(1, FieldProblem.Empty),
 });
 
@@ -73,10 +77,14 @@ export const SchoolSchema = z.object({
   period: requiredText,
   intro: z.string(),
   bullets: z.array(z.string()),
+  /** The entry's last links line; absent without one. */
+  website: LinkSchema.optional(),
 });
 
 export const ProjectSchema = z.object({
   title: z.string(),
+  /** From an exported `### Title (period)`; absent without one. */
+  period: z.string().optional(),
   intro: z.string(),
   techStack: z.string(),
   /** Markdown links in the project block, in document order. */
@@ -86,6 +94,8 @@ export const ProjectSchema = z.object({
 export const CertificationSchema = z.object({
   title: requiredText,
   issuer: requiredText,
+  /** From an exported `### Title — Issuer (date)`; absent without one. */
+  date: z.string().optional(),
   description: z.string(),
   credentialIds: z.array(z.string()),
   /** The first markdown link in the entry; absent without one. */
@@ -97,6 +107,12 @@ export const LanguageSchema = z.object({
   fluency: z.string(),
   /** 0–5; 0 when the bullet gives no level. */
   level: z.number(),
+});
+
+export const InterestSchema = z.object({
+  name: z.string(),
+  /** From an exported `- **Name**: a, b`; empty without any. */
+  keywords: z.array(z.string()),
 });
 
 /**
@@ -112,7 +128,7 @@ export const ResumeMdSchema = z.object({
   projects: z.array(ProjectSchema),
   certifications: z.array(CertificationSchema),
   languages: z.array(LanguageSchema),
-  interests: z.array(z.string()),
+  interests: z.array(InterestSchema),
   references: z.array(z.string()),
 });
 

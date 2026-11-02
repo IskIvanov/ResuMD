@@ -8,13 +8,17 @@ its documentation at docs.rxresu.me.
 ## Resume.md
 
 **Resume.md**:
-The hand-edited Markdown resume that is the source of truth for every resume
-the tools write.
+The Markdown resume every resume the tools write comes from, written by hand or
+downloaded as a Markdown export.
 _Avoid_: CV, source file
 
+**Markdown export**:
+The `.md` Reactive Resume writes for a resume. It holds only what's visible, so
+an update keeps what it leaves out.
+
 **Header**:
-The lines above the first section: `# Name`, a `**Headline**`, the
-`a | b | c` contact line and profile links.
+The lines above the first section: `# Name`, a `**Headline**` or `_Headline_`,
+the `a | b | c` or `a · b · c` contact line and profile links.
 _Avoid_: contact, basics
 
 **Section**:
@@ -33,8 +37,9 @@ An entry under `## Education`: one degree or course at one school.
 _Avoid_: edu item, education item
 
 **Skill group**:
-A `**Label** a, b, c` line under `## Technical Skills`: a label and the skills
-listed after it.
+A `**Label:** a, b, c` line under `## Technical Skills`, or a
+`- **Label**: a, b, c` bullet under `## Skills`: a label and the skills listed
+after it.
 
 **Intro**:
 The paragraph right under an entry's title line, e.g. a sentence about the
@@ -48,8 +53,8 @@ previous one.
 
 **Line kind**:
 What a logical line is: rule, bullet, reference, tech stack, title
-(`**Role** | dates`), labelled (`**Label** value`), markup, URL, links or
-paragraph.
+(`**Role** | dates`), labelled (`**Label** value`), markup, URL, links, italic
+or paragraph.
 
 **Job reference**:
 A person listed under a job on a `Reference: a, b` line, plain or bold,
@@ -168,7 +173,7 @@ _Avoid_: generate, new
 
 **Update**:
 To rewrite an existing document from its `.md`, keeping whatever the `.md`
-doesn't hold, such as the layout and template.
+doesn't hold, such as the layout, template and hidden items.
 _Avoid_: sync, regenerate
 
 **Delete**:

@@ -387,6 +387,7 @@ describe("promptOptions", () => {
       const prompter = createFakePrompter({
         [promptFor(updateResumeTool, "id")]: "resume-1",
         [promptFor(updateResumeTool, "resume")]: path,
+        [OPTIONAL_FLAGS]: [],
       });
       return promptOptions(updateResumeTool.options, prompter, pathLookup);
     }
@@ -448,7 +449,8 @@ describe("promptOptions", () => {
 const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
   "create-resume":
     "Usage: bun run cli create-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
-  "update-resume": "Usage: bun run cli update-resume --id <id> --resume <path>",
+  "update-resume":
+    "Usage: bun run cli update-resume --id <id> --resume <path> [--dry-run <dry-run>]",
   "delete-resume": "Usage: bun run cli delete-resume --id <id>",
   "download-resume":
     "Usage: bun run cli download-resume --id <id> --format <format> [--output <path>]",
@@ -551,6 +553,7 @@ describe("runCli", () => {
         [PICK_TOOL]: updateResumeTool.title,
         [promptFor(updateResumeTool, "id")]: "resume-1",
         [promptFor(updateResumeTool, "resume")]: "resume/Resume.md",
+        [OPTIONAL_FLAGS]: [],
         [RUN_IT]: true,
       },
       { environmentVariables: allSettings },

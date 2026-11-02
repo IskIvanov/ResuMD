@@ -267,6 +267,42 @@ const INTERESTS_WITHOUT_NOTE_FIXTURE = `
 Cycling · Weightlifting · Travel
 `.trim();
 
+// ─── Fixtures: Reactive Resume's Markdown export ──────────────────────────────
+
+const EXPORTED_HEADER_FIXTURE = `
+# Jane Doe
+
+_Software Engineer — TypeScript · GraphQL_
+
+jane.doe@example.com · +31 6 12345678 · City, Country · [example.com](https://example.com/) · [LinkedIn](https://linkedin.com/in/jane-doe) · [GitHub](https://github.com/jane-doe)
+`.trim();
+
+const EXPORTED_EXPERIENCE_FIXTURE = `
+## Experience
+
+### Acme Corp — Platform Engineer (Contract) (Jan 2021 – Jun 2024)
+
+_Amsterdam_
+
+Acme Corp builds widgets.
+
+- Led the widget platform.
+
+- Built real-time pipelines.
+
+**Tech Stack:** React, TypeScript
+
+[https://acme.example/](https://acme.example/)
+
+### Beta Inc — Engineer (Jan 2021 – Dec 2022)
+
+_Utrecht_
+
+- Owned returns.
+
+**Tech Stack:** React, Java
+`.trim();
+
 // ─── parseResumeMd ──────────────────────────────────────────────────────────────
 
 describe("parseResumeMd", () => {
@@ -876,9 +912,9 @@ describe("parseResumeMd", () => {
   describe("## Interests", () => {
     it('splits the line on " · " and stops at the rule', () => {
       expect(parseWith().interests).toEqual([
-        "Cycling",
-        "Weightlifting",
-        "Travel",
+        { name: "Cycling", keywords: [] },
+        { name: "Weightlifting", keywords: [] },
+        { name: "Travel", keywords: [] },
       ]);
     });
 
@@ -886,9 +922,9 @@ describe("parseResumeMd", () => {
       const interests =
         "## Interests\n\nCycling · Long Distance\nHiking · Travel";
       expect(parseWith({ interests }).interests).toEqual([
-        "Cycling",
-        "Long Distance Hiking",
-        "Travel",
+        { name: "Cycling", keywords: [] },
+        { name: "Long Distance Hiking", keywords: [] },
+        { name: "Travel", keywords: [] },
       ]);
     });
 
@@ -926,6 +962,282 @@ describe("parseResumeMd", () => {
       );
       const interests = INTERESTS_WITHOUT_NOTE_FIXTURE;
       expect(parseWith({ experience, interests }).references).toEqual([]);
+    });
+  });
+
+  // ─── Reactive Resume's Markdown export ──────────────────────────────────────
+
+  describe("Reactive Resume's Markdown export", () => {
+    it("reads an italic headline and a · contact line", () => {
+      expect(parseWith({ header: EXPORTED_HEADER_FIXTURE }).header).toEqual({
+        name: "Jane Doe",
+        headline: "Software Engineer — TypeScript · GraphQL",
+        email: "jane.doe@example.com",
+        phone: "+31 6 12345678",
+        location: "City, Country",
+        website: "example.com",
+        websiteUrl: "https://example.com/",
+        profiles: [
+          { label: "LinkedIn", url: "https://linkedin.com/in/jane-doe" },
+          { label: "GitHub", url: "https://github.com/jane-doe" },
+        ],
+      });
+    });
+
+    it("reads a job's role and dates from its heading", () => {
+      const experience = EXPORTED_EXPERIENCE_FIXTURE;
+      expect(parseWith({ experience }).jobs).toEqual([
+        {
+          company: "Acme Corp",
+          location: "Amsterdam",
+          role: "Platform Engineer (Contract)",
+          period: "Jan 2021 – Jun 2024",
+          intro: "Acme Corp builds widgets.",
+          bullets: ["Led the widget platform.", "Built real-time pipelines."],
+          techStack: "React, TypeScript",
+          website: "https://acme.example/",
+        },
+        {
+          company: "Beta Inc",
+          location: "Utrecht",
+          role: "Engineer",
+          period: "Jan 2021 – Dec 2022",
+          intro: "",
+          bullets: ["Owned returns."],
+          techStack: "React, Java",
+          website: "",
+        },
+      ]);
+    });
+
+    it("rejects a job with several roles under one heading", () => {
+      const experience = `
+## Experience
+
+### Acme Corp (Jan 2019 – Jun 2024)
+
+_Amsterdam_
+
+_Engineer · Jan 2020 – Dec 2022_
+
+**Tech Stack:** React
+`.trim();
+      expect(() => parseWith({ experience })).toThrow("jobs[0].role: required");
+    });
+
+    it("reads a school's degree, area, dates and details line", () => {
+      const education = `
+## Education
+
+### University A — Master's programme, Engineering (2018 – 2019)
+
+_Springfield · Grade: 9.0 / 10_
+
+Coursework completed.
+
+- LINK101 Course Title
+
+### University B — Bachelor's, Computer Science (Sep 2012 – Jun 2016)
+
+85% Overall Average
+
+### University C — Bachelor's, Physics (2010 – 2012)
+
+_Grade: 9 / 10_
+`.trim();
+      expect(parseWith({ education }).schools).toEqual([
+        {
+          school: "University A",
+          location: "Springfield",
+          degree: "Master's programme",
+          area: "Engineering",
+          grade: "9.0 / 10",
+          period: "2018 – 2019",
+          intro: "Coursework completed.",
+          bullets: ["LINK101 Course Title"],
+        },
+        {
+          school: "University B",
+          location: "",
+          degree: "Bachelor's",
+          area: "Computer Science",
+          grade: "",
+          period: "Sep 2012 – Jun 2016",
+          intro: "85% Overall Average",
+          bullets: [],
+        },
+        {
+          school: "University C",
+          location: "",
+          degree: "Bachelor's",
+          area: "Physics",
+          grade: "9 / 10",
+          period: "2010 – 2012",
+          intro: "",
+          bullets: [],
+        },
+      ]);
+    });
+
+    it("reads ## Skills bullets as skill groups", () => {
+      const skills = `
+## Skills
+
+- **Languages**: TypeScript, Python
+- **Practices** — Advanced: TDD, Code Reviews
+`.trim();
+      expect(parseWith({ skills }).skillGroups).toEqual([
+        { label: "Languages", skills: ["TypeScript", "Python"] },
+        {
+          label: "Practices",
+          proficiency: "Advanced",
+          skills: ["TDD", "Code Reviews"],
+        },
+      ]);
+    });
+
+    it("names an exported skill with no keywords instead of dropping it", () => {
+      const skills = "## Skills\n\n- **Docker**";
+      expect(() => parseWith({ skills })).toThrow(
+        "skillGroups[0].skills: needs at least one entry",
+      );
+    });
+
+    it("reads a plain Credential ID line", () => {
+      const certifications = `
+## Certifications
+
+### Example Security Essentials — Example Issuer
+
+Credential ID: EX-0001, EX-0002
+`.trim();
+      expect(parseWith({ certifications }).certifications).toEqual([
+        {
+          title: "Example Security Essentials",
+          issuer: "Example Issuer",
+          description: "",
+          credentialIds: ["EX-0001", "EX-0002"],
+        },
+      ]);
+    });
+
+    it("reads languages without their bold", () => {
+      const languages = "## Languages\n\n- **English**\n- **Dutch** — Fluent";
+      expect(parseWith({ languages }).languages).toEqual([
+        { language: "English", fluency: "", level: 0 },
+        { language: "Dutch", fluency: "Fluent", level: 0 },
+      ]);
+    });
+
+    it("reads interests from bullets", () => {
+      const interests = "## Interests\n\n- **AI**\n- **Cycling**: Road, Gravel";
+      expect(parseWith({ interests }).interests).toEqual([
+        { name: "AI", keywords: [] },
+        { name: "Cycling", keywords: ["Road", "Gravel"] },
+      ]);
+    });
+
+    it("reads a ## References bullet without its bold", () => {
+      const references =
+        "## References\n\n- **References available upon request**";
+      expect(parseWith({ references }).references).toEqual([
+        "References available upon request",
+      ]);
+    });
+
+    it("keeps links out of a project's tech stack and lists each once", () => {
+      const projects = `
+## Projects
+
+### Widget Dashboard — Prototype
+
+Prototype UI.
+
+**Tech Stack:** Next.js, React [GitHub](https://github.com/jane-doe/widgets) | [Demo](https://widgets.example/)
+
+[Demo](https://widgets.example/)
+
+[GitHub](https://github.com/jane-doe/widgets)
+`.trim();
+      expect(parseWith({ projects }).projects).toEqual([
+        {
+          title: "Widget Dashboard — Prototype",
+          intro: "Prototype UI.",
+          techStack: "Next.js, React",
+          links: [
+            { label: "GitHub", url: "https://github.com/jane-doe/widgets" },
+            { label: "Demo", url: "https://widgets.example/" },
+          ],
+        },
+      ]);
+    });
+
+    it("puts a project's website first, from its own last line", () => {
+      const projects = `
+## Projects
+
+### Widget Dashboard
+
+Prototype UI.
+
+[Demo](https://widgets.example/)
+
+[GitHub](https://github.com/jane-doe/widgets)
+`.trim();
+      expect(parseWith({ projects }).projects[0].links).toEqual([
+        { label: "GitHub", url: "https://github.com/jane-doe/widgets" },
+        { label: "Demo", url: "https://widgets.example/" },
+      ]);
+    });
+
+    it("reads a project's period from its heading", () => {
+      const projects = "## Projects\n\n### Widget Dashboard (2022)\n\nUI.";
+      expect(parseWith({ projects }).projects[0]).toMatchObject({
+        title: "Widget Dashboard",
+        period: "2022",
+      });
+    });
+
+    it("reads a certification's date from its heading", () => {
+      const certifications =
+        "## Certifications\n\n### Essentials — Example Issuer (Jan 2022)";
+      expect(parseWith({ certifications }).certifications[0]).toMatchObject({
+        title: "Essentials",
+        issuer: "Example Issuer",
+        date: "Jan 2022",
+      });
+    });
+
+    it("reads a school's website from its last links line", () => {
+      const education = `
+## Education
+
+### University A — Bachelor's, Physics (2012 – 2016)
+
+- Thesis: Example
+
+[Thesis](https://example.com/thesis)
+`.trim();
+      expect(parseWith({ education }).schools[0].website).toEqual({
+        label: "Thesis",
+        url: "https://example.com/thesis",
+      });
+    });
+
+    it("reads only the name of an exported reference", () => {
+      const references =
+        "## References\n\n- **Alex Doe** — Manager · +31 6 12345678";
+      expect(parseWith({ references }).references).toEqual(["Alex Doe"]);
+    });
+
+    it("rejects • bullets, naming the line, so none are lost", () => {
+      const experience = EXPORTED_EXPERIENCE_FIXTURE.replace(
+        "- Led the widget platform.",
+        "• Led the widget platform.",
+      );
+      expect(() => parseWith({ experience })).toThrow(
+        /Invalid Resume\.md:\n {2}1 line starts with "• "; use "- " instead\. First: "• Led the widget platform\."/,
+      );
     });
   });
 });

@@ -368,6 +368,22 @@ function apiServingResume() {
   return recordingFetch([Response.json(stored), Response.json(stored)]);
 }
 
+/** The API serving `data`, then the same resume once it's saved. */
+function apiServingData(data: ResumeData) {
+  const stored = storedResume(data);
+  return recordingFetch([Response.json(stored), Response.json(stored)]);
+}
+
+/** A project hidden in the editor, so the Markdown export leaves it out. */
+const HIDDEN_PROJECT = {
+  id: "hidden-project",
+  hidden: true,
+  period: "2022",
+  name: "Hidden Project",
+  description: "<p>Not on the resume.</p>",
+  website: EMPTY_WEBSITE,
+};
+
 /** The `data` the second request (the PUT) sent. */
 function savedData(receivedRequests: ReceivedRequest[]): ResumeData {
   return (receivedRequests[1].sentJson as { data: ResumeData }).data;
@@ -595,7 +611,614 @@ describe("every tool", () => {
   });
 });
 
+// ─── Exporter double ──────────────────────────────────────────────────────────
+//
+// A short stand-in for Reactive Resume's Markdown export
+// (packages/resume/src/markdown.ts), for the sections Jane's files use.
+
+/** The rich text forms the tools write, as the export turns them to Markdown. */
+function richTextToMarkdown(html: string): string {
+  return html
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g, "[$2]($1)")
+    .replace(/<strong>(.*?)<\/strong>/g, "**$1**")
+    .replace(/<em>(.*?)<\/em>/g, "_$1_")
+    .replace(/<li><p>(.*?)<\/p><\/li>/g, "- $1\n\n")
+    .replace(/<\/p>/g, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+function exportedLink(website: { url: string; label: string }): string {
+  if (!website.url) return "";
+  return `[${website.label || website.url}](${website.url})`;
+}
+
+function exportedBullets(section: string, lines: string[]): string[] {
+  if (lines.length === 0) return [];
+  return [`## ${section}`, lines.join("\n")];
+}
+
+function exportedEntries(section: string, blocks: string[]): string[] {
+  if (blocks.length === 0) return [];
+  return [`## ${section}`, ...blocks];
+}
+
+/** The Markdown export of `data`, sections in the order Jane's files use. */
+function exportedMarkdown(data: ResumeData): string {
+  const { basics, sections, summary } = data;
+  const contact = [
+    basics.email,
+    basics.phone,
+    basics.location,
+    exportedLink(basics.website),
+    ...basics.customFields.map((field) =>
+      exportedLink({ url: field.link, label: field.text }),
+    ),
+  ];
+  const experience = sections.experience.items.flatMap((job) => [
+    `### ${job.company} — ${job.position} (${job.period})`,
+    `_${job.location}_`,
+    richTextToMarkdown(job.description),
+    exportedLink(job.website),
+  ]);
+  const education = sections.education.items.flatMap((school) => [
+    `### ${school.school} — ${school.degree}, ${school.area} (${school.period})`,
+    `_${school.location} · Grade: ${school.grade}_`,
+    richTextToMarkdown(school.description),
+  ]);
+  const projects = sections.projects.items.flatMap((project) => [
+    `### ${project.name} (${project.period})`,
+    richTextToMarkdown(project.description),
+    exportedLink(project.website),
+  ]);
+  const certifications = sections.certifications.items.flatMap((item) => [
+    `### ${item.title} — ${item.issuer} (${item.date})`,
+    richTextToMarkdown(item.description),
+  ]);
+  const blocks = [
+    "# " + basics.name,
+    `_${basics.headline}_`,
+    contact.filter(Boolean).join(" · "),
+    "## Summary",
+    richTextToMarkdown(summary.content),
+    ...exportedBullets(
+      "Skills",
+      sections.skills.items.map(
+        ({ name, keywords }) => `- **${name}**: ${keywords.join(", ")}`,
+      ),
+    ),
+    "## Experience",
+    ...experience,
+    "## Education",
+    ...education,
+    ...exportedEntries("Projects", projects),
+    ...exportedEntries("Certifications", certifications),
+    ...exportedBullets(
+      "Languages",
+      sections.languages.items.map(({ language }) => `- **${language}**`),
+    ),
+    ...exportedBullets(
+      "Interests",
+      sections.interests.items.map(({ name }) => `- **${name}**`),
+    ),
+    ...exportedBullets(
+      "References",
+      sections.references.items.map(({ name }) => `- **${name}**`),
+    ),
+  ];
+  return `${blocks.filter(Boolean).join("\n\n")}\n`;
+}
+
+/** RESUME_MD with its whole `## Projects` section left out. */
+const RESUME_MD_WITHOUT_PROJECTS = RESUME_MD.replace(
+  /## Projects[\s\S]*?(?=## Certifications)/,
+  "",
+);
+
+/** Jane Doe as Reactive Resume's Markdown export writes her, with `- ` bullets. */
+const EXPORTED_RESUME_MD = `# Jane Doe
+
+_Software Engineer_
+
+jane.doe@example.com · City, Country · [example.com](https://example.com/) · [GitHub](https://github.com/jane-doe)
+
+## Summary
+
+Engineer shipping products.
+
+## Skills
+
+- **Languages**: TypeScript, Python
+
+## Experience
+
+### Acme Corp — Engineer (Contract) (Jan 2021 – Jun 2024)
+
+_Amsterdam_
+
+Acme Corp builds widgets.
+
+- Led the widget platform.
+
+**Tech Stack:** React
+
+[https://acme.example/](https://acme.example/)
+
+## Education
+
+### University A — Bachelor's, Physics (2012 – 2016)
+
+_Springfield · Grade: 9.0 / 10_
+
+## Languages
+
+- **English**
+
+## Interests
+
+- **Cycling**
+
+## References
+
+- **References available upon request**
+`;
+
 describe("update-resume", () => {
+  it("writes Reactive Resume's Markdown export into the data", async () => {
+    const api = apiServingResume();
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: EXPORTED_RESUME_MD },
+    });
+
+    const { basics, sections } = savedData(api.receivedRequests);
+    expect(basics).toMatchObject({
+      headline: "Software Engineer",
+      email: "jane.doe@example.com",
+      location: "City, Country",
+      website: { url: "https://example.com/", label: "example.com" },
+      customFields: [{ text: "GitHub", link: "https://github.com/jane-doe" }],
+    });
+    expect(sections.experience.items).toMatchObject([
+      {
+        company: "Acme Corp",
+        position: "Engineer (Contract)",
+        location: "Amsterdam",
+        period: "Jan 2021 – Jun 2024",
+        description:
+          "<p>Acme Corp builds widgets.</p>" +
+          "<ul><li><p>Led the widget platform.</p></li></ul>" +
+          "<p><strong>Tech Stack:</strong> React</p>",
+        website: { url: "https://acme.example/", label: "" },
+      },
+    ]);
+    expect(sections.skills.items).toMatchObject([
+      { name: "Languages", keywords: ["TypeScript", "Python"] },
+    ]);
+    expect(sections.education.items).toMatchObject([
+      {
+        school: "University A",
+        degree: "Bachelor's",
+        area: "Physics",
+        grade: "9.0 / 10",
+        location: "Springfield",
+        period: "2012 – 2016",
+      },
+    ]);
+    expect(sections.languages.items).toMatchObject([{ language: "English" }]);
+    expect(sections.interests.items).toMatchObject([{ name: "Cycling" }]);
+    expect(sections.references.items).toMatchObject([
+      { name: "References available upon request" },
+    ]);
+  });
+
+  it("sends nothing when the file has • bullets", async () => {
+    const api = apiServingResume();
+
+    await expect(
+      runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: {
+          [RESUME_FILE]: EXPORTED_RESUME_MD.replace("- Led", "• Led"),
+        },
+      }),
+    ).rejects.toThrow(/use "- " instead/);
+    expect(api.receivedRequests).toEqual([]);
+  });
+
+  it("reports the changes for --dry-run yes without saving", async () => {
+    const stored = storedResumeData();
+    stored.sections.projects.items = [HIDDEN_PROJECT];
+    const api = apiServingData(stored);
+
+    const { output } = await runTool(
+      updateResumeTool,
+      [...UPDATE_ARGUMENTS, "--dry-run", "yes"],
+      { fetch: api.fetch },
+    );
+
+    expect(api.receivedRequests.map(({ method }) => method)).toEqual(["GET"]);
+    expect(output).toEqual([
+      `Dry run for resume ${RESUME_ID}: nothing was saved.`,
+      "  experience: 1 → 1",
+      "  skills: 0 → 2",
+      "  education: 0 → 1",
+      "  projects: 0 → 1 (1 hidden kept)",
+      "  certifications: 0 → 1",
+      "  languages: 0 → 2",
+      "  interests: 0 → 2",
+      "  references: 0 → 1",
+    ]);
+  });
+
+  it("reports a section a real run would refuse to empty", async () => {
+    const stored = storedResumeData();
+    stored.sections.projects.items = [{ ...HIDDEN_PROJECT, hidden: false }];
+    const api = apiServingData(stored);
+
+    const { output } = await runTool(
+      updateResumeTool,
+      [...UPDATE_ARGUMENTS, "--dry-run", "yes"],
+      {
+        fetch: api.fetch,
+        files: { [RESUME_FILE]: RESUME_MD_WITHOUT_PROJECTS },
+      },
+    );
+
+    expect(output).toContain(
+      "  projects: 1 → 0 (blocked: a real run would refuse this)",
+    );
+    expect(api.receivedRequests.map(({ method }) => method)).toEqual(["GET"]);
+  });
+
+  it("renders inline Markdown as HTML and escapes the rest", async () => {
+    const markdown = EXPORTED_RESUME_MD.replace(
+      "- Led the widget platform.",
+      "- Led **live mode** for _R&D_ via [Apollo](https://apollo.example/a_b_c), <Foo> and snake_case_name, ~~gone~~ <u>under</u>",
+    ).replace(
+      "Engineer shipping products.",
+      "**Engineer** shipping [products](https://example.com/)",
+    );
+    const api = apiServingResume();
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: markdown },
+    });
+
+    const { sections, summary } = savedData(api.receivedRequests);
+    expect(sections.experience.items[0].description).toContain(
+      "<li><p>Led <strong>live mode</strong> for <em>R&amp;D</em> via " +
+        '<a target="_blank" rel="noopener noreferrer nofollow" href="https://apollo.example/a_b_c">Apollo</a>' +
+        ", &lt;Foo&gt; and snake_case_name, <s>gone</s> <u>under</u></p></li>",
+    );
+    expect(summary.content).toBe(
+      "<p><strong>Engineer</strong> shipping " +
+        '<a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com/">products</a></p>',
+    );
+  });
+
+  it("writes the exported dates, proficiency, keywords and school website", async () => {
+    const markdown = EXPORTED_RESUME_MD.replace(
+      "- **Languages**: TypeScript, Python",
+      "- **Languages** — Advanced: TypeScript, Python",
+    )
+      .replace("- **Cycling**", "- **Cycling**: Road, Gravel")
+      .replace(
+        "_Springfield · Grade: 9.0 / 10_",
+        "_Springfield · Grade: 9.0 / 10_\n\n[Thesis](https://example.com/thesis)",
+      )
+      .replace(
+        "## Languages",
+        "## Projects\n\n### Widget (2022)\n\nUI.\n\n" +
+          "## Certifications\n\n### Essentials — Example Issuer (Jan 2022)\n\n" +
+          "## Languages",
+      );
+    const api = apiServingResume();
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: markdown },
+    });
+
+    const { sections } = savedData(api.receivedRequests);
+    expect(sections.skills.items[0]).toMatchObject({
+      proficiency: "Advanced",
+    });
+    expect(sections.interests.items[0]).toMatchObject({
+      name: "Cycling",
+      keywords: ["Road", "Gravel"],
+    });
+    expect(sections.education.items[0]).toMatchObject({
+      website: {
+        url: "https://example.com/thesis",
+        label: "Thesis",
+        inlineLink: false,
+      },
+    });
+    expect(sections.projects.items[0]).toMatchObject({
+      name: "Widget",
+      period: "2022",
+    });
+    expect(sections.certifications.items[0]).toMatchObject({
+      issuer: "Example Issuer",
+      date: "Jan 2022",
+    });
+  });
+
+  describe("what the export can't carry", () => {
+    /** Stored items Jane's exported file matches by name. */
+    function storedWithDetails(): ResumeData {
+      const stored = storedResumeData();
+      stored.basics.customFields = [
+        {
+          id: "field-1",
+          icon: "code",
+          text: "GitHub",
+          link: "https://github.com/jane-doe",
+        },
+      ];
+      stored.sections.experience.items = [
+        {
+          id: "job-1",
+          hidden: false,
+          roles: [],
+          company: "Acme Corp",
+          position: "Engineer (Contract)",
+          location: "",
+          period: "",
+          description: "",
+          website: {
+            url: "https://acme.example/",
+            label: "Site",
+            inlineLink: true,
+          },
+        },
+      ];
+      stored.sections.skills.items = [
+        {
+          id: "skill-1",
+          hidden: false,
+          icon: "code",
+          iconColor: "#000",
+          proficiency: "",
+          level: 4,
+          name: "Languages",
+          keywords: [],
+        },
+      ];
+      stored.sections.languages.items = [
+        {
+          id: "language-1",
+          hidden: false,
+          language: "English",
+          fluency: "",
+          level: 5,
+        },
+      ];
+      stored.sections.interests.items = [
+        {
+          id: "interest-1",
+          hidden: false,
+          icon: "bicycle",
+          iconColor: "#111",
+          keywords: [],
+          name: "Cycling",
+        },
+      ];
+      stored.sections.references.items = [
+        {
+          id: "reference-1",
+          hidden: false,
+          name: "Alex Doe",
+          position: "Manager",
+          phone: "+31 6 12345678",
+          website: EMPTY_WEBSITE,
+          description: "<p>Kind words.</p>",
+        },
+      ];
+      return stored;
+    }
+
+    const MARKDOWN_WITH_REFERENCE = EXPORTED_RESUME_MD.replace(
+      "- **References available upon request**",
+      "- **Alex Doe** — Manager · +31 6 12345678",
+    );
+
+    it("keeps a matched item's id and unexported fields", async () => {
+      const api = apiServingData(storedWithDetails());
+
+      await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: { [RESUME_FILE]: MARKDOWN_WITH_REFERENCE },
+      });
+
+      const { basics, sections } = savedData(api.receivedRequests);
+      expect(basics.customFields).toMatchObject([
+        { id: "field-1", icon: "code", text: "GitHub" },
+      ]);
+      expect(sections.experience.items[0]).toMatchObject({
+        id: "job-1",
+        website: {
+          url: "https://acme.example/",
+          label: "Site",
+          inlineLink: true,
+        },
+      });
+      expect(sections.skills.items[0]).toMatchObject({
+        id: "skill-1",
+        icon: "code",
+        iconColor: "#000",
+        level: 4,
+      });
+      expect(sections.languages.items[0]).toMatchObject({
+        id: "language-1",
+        level: 5,
+      });
+      expect(sections.interests.items[0]).toMatchObject({
+        id: "interest-1",
+        icon: "bicycle",
+        iconColor: "#111",
+      });
+      expect(sections.references.items).toEqual([
+        {
+          id: "reference-1",
+          hidden: false,
+          name: "Alex Doe",
+          position: "Manager",
+          phone: "+31 6 12345678",
+          website: EMPTY_WEBSITE,
+          description: "<p>Kind words.</p>",
+        },
+      ]);
+    });
+
+    it("lets a level written in the file win over the stored one", async () => {
+      const api = apiServingData(storedWithDetails());
+
+      await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: {
+          [RESUME_FILE]: EXPORTED_RESUME_MD.replace(
+            "- **English**",
+            "- **English** — Native (3/5)",
+          ),
+        },
+      });
+
+      expect(
+        savedData(api.receivedRequests).sections.languages.items[0],
+      ).toMatchObject({ fluency: "Native", level: 3 });
+    });
+
+    it("never gives two entries the same stored item's id", async () => {
+      const api = apiServingData(storedWithDetails());
+
+      await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: {
+          [RESUME_FILE]: EXPORTED_RESUME_MD.replace(
+            "- **English**",
+            "- **English**\n- **English**",
+          ),
+        },
+      });
+
+      const { items } = savedData(api.receivedRequests).sections.languages;
+      expect(new Set(items.map(({ id }) => id)).size).toBe(2);
+    });
+
+    it("saves the website's real URL, not one rebuilt from its label", async () => {
+      const api = apiServingResume();
+
+      await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: {
+          [RESUME_FILE]: EXPORTED_RESUME_MD.replace(
+            "[example.com](https://example.com/)",
+            "[example.com](https://www.example.com/)",
+          ),
+        },
+      });
+
+      expect(savedData(api.receivedRequests).basics.website).toEqual({
+        url: "https://www.example.com/",
+        label: "example.com",
+      });
+    });
+  });
+
+  it("saves the same data again when fed its own export", async () => {
+    const markdown = EXPORTED_RESUME_MD.replace(
+      "Engineer shipping products.",
+      "**Engineer** shipping products for R&D.",
+    )
+      .replace(
+        "- Led the widget platform.",
+        "- Led _live mode_ with [Apollo](https://apollo.example/)",
+      )
+      .replace(
+        "## Languages",
+        "## Projects\n\n### Widget (2022)\n\nUI.\n\n" +
+          "**Tech Stack:** React\n\n" +
+          "[Demo](https://widgets.example/)\n\n" +
+          "[GitHub](https://github.com/jane-doe/widgets)\n\n" +
+          "## Certifications\n\n" +
+          "### Essentials — Example Issuer (Jan 2022)\n\n" +
+          "Credential ID: EX-0001, EX-0002\n\n" +
+          "## Languages",
+      );
+
+    async function syncOnto(data: ResumeData, file: string) {
+      const api = apiServingData(data);
+      await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: { [RESUME_FILE]: file },
+      });
+      return savedData(api.receivedRequests);
+    }
+
+    const firstSync = await syncOnto(storedResumeData(), markdown);
+    const firstExport = exportedMarkdown(firstSync);
+    const secondSync = await syncOnto(firstSync, firstExport);
+
+    expect(firstExport).toBe(markdown);
+    expect(secondSync).toEqual(firstSync);
+  });
+
+  it("keeps hidden items, which the export leaves out", async () => {
+    const stored = storedResumeData();
+    stored.sections.projects.items = [HIDDEN_PROJECT];
+    const api = apiServingData(stored);
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, { fetch: api.fetch });
+
+    const { items } = savedData(api.receivedRequests).sections.projects;
+    expect(items.map(({ name }) => name)).toEqual([
+      "Example Project",
+      "Hidden Project",
+    ]);
+    expect(items[1]).toEqual(HIDDEN_PROJECT);
+  });
+
+  it("leaves a hidden section alone when the file has nothing for it", async () => {
+    const stored = storedResumeData();
+    stored.sections.projects = {
+      ...stored.sections.projects,
+      hidden: true,
+      items: [{ ...HIDDEN_PROJECT, hidden: false }],
+    };
+    const api = apiServingData(stored);
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+      fetch: api.fetch,
+      files: { [RESUME_FILE]: RESUME_MD_WITHOUT_PROJECTS },
+    });
+
+    expect(savedData(api.receivedRequests).sections.projects).toEqual(
+      stored.sections.projects,
+    );
+  });
+
+  it("refuses to empty a section the file has nothing for", async () => {
+    const stored = storedResumeData();
+    stored.sections.projects.items = [{ ...HIDDEN_PROJECT, hidden: false }];
+    const api = apiServingData(stored);
+
+    await expect(
+      runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+        fetch: api.fetch,
+        files: { [RESUME_FILE]: RESUME_MD_WITHOUT_PROJECTS },
+      }),
+    ).rejects.toThrow(/Resume\.md has nothing for: projects/);
+    expect(api.receivedRequests.map(({ method }) => method)).toEqual(["GET"]);
+  });
+
   it("reads the resume, saves it under the same id and links to it", async () => {
     const api = apiServingResume();
 
@@ -670,8 +1293,10 @@ describe("update-resume", () => {
                 location: "City",
                 period: "01/2020 – Present",
                 description:
-                  "<p>• Led the migration of a legacy dashboard to a typed component library, cutting release time in half.</p>" +
-                  "<p>• Designed the public REST API used by partner integrations.</p>" +
+                  "<ul>" +
+                  "<li><p>Led the migration of a legacy dashboard to a typed component library, cutting release time in half.</p></li>" +
+                  "<li><p>Designed the public REST API used by partner integrations.</p></li>" +
+                  "</ul>" +
                   "<p><strong>Tech Stack:</strong> TypeScript, React, Node.js</p>",
                 website: EMPTY_WEBSITE,
               },
@@ -717,8 +1342,10 @@ describe("update-resume", () => {
                 period: "2012 – 2016",
                 description:
                   "<p>Graduated with honours.</p>" +
-                  "<p>• (link) Degree course</p>" +
-                  "<p>• Thesis: Distributed Task Scheduling</p>",
+                  "<ul>" +
+                  "<li><p>(link) Degree course</p></li>" +
+                  "<li><p>Thesis: Distributed Task Scheduling</p></li>" +
+                  "</ul>",
               },
             ],
           },

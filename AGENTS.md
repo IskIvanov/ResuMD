@@ -5,8 +5,9 @@ and [docs/interactive-cli.md](docs/interactive-cli.md) for the CLI design.
 
 ## What this is
 
-A Bun + TypeScript (ESM, strict) CLI that keeps one hand-edited `Resume.md` as
-the source of truth and syncs it into Reactive Resume via its API. A
+A Bun + TypeScript (ESM, strict) CLI that keeps one `Resume.md`, hand-edited or
+downloaded as Reactive Resume's Markdown export, and syncs it into Reactive
+Resume via its API. A
 cover-letter `.md` drives a Reactive Resume cover letter the same way.
 
 This folder is a standalone private repo (`IskIvanov/Resume-Tools`) cloned into
@@ -77,12 +78,13 @@ caller stays in that caller's file.
 | Folder       | Role |
 | ------------ | ---- |
 | `resume-md/` | `parser.ts` (only `parseResumeMd`: reads Resume.md once into typed logical lines, see `docs/GLOSSARY.md`; `classifyLine` is the only place that decides a line's kind), `schema.ts` (Zod validation), `types.ts` |
-| `rx-resume/` | The Reactive Resume platform. `index.ts` (the six tools, `RX_RESUME_TOOLS`), `types.ts` (cover-letter text and letter fields), `schema.ts` (`CoverLetterIdSchema`, the letter `.md` schemas). `api/`: `client.ts` (`RxResumeApiClient` with editor links, `RxResumeApiError`), `settings.ts` (`describeMissingSettings`, `connectRxResume(environmentVariables, fetch, apiCallLog)`), `schema.ts` (API shapes), `types.ts`. `operations/resume/`: `index.ts` (`createResume`, `updateResume`, `deleteResume`), `mapping.ts` (ResumeMd → API `data`), `layout.ts`. `operations/cover-letter/`: `index.ts` (create, update, delete), `parser.ts`. `index.test.ts`: every tool through its tool arguments, with `recordingFetch` and in-memory files |
+| `rx-resume/` | The Reactive Resume platform. `index.ts` (the six tools, `RX_RESUME_TOOLS`), `types.ts` (cover-letter text and letter fields), `schema.ts` (`CoverLetterIdSchema`, the letter `.md` schemas). `api/`: `client.ts` (`RxResumeApiClient` with editor links, `RxResumeApiError`), `settings.ts` (`describeMissingSettings`, `connectRxResume(environmentVariables, fetch, apiCallLog)`), `schema.ts` (API shapes), `types.ts`. `operations/resume/`: `index.ts` (`createResume`, `updateResume`, `previewResumeUpdate`, `deleteResume`), `mapping.ts` (ResumeMd → API `data`, keeping hidden items and what matched stored items hold), `changes.ts` (`compareSections`, `assertNoSectionEmptied`), `layout.ts`. `operations/cover-letter/`: `index.ts` (create, update, delete), `parser.ts`. `index.test.ts`: every tool through its tool arguments, with `recordingFetch`, in-memory files and a stand-in for the Markdown export |
 | `utils/`     | `string.ts` (`slugify`, `splitList`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`), `markdown.ts` (`splitSections`), `schema.ts` (`FieldProblem`, `requiredText`, `firstIssue`, `parseOrThrow`), `error.ts` (`describeCaught`), `types.ts` (`ValueOf`, `DefaultEntry`, `EnvironmentVariables`, `FetchFunction`) |
 
 Data flow: `Resume.md` → `create-resume` / `update-resume` →
 `createResume` / `updateResume` → `parseResumeMd` (Zod-validated; errors name
-paths like `jobs[2].role: required`) → `applyResumeMd` → Reactive Resume API. A
+paths like `jobs[2].role: required`) → `applyResumeMd` →
+`assertNoSectionEmptied` (updates only) → Reactive Resume API. A
 cover-letter `.md` → `create-cover-letter` / `update-cover-letter` →
 `parseCoverLetter` (`## Recipient`, `## Letter`, `## Sign-off`; errors like
 `signOff: required`) → the request, checked against the API's schema →
@@ -92,6 +94,10 @@ Gotchas:
 
 - `resume-md/` is not a tool: it is the `Resume.md` parser that
   `rx-resume/operations/resume/` imports.
+- `parseResumeMd` reads both the hand-written format and Reactive Resume's
+  Markdown export, except that bullets are always `- text`: a `• ` line throws.
+  The export holds only visible content, so `update-resume` must keep what it
+  can't show; see `docs/resume-md.md`.
 - The CLI tests that drive the menu, argument parsing, prompts and `runCli` live
   in one file, `src/cli/cli.test.ts`, with their doubles (fake prompter,
   harness, `withRecordedRuns`). They use the Reactive Resume tools, so

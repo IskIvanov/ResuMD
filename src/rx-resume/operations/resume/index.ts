@@ -15,6 +15,11 @@ import type {
   ResumeData,
 } from "../../api/types.ts";
 import { ResumeFormat } from "../../types.ts";
+import {
+  assertNoSectionEmptied,
+  compareSections,
+  type SectionChange,
+} from "./changes.ts";
 import { applySectionOrder, SECTION_ORDER } from "./layout.ts";
 import { applyResumeMd } from "./mapping.ts";
 
@@ -62,14 +67,15 @@ export async function createResume(
 
 /**
  * Rewrites a resume's data from Resume.md, keeping its layout, picture,
- * template and every section Resume.md doesn't feed.
+ * template, hidden items and every section Resume.md doesn't feed.
  *
  * @param client - The Reactive Resume API client.
  * @param id - The resume's id, as create prints it.
  * @param markdown - The full Resume.md text.
  * @param newId - Ids for the items written from Resume.md.
  * @returns The saved resume.
- * @throws If Resume.md is invalid, before any request, or if a request fails.
+ * @throws If Resume.md is invalid, before any request, if it would empty a
+ *   section, before the save, or if a request fails.
  *
  * @example
  * await updateResume(client, "resume-1", markdown, randomUUID);
@@ -81,9 +87,36 @@ export async function updateResume(
   newId: IdFactory,
 ): Promise<Resume> {
   const resumeMd = parseResumeMd(markdown);
-  return rewriteResumeData(client, id, (currentData) =>
-    applyResumeMd(currentData, resumeMd, newId),
-  );
+  return rewriteResumeData(client, id, (currentData) => {
+    const newData = applyResumeMd(currentData, resumeMd, newId);
+    assertNoSectionEmptied(compareSections(currentData, newData));
+    return newData;
+  });
+}
+
+/**
+ * Works out what `updateResume` would do, without saving anything.
+ *
+ * @param client - The Reactive Resume API client.
+ * @param id - The resume's id, as create prints it.
+ * @param markdown - The full Resume.md text.
+ * @param newId - Ids for the items written from Resume.md.
+ * @returns What would change in each section. An emptied section is reported
+ *   rather than refused.
+ * @throws If Resume.md is invalid, before any request, or if the request fails.
+ *
+ * @example
+ * await previewResumeUpdate(client, "resume-1", markdown, randomUUID);
+ */
+export async function previewResumeUpdate(
+  client: RxResumeApiClient,
+  id: string,
+  markdown: string,
+  newId: IdFactory,
+): Promise<SectionChange[]> {
+  const resumeMd = parseResumeMd(markdown);
+  const { data } = await client.getResume(id);
+  return compareSections(data, applyResumeMd(data, resumeMd, newId));
 }
 
 /**
