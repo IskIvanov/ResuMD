@@ -75,7 +75,9 @@ show:
 It refuses to save when a visible section with items has nothing in the file,
 since that would delete them. This is what a renamed section looks like too,
 because only the headings above are read. Fix the heading, or clear the section
-in Reactive Resume first.
+in Reactive Resume first. References are optional: a file without a
+`## References` section or a "References available upon request" note removes
+the visible references instead.
 
 `--dry-run yes` prints each section's item count before and after, and any
 section a real run would refuse, without saving anything.

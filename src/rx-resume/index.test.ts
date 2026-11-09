@@ -1219,6 +1219,36 @@ describe("update-resume", () => {
     expect(api.receivedRequests.map(({ method }) => method)).toEqual(["GET"]);
   });
 
+  it("removes the visible references when the file has none", async () => {
+    const stored = storedResumeData();
+    stored.sections.references.items = [
+      {
+        id: "reference-1",
+        hidden: false,
+        name: "Alex Doe",
+        position: "Manager",
+        phone: "",
+        website: EMPTY_WEBSITE,
+        description: "",
+      },
+    ];
+    const api = apiServingData(stored);
+
+    await runTool(updateResumeTool, UPDATE_ARGUMENTS, {
+      fetch: api.fetch,
+      files: {
+        [RESUME_FILE]: RESUME_MD.replace(
+          "References available upon request",
+          "",
+        ),
+      },
+    });
+
+    expect(savedData(api.receivedRequests).sections.references.items).toEqual(
+      [],
+    );
+  });
+
   it("reads the resume, saves it under the same id and links to it", async () => {
     const api = apiServingResume();
 

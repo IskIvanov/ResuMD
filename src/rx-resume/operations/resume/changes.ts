@@ -3,7 +3,8 @@
  *
  * Compares a resume's stored data with what a write would save, section by
  * section. A section Resume.md feeds but says nothing about would lose every
- * visible item, so a write refuses that instead of saving it.
+ * visible item, so a write refuses that instead of saving it, unless the
+ * section is optional.
  */
 
 import type { ResumeData } from "../../api/types.ts";
@@ -20,6 +21,9 @@ const FED_SECTIONS = [
   "references",
 ] as const;
 
+/** Sections Resume.md may leave out, clearing their visible items. */
+const OPTIONAL_SECTIONS: ReadonlySet<string> = new Set(["references"]);
+
 /** What a write would do to one section. */
 export interface SectionChange {
   section: (typeof FED_SECTIONS)[number];
@@ -29,7 +33,8 @@ export interface SectionChange {
   after: number;
   /** Hidden items the write keeps. */
   hiddenKept: number;
-  /** True when the write would remove every visible item. */
+  /** True when the write would remove every visible item of a section
+   * Resume.md may not leave out. */
   emptied: boolean;
 }
 
@@ -66,7 +71,7 @@ export function compareSections(
       after,
       hiddenKept: newData.sections[section].items.filter((item) => item.hidden)
         .length,
-      emptied: before > 0 && after === 0,
+      emptied: before > 0 && after === 0 && !OPTIONAL_SECTIONS.has(section),
     };
   });
 }
