@@ -5,6 +5,21 @@ Linear:
 · Follow-up:
 [BAC-53](https://linear.app/bck123/issue/BAC-53/move-test-fixtures-into-one-mocksts-per-tool-folder)
 
+> **Revision (platform step and Connect,
+> [BAC-123](https://linear.app/ivanovdev/issue/BAC-123/users-should-be-able-to-add-api-keys-from-the-cli)):**
+> the menu has two levels again. The first lists each platform, in order of
+> first appearance, then the tools that need no platform (`example-resume`),
+> then Exit. Picking a platform lists its tools, then Back and Exit. A
+> platform is a `platform` label on its tools, not a type, and direct
+> commands are unchanged: `bun run cli <tool id> [flags]`. Each platform's
+> first tool connects it: `connect-rx-resume` tests the API key and saves it
+> to `~/.config/resume-tools/.env`, mode 600. `runCli` reads that file and
+> lays the shell's and the current folder's `.env` over it, skipping empty
+> values. Until connected, the platform's other tools are disabled with
+> "connect Reactive Resume first". A `Text` option with `secret: true` is
+> asked with `Prompter.password` and printed as `••••••••`.
+> `ToolDependencies` gained `exists`, `settingsFile` and `writePrivateFile`.
+
 > **Revision (glossary names):** names follow [GLOSSARY.md](GLOSSARY.md) and
 > spell out what they hold. The tools are `create-resume`, `update-resume`,
 > `delete-resume`, `create-cover-letter`, `update-cover-letter` and

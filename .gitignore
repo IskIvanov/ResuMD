@@ -17,7 +17,7 @@ resume/RxResume/Resume.json
 
 .DS_Store
 
-# Reactive Resume API key and URL for generate-rx-resume. See .env.example.
+# Reactive Resume settings that override the saved ones. See .env.example.
 .env
 .env.*
 !.env.example

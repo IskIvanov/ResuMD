@@ -8,6 +8,7 @@
  * a terminal or process.exit.
  */
 
+import { parseEnv } from "util";
 import { describeCaught } from "../utils/error.ts";
 import type { EnvironmentVariables } from "../utils/types.ts";
 import { promptOptions } from "./prompt.ts";
@@ -16,7 +17,8 @@ import {
   type CliDependencies,
   ExitCode,
   MenuAction,
-  type MenuValue,
+  type FirstLevelValue,
+  type PlatformLevelValue,
   type ToolDefinition,
 } from "./types.ts";
 
@@ -43,23 +45,40 @@ function quoteForShell(word: string): string {
   return `"${word.replace(/(["\\$`])/g, "\\$1")}"`;
 }
 
+/** What the printed command shows in place of a secret answer. */
+const SECRET_MASK = "••••••••";
+
+/** The flags, with their dashes, whose answers are secret. */
+function secretFlagsOf(tool: ToolDefinition): Set<string> {
+  const secretOptions = tool.options.filter(
+    (option) => "secret" in option && option.secret === true,
+  );
+  return new Set(secretOptions.map((option) => `--${option.flag}`));
+}
+
 /**
- * Joins a command and its tool arguments into one copy-pasteable shell line,
- * so the user sees (and can reuse) exactly what is about to run.
+ * Joins a tool's command and its tool arguments into one copy-pasteable
+ * shell line, so the user sees (and can reuse) exactly what is about to run.
+ * A secret answer is shown as SECRET_MASK, so it stays off the screen.
  */
 function formatCommand(
-  command: string,
+  tool: ToolDefinition,
   toolArguments: readonly string[],
 ): string {
-  return [command, ...toolArguments.map(quoteForShell)].join(" ");
+  const secretFlags = secretFlagsOf(tool);
+  const shownArguments = toolArguments.map((word, position) => {
+    if (secretFlags.has(toolArguments[position - 1] ?? "")) return SECRET_MASK;
+    return quoteForShell(word);
+  });
+  return [tool.command, ...shownArguments].join(" ");
 }
 
 /** Lists a tool, disabled with the reason when its preflight fails. */
 function toToolChoice(
   tool: ToolDefinition,
   environmentVariables: EnvironmentVariables,
-): Choice<MenuValue> {
-  const choice: Choice<MenuValue> = {
+): Choice<ToolDefinition> {
+  const choice: Choice<ToolDefinition> = {
     name: `${tool.title} — ${tool.description}`,
     value: tool,
   };
@@ -68,24 +87,72 @@ function toToolChoice(
   return { ...choice, disabled: `Not available: ${reason}` };
 }
 
+/** Each tool's platform, once, in order of first appearance. */
+function platformsOf(tools: readonly ToolDefinition[]): string[] {
+  const platforms = tools
+    .map((tool) => tool.platform)
+    .filter((platform): platform is string => platform !== undefined);
+  return [...new Set(platforms)];
+}
+
 /**
- * Builds the select choices for the tool menu.
+ * Builds the select choices for the first menu level.
  *
  * @param tools - The registered tools, in menu order.
- * @param environmentVariables - Passed to each tool's preflight.
- * @returns Each tool, disabled with the reason when it can't run, then Exit.
+ * @param environmentVariables - Passed to the preflight of each tool that
+ *   needs no platform.
+ * @returns Each platform in order of first appearance, then each tool that
+ *   needs no platform, disabled with the reason when it can't run, then Exit.
  *
  * @example
- * buildMenu([deleteResumeTool], process.env);
- * // [{ name: "Delete resume — …", value: deleteResumeTool },
+ * buildMenu([...RX_RESUME_TOOLS, exampleResumeTool], process.env);
+ * // [{ name: "Reactive Resume", value: { platform: "Reactive Resume" } },
+ * //  { name: "Example resume — …", value: exampleResumeTool },
  * //  { name: "Exit", value: MenuAction.Exit }]
  */
 export function buildMenu(
   tools: readonly ToolDefinition[],
   environmentVariables: EnvironmentVariables,
-): Choice<MenuValue>[] {
+): Choice<FirstLevelValue>[] {
+  const platformChoices = platformsOf(tools).map((platform) => ({
+    name: platform,
+    value: { platform },
+  }));
+  const toolChoices = tools
+    .filter((tool) => tool.platform === undefined)
+    .map((tool) => toToolChoice(tool, environmentVariables));
   return [
-    ...tools.map((tool) => toToolChoice(tool, environmentVariables)),
+    ...platformChoices,
+    ...toolChoices,
+    { name: "Exit", value: MenuAction.Exit },
+  ];
+}
+
+/**
+ * Builds the select choices for one platform's tools.
+ *
+ * @param platform - The platform's label, e.g. "Reactive Resume".
+ * @param tools - The registered tools; only that platform's are listed.
+ * @param environmentVariables - Passed to each tool's preflight.
+ * @returns The platform's tools in registry order, each disabled with the
+ *   reason when it can't run, then Back and Exit.
+ *
+ * @example
+ * buildPlatformMenu("Reactive Resume", RX_RESUME_TOOLS, process.env);
+ * // [{ name: "Connect Reactive Resume — …", value: connectRxResumeTool },
+ * //  …, { name: "Back", value: MenuAction.Back },
+ * //  { name: "Exit", value: MenuAction.Exit }]
+ */
+export function buildPlatformMenu(
+  platform: string,
+  tools: readonly ToolDefinition[],
+  environmentVariables: EnvironmentVariables,
+): Choice<PlatformLevelValue>[] {
+  return [
+    ...tools
+      .filter((tool) => tool.platform === platform)
+      .map((tool) => toToolChoice(tool, environmentVariables)),
+    { name: "Back", value: MenuAction.Back },
     { name: "Exit", value: MenuAction.Exit },
   ];
 }
@@ -112,6 +179,24 @@ function describeFailure(error: unknown): string {
   return lines.join("\n");
 }
 
+/**
+ * The settings Connect saved, with the environment variables over them: the
+ * shell's, and a `.env` in the current folder, which Bun loads. An empty
+ * value, such as `RXRESUME_API_KEY=` copied from `.env.example`, doesn't hide
+ * a saved one.
+ */
+function withSavedSettings(
+  dependencies: CliDependencies,
+): EnvironmentVariables {
+  const { settingsFile, environmentVariables } = dependencies;
+  if (!dependencies.exists(settingsFile)) return environmentVariables;
+  const savedSettings = parseEnv(dependencies.readFile(settingsFile));
+  const givenSettings = Object.entries(environmentVariables).filter(
+    ([, value]) => value !== "",
+  );
+  return { ...savedSettings, ...Object.fromEntries(givenSettings) };
+}
+
 /** Runs the tool named by the first command-line argument with the rest. */
 async function runNamedTool(dependencies: CliDependencies): Promise<ExitCode> {
   const [toolId, ...toolArguments] = dependencies.commandLineArguments;
@@ -126,23 +211,47 @@ async function runNamedTool(dependencies: CliDependencies): Promise<ExitCode> {
   return ExitCode.Success;
 }
 
-/** Runs the menu until a tool has run or the user exits. */
-async function menuLoop(dependencies: CliDependencies): Promise<ExitCode> {
-  const { tools, prompter, environmentVariables, log } = dependencies;
+/**
+ * Asks which tool to run: a platform and then one of its tools, or a tool
+ * that needs no platform. Back in a platform's menu asks again from the top.
+ */
+async function pickTool(
+  dependencies: CliDependencies,
+): Promise<ToolDefinition | MenuAction.Exit> {
+  const { tools, prompter, environmentVariables } = dependencies;
 
   for (;;) {
-    const menuSelection = await prompter.select<MenuValue>({
-      question: "Which tool do you want to run?",
+    const firstLevelPick = await prompter.select<FirstLevelValue>({
+      question: "What do you want to do?",
       choices: buildMenu(tools, environmentVariables),
     });
-    if (menuSelection === MenuAction.Exit) return ExitCode.Success;
+    if (firstLevelPick === MenuAction.Exit || "id" in firstLevelPick) {
+      return firstLevelPick;
+    }
+
+    const { platform } = firstLevelPick;
+    const platformPick = await prompter.select<PlatformLevelValue>({
+      question: `Which ${platform} tool?`,
+      choices: buildPlatformMenu(platform, tools, environmentVariables),
+    });
+    if (platformPick !== MenuAction.Back) return platformPick;
+  }
+}
+
+/** Runs the menu until a tool has run or the user exits. */
+async function menuLoop(dependencies: CliDependencies): Promise<ExitCode> {
+  const { prompter, log } = dependencies;
+
+  for (;;) {
+    const tool = await pickTool(dependencies);
+    if (tool === MenuAction.Exit) return ExitCode.Success;
 
     const toolArguments = await promptOptions(
-      menuSelection.options,
+      tool.options,
       prompter,
       dependencies,
     );
-    log(formatCommand(menuSelection.command, toolArguments));
+    log(formatCommand(tool, toolArguments));
 
     const confirmed = await prompter.confirm({
       question: "Run it?",
@@ -150,7 +259,7 @@ async function menuLoop(dependencies: CliDependencies): Promise<ExitCode> {
     });
     if (!confirmed) continue;
 
-    await menuSelection.run(toolArguments, dependencies);
+    await tool.run(toolArguments, dependencies);
     return ExitCode.Success;
   }
 }
@@ -169,8 +278,14 @@ async function menuLoop(dependencies: CliDependencies): Promise<ExitCode> {
  *   await runCli({ commandLineArguments: process.argv.slice(2), tools, … }),
  * );
  */
-export async function runCli(dependencies: CliDependencies): Promise<ExitCode> {
+export async function runCli(
+  cliDependencies: CliDependencies,
+): Promise<ExitCode> {
   try {
+    const dependencies: CliDependencies = {
+      ...cliDependencies,
+      environmentVariables: withSavedSettings(cliDependencies),
+    };
     if (dependencies.commandLineArguments.length > 0) {
       return await runNamedTool(dependencies);
     }
@@ -186,10 +301,10 @@ export async function runCli(dependencies: CliDependencies): Promise<ExitCode> {
     return await menuLoop(dependencies);
   } catch (error) {
     if (error instanceof PromptCancelled) {
-      dependencies.logError("Cancelled.");
+      cliDependencies.logError("Cancelled.");
       return ExitCode.Cancelled;
     }
-    dependencies.logError(describeFailure(error));
+    cliDependencies.logError(describeFailure(error));
     return ExitCode.Failure;
   }
 }

@@ -159,9 +159,14 @@ A destination the tools write to, e.g. Reactive Resume.
 _Avoid_: vendor, integration
 
 **Tool**:
-One thing a person can run against a platform, from the menu or directly with
-flags.
+One thing a person can run against a platform, or on Resume.md alone, from the
+menu or directly with flags.
 _Avoid_: script
+
+**Connect**:
+To give the tools a platform's address and API key: the key is tested, then
+saved, so later runs from any folder can use the platform's other tools.
+_Avoid_: login, credentials
 
 **Operation**:
 One thing a platform does through its API, such as creating a resume. It takes

@@ -30,8 +30,11 @@ import {
   type ToolSpec,
 } from "./types.ts";
 
-/** The direct command; a tool runs as `bun run cli <tool id> [flags]`. */
-const CLI_COMMAND = "bun run cli";
+/**
+ * The command that opens the menu; a tool runs as `bun run cli <tool id>
+ * [flags]`. Tools name it when they tell the user what to run next.
+ */
+export const CLI_COMMAND = "bun run cli";
 
 /** Every flag takes a string value; kinds are converted after parsing. */
 const STRING_FLAG = { type: "string" } as const;
@@ -199,6 +202,7 @@ export function defineTool<const TOptions extends OptionSpecs>(
 
   return {
     id: spec.id,
+    platform: spec.platform,
     title: spec.title,
     description: spec.description,
     command,

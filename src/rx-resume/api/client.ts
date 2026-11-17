@@ -45,6 +45,8 @@ const DocumentType = {
 } as const;
 type DocumentType = ValueOf<typeof DocumentType>;
 
+/** The account the API key belongs to; the key check reads it. */
+const PROFILE_PATH = "/auth/profile";
 const RESUMES_PATH = "/resumes";
 const COVER_LETTERS_PATH = "/cover-letters";
 /** Where a document already in Trash is purged. */
@@ -57,8 +59,16 @@ const COVER_LETTER_EDITOR_PATH = "/dashboard";
 /** One or more slashes at the end of a URL. */
 const TRAILING_SLASHES = /\/+$/;
 
-/** Drops the slashes at the end of a URL, so a path can be appended. */
-function trimTrailingSlashes(url: string): string {
+/**
+ * Drops the slashes at the end of a URL, so a path can be appended.
+ *
+ * @param url - A URL, e.g. `https://rxresu.me/`.
+ * @returns The URL without slashes at its end.
+ *
+ * @example
+ * trimTrailingSlashes("https://rxresu.me/"); // "https://rxresu.me"
+ */
+export function trimTrailingSlashes(url: string): string {
   return url.replace(TRAILING_SLASHES, "");
 }
 
@@ -82,7 +92,16 @@ export class RxResumeApiError extends Error {
   }
 }
 
-/** Builds an RxResumeApiError from a failed response, JSON or not. */
+/** The status an instance answers with when it refuses the API key. */
+const UNAUTHORIZED_STATUS = 401;
+
+/** What to do when the instance refuses the API key. */
+const REFUSED_KEY_HINT = "Run Connect again with a valid API key.";
+
+/**
+ * Builds an RxResumeApiError from a failed response, JSON or not. A refused
+ * key also says to connect again.
+ */
 async function toApiError(httpResponse: Response): Promise<RxResumeApiError> {
   const responseText = await httpResponse.text();
   let errorDetails: ApiErrorDetails = {};
@@ -99,6 +118,9 @@ async function toApiError(httpResponse: Response): Promise<RxResumeApiError> {
   let apiMessage = responseText || httpResponse.statusText;
   if (typeof errorDetails.message === "string") {
     apiMessage = errorDetails.message;
+  }
+  if (httpResponse.status === UNAUTHORIZED_STATUS) {
+    apiMessage = `${apiMessage}\n${REFUSED_KEY_HINT}`;
   }
   return new RxResumeApiError(httpResponse.status, code, apiMessage);
 }
@@ -228,6 +250,14 @@ export class RxResumeApiClient {
    */
   coverLetterEditorUrl(letterId: string): string {
     return itemPath(`${this.appUrl}${COVER_LETTER_EDITOR_PATH}`, letterId);
+  }
+
+  /**
+   * `GET /auth/profile`, the smallest read-only call that needs the key.
+   * Rejects with RxResumeApiError when the instance refuses the key.
+   */
+  async checkApiKey(): Promise<void> {
+    await this.callApi(HttpMethod.Get, PROFILE_PATH);
   }
 
   /** `POST /resumes`; resolves to the new resume's id. */

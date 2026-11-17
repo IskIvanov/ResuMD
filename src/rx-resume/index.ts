@@ -1,15 +1,15 @@
 /**
  * index.ts
  *
- * The Reactive Resume tools, in menu order: create, update and delete a
- * resume from Resume.md, then the same for a cover letter from its `.md`.
- * Each connects, reads its file, runs an operation and prints what it wrote.
- * Every tool is disabled in the menu until `.env` has the Reactive Resume
- * settings. Deleting this folder and its line in src/cli/index.ts removes
+ * The Reactive Resume tools, in menu order: Connect, then create, update and
+ * delete a resume from Resume.md, then the same for a cover letter from its
+ * `.md`. Each connects, reads its file, runs an operation and prints what it
+ * wrote. Every tool but Connect is disabled in the menu until Reactive Resume
+ * is connected. Deleting this folder and its line in src/cli/index.ts removes
  * the platform.
  */
 
-import { defineTool } from "../cli/define-tool.ts";
+import { CLI_COMMAND, defineTool } from "../cli/define-tool.ts";
 import {
   FileExtension,
   OptionKind,
@@ -17,8 +17,14 @@ import {
   type ToolDependencies,
 } from "../cli/types.ts";
 import { slugify } from "../utils/string.ts";
+import type { EnvironmentVariables } from "../utils/types.ts";
 import type { RxResumeApiClient } from "./api/client.ts";
-import { connectRxResume, describeMissingSettings } from "./api/settings.ts";
+import {
+  connectRxResume,
+  isConnected,
+  replaceSavedSettings,
+  settingsFor,
+} from "./api/settings.ts";
 import {
   type CoverLetter,
   CoverLetterTemplate,
@@ -37,10 +43,13 @@ import {
   updateResume,
 } from "./operations/resume/index.ts";
 import type { SectionChange } from "./operations/resume/changes.ts";
-import { CoverLetterIdSchema } from "./schema.ts";
+import { AddressSchema, CoverLetterIdSchema } from "./schema.ts";
 import { ResumeFormat, type LetterFields } from "./types.ts";
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
+
+/** The platform the menu lists these tools under. */
+const PLATFORM = "Reactive Resume";
 
 /** A Markdown file that must already exist. */
 const MARKDOWN_FILE = { extensions: [FileExtension.Markdown], mustExist: true };
@@ -83,8 +92,27 @@ const COMPANY_OPTION = {
   required: false,
 } as const;
 
-/** Connects to the instance the run's `.env` settings name. */
+/** Why a tool is unavailable in the menu before Reactive Resume is connected. */
+function requireConnection(
+  environmentVariables: EnvironmentVariables,
+): string | undefined {
+  if (isConnected(environmentVariables)) return undefined;
+  return "connect Reactive Resume first";
+}
+
+/**
+ * Connects to the instance the run's settings name.
+ *
+ * @throws When Reactive Resume isn't connected, naming the command that
+ *   connects it.
+ */
 function connect(dependencies: ToolDependencies): RxResumeApiClient {
+  if (!isConnected(dependencies.environmentVariables)) {
+    throw new Error(
+      "Reactive Resume isn't connected. " +
+        `Run \`${connectRxResumeTool.command}\`, or pick Connect in the menu.`,
+    );
+  }
   return connectRxResume(
     dependencies.environmentVariables,
     dependencies.fetch,
@@ -149,11 +177,68 @@ function letterFields(values: {
   };
 }
 
+// ─── Connecting ───────────────────────────────────────────────────────────────
+
+/** Where Reactive Resume is hosted, unless the user runs their own. */
+const HOSTED_ADDRESS = "https://rxresu.me";
+
+/**
+ * Saves the address and API key of a Reactive Resume instance to the settings
+ * file, so the other tools can connect from any folder.
+ */
+export const connectRxResumeTool = defineTool({
+  id: "connect-rx-resume",
+  platform: PLATFORM,
+  title: "Connect Reactive Resume",
+  description: "save your Reactive Resume address and API key",
+  options: {
+    "api-key": {
+      question: "Reactive Resume API key",
+      kind: OptionKind.Text,
+      required: true,
+      secret: true,
+    },
+    address: {
+      question: "Address of your Reactive Resume",
+      kind: OptionKind.Text,
+      required: false,
+      schema: AddressSchema,
+      default: () => HOSTED_ADDRESS,
+    },
+  },
+  run: async (values, dependencies) => {
+    const settings = settingsFor(values.address, values["api-key"]);
+    // Connects with the settings about to be saved, keeping RXRESUME_DEBUG.
+    const client = connect({
+      ...dependencies,
+      environmentVariables: {
+        ...dependencies.environmentVariables,
+        ...settings,
+      },
+    });
+    await client.checkApiKey();
+    const { settingsFile } = dependencies;
+    let savedText = "";
+    if (dependencies.exists(settingsFile)) {
+      savedText = dependencies.readFile(settingsFile);
+    }
+    dependencies.writePrivateFile(
+      settingsFile,
+      replaceSavedSettings(savedText, settings),
+    );
+    const { host } = new URL(values.address);
+    dependencies.log(
+      `✓ Connected to ${host}. Run \`${CLI_COMMAND}\` again to use its tools.`,
+    );
+  },
+});
+
 // ─── Resumes ──────────────────────────────────────────────────────────────────
 
 /** Parses Resume.md and creates a new resume from it. */
 export const createResumeTool = defineTool({
   id: "create-resume",
+  platform: PLATFORM,
   title: "Create resume",
   description: "create a new resume in Reactive Resume from Resume.md",
   options: {
@@ -175,7 +260,7 @@ export const createResumeTool = defineTool({
       required: false,
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async ({ resume, name, slug, tags }, dependencies) => {
     if (!slug) {
       throw new Error(`Cannot derive --slug from "${name}"; pass --slug`);
@@ -196,6 +281,7 @@ export const createResumeTool = defineTool({
 /** Parses Resume.md and writes it into a resume, by the id create prints. */
 export const updateResumeTool = defineTool({
   id: "update-resume",
+  platform: PLATFORM,
   title: "Update resume",
   description: "rewrite an existing resume in Reactive Resume from Resume.md",
   options: {
@@ -212,7 +298,7 @@ export const updateResumeTool = defineTool({
       required: false,
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async ({ id, resume, "dry-run": dryRun }, dependencies) => {
     // Settings are checked before the file is read.
     const client = connect(dependencies);
@@ -245,6 +331,7 @@ export const updateResumeTool = defineTool({
  */
 export const deleteResumeTool = defineTool({
   id: "delete-resume",
+  platform: PLATFORM,
   title: "Delete resume",
   description:
     "delete a resume in Reactive Resume: move it to Trash, then purge it",
@@ -255,7 +342,7 @@ export const deleteResumeTool = defineTool({
       required: true,
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   // The API returns no data on deletion, so only the id is printed.
   run: async ({ id }, dependencies) => {
     await deleteResume(connect(dependencies), id);
@@ -265,6 +352,7 @@ export const deleteResumeTool = defineTool({
 
 export const downloadResumeTool = defineTool({
   id: "download-resume",
+  platform: PLATFORM,
   title: "Download resume",
   description:
     "download a resume from Reactive Resume: format: pdf, md, docx, etc.",
@@ -288,7 +376,7 @@ export const downloadResumeTool = defineTool({
       default: (answers) => `resume.${answers.format}`,
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async ({ id, format, output }, dependencies) => {
     const client = connect(dependencies);
     const data = await downloadResume(client, id, format);
@@ -305,6 +393,7 @@ export const downloadResumeTool = defineTool({
  */
 export const createCoverLetterTool = defineTool({
   id: "create-cover-letter",
+  platform: PLATFORM,
   title: "Create cover letter",
   description: "create a cover letter in Reactive Resume from a .md",
   options: {
@@ -328,7 +417,7 @@ export const createCoverLetterTool = defineTool({
       choices: Object.values(CoverLetterTemplate),
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async (values, dependencies) => {
     // Settings are checked before the file is read.
     const client = connect(dependencies);
@@ -359,6 +448,7 @@ export const createCoverLetterTool = defineTool({
  */
 export const updateCoverLetterTool = defineTool({
   id: "update-cover-letter",
+  platform: PLATFORM,
   title: "Update cover letter",
   description: "rewrite an existing cover letter in Reactive Resume from a .md",
   options: {
@@ -384,7 +474,7 @@ export const updateCoverLetterTool = defineTool({
       choices: Object.values(CoverLetterTemplate),
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async (values, dependencies) => {
     // Settings are checked before the file is read.
     const client = connect(dependencies);
@@ -412,6 +502,7 @@ export const updateCoverLetterTool = defineTool({
  */
 export const deleteCoverLetterTool = defineTool({
   id: "delete-cover-letter",
+  platform: PLATFORM,
   title: "Delete cover letter",
   description:
     "delete a cover letter in Reactive Resume: move it to Trash, then purge it",
@@ -423,7 +514,7 @@ export const deleteCoverLetterTool = defineTool({
       required: true,
     },
   },
-  preflight: describeMissingSettings,
+  preflight: requireConnection,
   run: async ({ id }, dependencies) => {
     await deleteCoverLetter(connect(dependencies), id);
     dependencies.log(`✓ Deleted cover letter ${id}`);
@@ -432,6 +523,7 @@ export const deleteCoverLetterTool = defineTool({
 
 /** Every Reactive Resume tool, in menu order. */
 export const RX_RESUME_TOOLS: readonly ToolDefinition[] = [
+  connectRxResumeTool,
   createResumeTool,
   updateResumeTool,
   deleteResumeTool,

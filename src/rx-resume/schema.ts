@@ -32,6 +32,12 @@ export const CoverLetterTextSchema = z.object({
   content: requiredText.max(CoverLetterLimit.ContentMax),
 });
 
+/** The address of a Reactive Resume instance: an http or https URL. */
+export const AddressSchema = z.url({
+  protocol: /^https?$/,
+  message: "must start with http:// or https://, e.g. https://rxresu.me",
+});
+
 /** What's wrong with a cover-letter id that isn't accepted. */
 const CoverLetterIdProblem = {
   NotUuid: "Field must accept a valid UUID",

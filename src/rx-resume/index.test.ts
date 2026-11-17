@@ -13,6 +13,7 @@ import {
   type Section,
 } from "./api/types.ts";
 import {
+  connectRxResumeTool,
   deleteCoverLetterTool,
   deleteResumeTool,
   createCoverLetterTool,
@@ -83,18 +84,22 @@ function recordingFetch(scriptedResponses: readonly Response[]): {
 const WORKING_DIRECTORY = "/work";
 const RESUME_FILE = "Resume.md";
 const LETTER_FILE = "letter.md";
+/** Where Connect saves the settings, outside the working directory. */
+const SETTINGS_FILE = "/home/jane/.config/resume-tools/.env";
 
 /** What every id a tool hands out starts with: `new-1`, `new-2`, … */
 const NEW_ID_PREFIX = "new-";
 
 /**
- * What a tool printed while it ran, and the files it saved by path relative
- * to WORKING_DIRECTORY.
+ * What a tool printed while it ran, the files it saved by path relative to
+ * WORKING_DIRECTORY, and the files it saved readable only by the user, by
+ * absolute path.
  */
 interface ToolOutput {
   output: string[];
   errors: string[];
   savedFiles: Record<string, Uint8Array>;
+  privateFiles: Record<string, string>;
 }
 
 /**
@@ -105,9 +110,10 @@ interface ToolOutput {
  * @param tool - A registered tool.
  * @param toolArguments - Its flags.
  * @param doubles - The fetch to send requests with, the environment variables
- *   (the Reactive Resume settings by default) and files by path relative to
- *   WORKING_DIRECTORY, over Resume.md
- *   and letter.md.
+ *   (the Reactive Resume settings by default), files by path relative to
+ *   WORKING_DIRECTORY, over Resume.md and letter.md, and the private files
+ *   by absolute path, which the tool reads and writes, to read even when the
+ *   tool throws.
  * @returns The lines it printed to stdout and stderr.
  * @throws Whatever the tool throws.
  */
@@ -118,6 +124,7 @@ async function runTool(
     fetch: FetchFunction;
     environmentVariables?: EnvironmentVariables;
     files?: Record<string, string>;
+    privateFiles?: Record<string, string>;
   },
 ): Promise<ToolOutput> {
   const files: Record<string, string> = {
@@ -125,7 +132,12 @@ async function runTool(
     [LETTER_FILE]: COVER_LETTER_MD,
     ...doubles.files,
   };
-  const printed: ToolOutput = { output: [], errors: [], savedFiles: {} };
+  const printed: ToolOutput = {
+    output: [],
+    errors: [],
+    savedFiles: {},
+    privateFiles: doubles.privateFiles ?? {},
+  };
   const clockReadings = [1000, 1084, 2000, 2042];
   let idsIssued = 0;
   const dependencies: ToolDependencies = {
@@ -139,12 +151,20 @@ async function runTool(
     today: () => TODAY,
     now: () => clockReadings.shift() ?? 0,
     readFile: (path) => {
-      const text = files[relative(WORKING_DIRECTORY, path)];
+      const text =
+        printed.privateFiles[path] ?? files[relative(WORKING_DIRECTORY, path)];
       if (text === undefined) throw new Error(`No such file: ${path}`);
       return text;
     },
+    exists: (path) =>
+      path in printed.privateFiles ||
+      relative(WORKING_DIRECTORY, path) in files,
     writeFile: (path, bytes) => {
       printed.savedFiles[relative(WORKING_DIRECTORY, path)] = bytes;
+    },
+    settingsFile: SETTINGS_FILE,
+    writePrivateFile: (path, text) => {
+      printed.privateFiles[path] = text;
     },
     log: (line) => printed.output.push(line),
     logError: (line) => printed.errors.push(line),
@@ -507,20 +527,41 @@ function letterMd(
 }
 
 describe("every tool", () => {
-  it("names every missing setting and where they go", async () => {
-    const missing =
-      "Missing RXRESUME_API_KEY, RXRESUME_API_URL, RXRESUME_APP_URL. " +
-      "Copy .env.example to .env and fill it in.";
-
-    expect(deleteResumeTool.preflight?.({ RXRESUME_API_KEY: "" })).toBe(
-      missing,
+  it.each([
+    ["no settings", {}],
+    ["an empty key", { ...RX_RESUME_SETTINGS, RXRESUME_API_KEY: "" }],
+  ])("is unavailable in the menu until connected, with %s", (_, settings) => {
+    expect(deleteResumeTool.preflight?.(settings)).toBe(
+      "connect Reactive Resume first",
     );
+  });
+
+  it("fails a direct run before connecting, saying how to connect", async () => {
     await expect(
       runTool(deleteResumeTool, ["--id", RESUME_ID], {
         fetch: recordingFetch([]).fetch,
         environmentVariables: {},
       }),
-    ).rejects.toThrow(missing);
+    ).rejects.toThrow(
+      "Reactive Resume isn't connected. Run `bun run cli connect-rx-resume`, " +
+        "or pick Connect in the menu.",
+    );
+  });
+
+  it("says to connect again when the API refuses the saved key", async () => {
+    const refused = Response.json(
+      { code: "UNAUTHORIZED", status: 401, message: "Sign-in required." },
+      { status: 401 },
+    );
+
+    await expect(
+      runTool(deleteResumeTool, ["--id", RESUME_ID], {
+        fetch: recordingFetch([refused]).fetch,
+      }),
+    ).rejects.toThrow(
+      "Reactive Resume API error 401 UNAUTHORIZED: Sign-in required.\n" +
+        "Run Connect again with a valid API key.",
+    );
   });
 
   it("has no problem once every setting is there", () => {
@@ -608,6 +649,182 @@ describe("every tool", () => {
         "Check RXRESUME_API_URL (http or https, host, port) and that the " +
         "server is running.",
     });
+  });
+});
+
+// ─── Connecting ───────────────────────────────────────────────────────────────
+
+/** What `GET /auth/profile` answers for a valid key. */
+const PROFILE = {
+  id: "user-1",
+  name: "Jane Doe",
+  username: "janedoe",
+  displayUsername: "janedoe",
+  email: "jane@example.com",
+  emailVerified: true,
+  image: null,
+  locale: "en-US",
+  timezone: "Europe/Amsterdam",
+};
+
+describe("connect-rx-resume", () => {
+  it("saves the key with rxresu.me's addresses when no address is given", async () => {
+    const api = recordingFetch([Response.json(PROFILE)]);
+
+    const { privateFiles } = await runTool(
+      connectRxResumeTool,
+      ["--api-key", API_KEY],
+      { fetch: api.fetch, environmentVariables: {} },
+    );
+
+    expect(privateFiles).toEqual({
+      [SETTINGS_FILE]:
+        "RXRESUME_API_KEY=test-key\n" +
+        "RXRESUME_API_URL=https://rxresu.me/api/openapi\n" +
+        "RXRESUME_APP_URL=https://rxresu.me\n",
+    });
+  });
+
+  it("tests the key with one read-only request", async () => {
+    const api = recordingFetch([Response.json(PROFILE)]);
+
+    await runTool(connectRxResumeTool, ["--api-key", API_KEY], {
+      fetch: api.fetch,
+      environmentVariables: {},
+    });
+
+    expect(api.receivedRequests).toEqual([
+      {
+        method: "GET",
+        url: "https://rxresu.me/api/openapi/auth/profile",
+        apiKey: API_KEY,
+        sentJson: undefined,
+      },
+    ]);
+  });
+
+  it("saves nothing and fails with the API's error when the key is refused", async () => {
+    const refused = Response.json(
+      {
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "Sign-in required. Send a valid API key.",
+      },
+      { status: 401 },
+    );
+    const privateFiles: Record<string, string> = {};
+
+    await expect(
+      runTool(connectRxResumeTool, ["--api-key", "wrong-key"], {
+        fetch: recordingFetch([refused]).fetch,
+        environmentVariables: {},
+        privateFiles,
+      }),
+    ).rejects.toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+    expect(privateFiles).toEqual({});
+  });
+
+  it("tests the key at a self-hosted address and saves that address", async () => {
+    const api = recordingFetch([Response.json(PROFILE)]);
+
+    const { privateFiles } = await runTool(
+      connectRxResumeTool,
+      ["--api-key", API_KEY, "--address", "https://resume.example.com"],
+      { fetch: api.fetch, environmentVariables: {} },
+    );
+
+    expect(api.receivedRequests.map((request) => request.url)).toEqual([
+      "https://resume.example.com/api/openapi/auth/profile",
+    ]);
+    expect(privateFiles[SETTINGS_FILE]).toBe(
+      "RXRESUME_API_KEY=test-key\n" +
+        "RXRESUME_API_URL=https://resume.example.com/api/openapi\n" +
+        "RXRESUME_APP_URL=https://resume.example.com\n",
+    );
+  });
+
+  it("refuses an address without http:// or https://, before any request", async () => {
+    const api = recordingFetch([]);
+
+    await expect(
+      runTool(
+        connectRxResumeTool,
+        ["--api-key", API_KEY, "--address", "resume.example.com"],
+        { fetch: api.fetch, environmentVariables: {} },
+      ),
+    ).rejects.toThrow(
+      "--address: must start with http:// or https://, e.g. https://rxresu.me",
+    );
+  });
+
+  it("logs the key check without the key when RXRESUME_DEBUG is set", async () => {
+    const { errors } = await runTool(
+      connectRxResumeTool,
+      ["--api-key", API_KEY],
+      {
+        fetch: recordingFetch([Response.json(PROFILE)]).fetch,
+        environmentVariables: { RXRESUME_DEBUG: "1" },
+      },
+    );
+
+    expect(errors).toEqual([
+      "→ GET https://rxresu.me/api/openapi/auth/profile",
+      "← 200 GET https://rxresu.me/api/openapi/auth/profile (84ms)",
+    ]);
+  });
+
+  it("says where it connected and to run the CLI again", async () => {
+    const { output } = await runTool(
+      connectRxResumeTool,
+      ["--api-key", API_KEY, "--address", "https://resume.example.com"],
+      {
+        fetch: recordingFetch([Response.json(PROFILE)]).fetch,
+        environmentVariables: {},
+      },
+    );
+
+    expect(output).toEqual([
+      "✓ Connected to resume.example.com. Run `bun run cli` again to use its tools.",
+    ]);
+  });
+
+  it("replaces only Reactive Resume's lines in the saved settings", async () => {
+    const privateFiles = {
+      [SETTINGS_FILE]:
+        "OTHER_PLATFORM_API_KEY=other-key\n" +
+        "RXRESUME_API_KEY=old-key\n" +
+        "RXRESUME_API_URL=https://old.example.com/api/openapi\n" +
+        "RXRESUME_APP_URL=https://old.example.com\n",
+    };
+
+    await runTool(connectRxResumeTool, ["--api-key", API_KEY], {
+      fetch: recordingFetch([Response.json(PROFILE)]).fetch,
+      environmentVariables: {},
+      privateFiles,
+    });
+
+    expect(privateFiles[SETTINGS_FILE]).toBe(
+      "OTHER_PLATFORM_API_KEY=other-key\n" +
+        "RXRESUME_API_KEY=test-key\n" +
+        "RXRESUME_API_URL=https://rxresu.me/api/openapi\n" +
+        "RXRESUME_APP_URL=https://rxresu.me\n",
+    );
+  });
+
+  it("saves an address given with a trailing slash without it", async () => {
+    const api = recordingFetch([Response.json(PROFILE)]);
+
+    const { privateFiles } = await runTool(
+      connectRxResumeTool,
+      ["--api-key", API_KEY, "--address", "https://resume.example.com/"],
+      { fetch: api.fetch, environmentVariables: {} },
+    );
+
+    expect(privateFiles[SETTINGS_FILE]).toBe(
+      "RXRESUME_API_KEY=test-key\n" +
+        "RXRESUME_API_URL=https://resume.example.com/api/openapi\n" +
+        "RXRESUME_APP_URL=https://resume.example.com\n",
+    );
   });
 });
 
