@@ -5,16 +5,24 @@ import {
   EnvironmentVariable,
 } from "../rx-resume/api/types.ts";
 import {
+  connectRxResumeTool,
   deleteCoverLetterTool,
+  deleteResumeTool,
   createCoverLetterTool,
   createResumeTool,
   RX_RESUME_TOOLS,
   updateCoverLetterTool,
   updateResumeTool,
 } from "../rx-resume/index.ts";
+import { exampleResumeTool, RESUME_MD_TOOLS } from "../resume-md/index.ts";
 import type { EnvironmentVariables } from "../utils/types.ts";
 import { promptOptions } from "./prompt.ts";
-import { buildMenu, PromptCancelled, runCli } from "./run-cli.ts";
+import {
+  buildMenu,
+  buildPlatformMenu,
+  PromptCancelled,
+  runCli,
+} from "./run-cli.ts";
 import {
   type CliDependencies,
   type Choice,
@@ -40,6 +48,17 @@ const pathLookup: PathLookup = {
     ),
 };
 
+/** Where Connect saves the settings that every run reads. */
+const SETTINGS_FILE = "/home/jane/.config/resume-tools/.env";
+
+/** The settings file after connecting Reactive Resume. */
+const SAVED_SETTINGS = [
+  "RXRESUME_API_KEY=saved-key",
+  "RXRESUME_API_URL=https://rx.example/api/openapi",
+  "RXRESUME_APP_URL=https://rx.example",
+  "",
+].join("\n");
+
 /** Fails the test that reaches it: CLI tests never touch files or the API. */
 function unreachable(): never {
   throw new Error("A CLI test reached the outside world");
@@ -54,7 +73,10 @@ const toolDependencies: ToolDependencies = {
   today: unreachable,
   now: unreachable,
   readFile: unreachable,
+  exists: unreachable,
   writeFile: unreachable,
+  settingsFile: SETTINGS_FILE,
+  writePrivateFile: unreachable,
   log: unreachable,
   logError: unreachable,
 };
@@ -69,28 +91,52 @@ const allSettings: EnvironmentVariables = {
 // ─── Prompter ─────────────────────────────────────────────────────────────────
 
 /** The CLI's own prompts, as the user sees them. */
-const PICK_TOOL = "Which tool do you want to run?";
+const PICK_ACTION = "What do you want to do?";
+const PICK_RX_RESUME_TOOL = "Which Reactive Resume tool?";
 const OPTIONAL_FLAGS = "Set any optional flags?";
 const RUN_IT = "Run it?";
 
-/** Answers keyed by question: select/input take text, checkbox a list, confirm a boolean. */
+/** Answers to a question asked more than once, one each time, in order. */
+interface AnswersInTurn {
+  inTurn: readonly string[];
+}
+
+/**
+ * Answers keyed by question: select/input take text, checkbox a list, confirm
+ * a boolean, and a select asked again takes its answers in turn.
+ */
 type PromptScript = Readonly<
-  Record<string, string | readonly string[] | boolean>
+  Record<string, string | readonly string[] | boolean | AnswersInTurn>
 >;
+
+/** One answer as a prompt receives it. */
+type ScriptedAnswer = string | readonly string[] | boolean;
 
 /**
  * A Prompter that answers from a script keyed by question.
  *
  * - select picks the first enabled choice whose name starts with the answer
- * - input runs the prompt's validator and throws if the answer is rejected
+ * - input and password run the prompt's validator and throw if the answer
+ *   is rejected
  * - checkbox picks the choices whose value is in the answer list
- * - any prompt missing from the script throws
+ * - answers given in turn are used one per time the question is asked
+ * - any prompt missing from the script, or asked once too often, throws
  */
 function createFakePrompter(script: PromptScript): Prompter {
-  const answer = (question: string): PromptScript[string] => {
+  const timesAsked: Record<string, number> = {};
+  const answer = (question: string): ScriptedAnswer => {
     if (!(question in script))
       throw new Error(`Unscripted prompt: ${question}`);
-    return script[question];
+    const scripted = script[question];
+    if (typeof scripted !== "object" || !("inTurn" in scripted)) {
+      return scripted;
+    }
+    const turn = timesAsked[question] ?? 0;
+    timesAsked[question] = turn + 1;
+    const inTurn = scripted.inTurn[turn];
+    if (inTurn === undefined)
+      throw new Error(`Asked once too often: ${question}`);
+    return inTurn;
   };
 
   return {
@@ -104,6 +150,12 @@ function createFakePrompter(script: PromptScript): Prompter {
       return choice.value;
     },
     async input({ question, validate }) {
+      const text = String(answer(question));
+      const verdict = validate ? validate(text) : true;
+      if (verdict !== true) throw new Error(`Rejected "${text}": ${verdict}`);
+      return text;
+    },
+    async password({ question, validate }) {
       const text = String(answer(question));
       const verdict = validate ? validate(text) : true;
       if (verdict !== true) throw new Error(`Rejected "${text}": ${verdict}`);
@@ -154,20 +206,25 @@ const CREATE_LETTER_ARGUMENTS: readonly string[] = [
 /**
  * Keeps a tool's id, options and usage, and replaces only its run, so a test
  * can drive the real tool through the CLI without touching files or APIs.
+ * Records each run's tool arguments, and the settings it ran with.
  */
 function withRecordedRuns(tool: ToolDefinition): {
   tool: ToolDefinition;
   calls: string[][];
+  settingsReceived: EnvironmentVariables[];
 } {
   const calls: string[][] = [];
+  const settingsReceived: EnvironmentVariables[] = [];
   return {
     tool: {
       ...tool,
-      run: async (toolArguments) => {
+      run: async (toolArguments, dependencies) => {
         calls.push([...toolArguments]);
+        settingsReceived.push(dependencies.environmentVariables);
       },
     },
     calls,
+    settingsReceived,
   };
 }
 
@@ -177,6 +234,23 @@ function withFailingRun(tool: ToolDefinition, error: unknown): ToolDefinition {
     ...tool,
     run: async () => {
       throw error;
+    },
+  };
+}
+
+/**
+ * The runCli dependencies for a settings file holding `savedText`, next to
+ * the files pathLookup knows.
+ */
+function withSettingsFile(
+  savedText: string,
+): Pick<CliDependencies, "exists" | "readFile"> {
+  return {
+    exists: (absolutePath) =>
+      absolutePath === SETTINGS_FILE || pathLookup.exists(absolutePath),
+    readFile: (absolutePath) => {
+      if (absolutePath === SETTINGS_FILE) return savedText;
+      return unreachable();
     },
   };
 }
@@ -298,7 +372,7 @@ describe("parse", () => {
     // No settings stop the tool at its settings check, before any request.
     await expect(
       createCoverLetterTool.run(CREATE_LETTER_ARGUMENTS, toolDependencies),
-    ).rejects.toThrow("Missing RXRESUME_API_KEY");
+    ).rejects.toThrow("Reactive Resume isn't connected");
   });
 });
 
@@ -414,6 +488,21 @@ describe("promptOptions", () => {
     });
   });
 
+  it("asks for a secret option with its answer hidden", async () => {
+    const question = promptFor(connectRxResumeTool, "api-key");
+    const prompter = createFakePrompter({
+      [question]: "rr_secret",
+      [OPTIONAL_FLAGS]: [],
+    });
+    const password = vi.spyOn(prompter, "password");
+
+    await promptOptions(connectRxResumeTool.options, prompter, pathLookup);
+
+    expect(password).toHaveBeenCalledWith(
+      expect.objectContaining({ question }),
+    );
+  });
+
   it("rejects a required answer left blank", async () => {
     const prompter = createFakePrompter({
       [promptFor(updateResumeTool, "id")]: "  ",
@@ -447,6 +536,8 @@ describe("promptOptions", () => {
 
 /** Every tool's usage line, as `bun run cli` prints it, keyed by tool id. */
 const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
+  "connect-rx-resume":
+    "Usage: bun run cli connect-rx-resume --api-key <api-key> [--address <address>]",
   "create-resume":
     "Usage: bun run cli create-resume --resume <path> --name <name> [--slug <slug>] [--tags <a,b>]",
   "update-resume":
@@ -461,23 +552,29 @@ const USAGE_BY_TOOL_ID: Readonly<Record<string, string>> = {
   "delete-cover-letter": "Usage: bun run cli delete-cover-letter --id <id>",
 };
 
-/** A menu entry as one line: its tool's id, or its action. */
+/** A menu entry as one line: its tool's id, its platform, or its action. */
 function menuLine(entry: Choice<MenuValue>): string {
   if (typeof entry.value === "string") return entry.value;
-  return entry.value.id;
+  if ("id" in entry.value) return entry.value.id;
+  return entry.value.platform;
 }
 
-/** The tool's own menu entry. */
+/** A Reactive Resume tool's own entry in that platform's menu. */
 function menuEntry(
   tool: ToolDefinition,
   environmentVariables: EnvironmentVariables,
 ): Choice<MenuValue> {
-  return buildMenu([tool], environmentVariables)[0];
+  return buildPlatformMenu("Reactive Resume", [tool], environmentVariables)[0];
 }
 
 describe("RX_RESUME_TOOLS", () => {
-  it("lists every tool in menu order, then Exit", () => {
-    expect(buildMenu(RX_RESUME_TOOLS, allSettings).map(menuLine)).toEqual([
+  it("lists Connect, then every tool in menu order, then Back and Exit", () => {
+    expect(
+      buildPlatformMenu("Reactive Resume", RX_RESUME_TOOLS, allSettings).map(
+        menuLine,
+      ),
+    ).toEqual([
+      "connect-rx-resume",
       "create-resume",
       "update-resume",
       "delete-resume",
@@ -485,6 +582,7 @@ describe("RX_RESUME_TOOLS", () => {
       "create-cover-letter",
       "update-cover-letter",
       "delete-cover-letter",
+      MenuAction.Back,
       MenuAction.Exit,
     ]);
   });
@@ -497,8 +595,8 @@ describe("RX_RESUME_TOOLS", () => {
     },
   );
 
-  it.each(RX_RESUME_TOOLS)(
-    "disables $id with the reason until .env has its settings",
+  it.each(RX_RESUME_TOOLS.filter((tool) => tool !== connectRxResumeTool))(
+    "disables $id with the reason until Reactive Resume is connected",
     (tool) => {
       expect(menuEntry(tool, {})).toMatchObject({
         disabled: `Not available: ${tool.preflight?.({})}`,
@@ -506,6 +604,10 @@ describe("RX_RESUME_TOOLS", () => {
       expect(menuEntry(tool, allSettings)).not.toHaveProperty("disabled");
     },
   );
+
+  it("keeps Connect available before connecting", () => {
+    expect(menuEntry(connectRxResumeTool, {})).not.toHaveProperty("disabled");
+  });
 
   it.each(RX_RESUME_TOOLS)(
     "rejects $id without its required flags, before doing any work",
@@ -519,6 +621,24 @@ describe("RX_RESUME_TOOLS", () => {
       });
     },
   );
+});
+
+// ─── The menu ─────────────────────────────────────────────────────────────────
+
+/** Every registered tool, as src/cli/index.ts lists them. */
+const ALL_TOOLS: readonly ToolDefinition[] = [
+  ...RX_RESUME_TOOLS,
+  ...RESUME_MD_TOOLS,
+];
+
+describe("buildMenu", () => {
+  it("lists each platform, then the tools that need none, then Exit", () => {
+    expect(buildMenu(ALL_TOOLS, {}).map(menuLine)).toEqual([
+      "Reactive Resume",
+      "example-resume",
+      MenuAction.Exit,
+    ]);
+  });
 });
 
 // ─── runCli ───────────────────────────────────────────────────────────────────
@@ -538,11 +658,96 @@ describe("runCli", () => {
   it("exits cleanly when Exit is picked", async () => {
     const { tool, calls } = withRecordedRuns(updateResumeTool);
     const { dependencies } = createCliHarness([tool], {
-      [PICK_TOOL]: "Exit",
+      [PICK_ACTION]: "Exit",
     });
 
     expect(await runCli(dependencies)).toBe(ExitCode.Success);
     expect(calls).toEqual([]);
+  });
+
+  it("goes back to the first level from a platform's tools", async () => {
+    const { tool, calls } = withRecordedRuns(exampleResumeTool);
+    const { dependencies } = createCliHarness([...RX_RESUME_TOOLS, tool], {
+      [PICK_ACTION]: { inTurn: ["Reactive Resume", exampleResumeTool.title] },
+      [PICK_RX_RESUME_TOOL]: "Back",
+      [OPTIONAL_FLAGS]: [],
+      [RUN_IT]: true,
+    });
+
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
+    expect(calls).toEqual([[]]);
+  });
+
+  it("exits cleanly when Exit is picked in a platform's tools", async () => {
+    const { tool, calls } = withRecordedRuns(updateResumeTool);
+    const { dependencies } = createCliHarness([tool], {
+      [PICK_ACTION]: "Reactive Resume",
+      [PICK_RX_RESUME_TOOL]: "Exit",
+    });
+
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
+    expect(calls).toEqual([]);
+  });
+
+  it("runs a tool that needs no platform straight from the first level", async () => {
+    const { tool, calls } = withRecordedRuns(exampleResumeTool);
+    const { dependencies, output } = createCliHarness([tool], {
+      [PICK_ACTION]: exampleResumeTool.title,
+      [OPTIONAL_FLAGS]: [],
+      [RUN_IT]: true,
+    });
+
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
+    expect(output).toContain("bun run cli example-resume");
+    expect(calls).toEqual([[]]);
+  });
+
+  it("reads the saved settings, so a connected platform's tools are available", async () => {
+    const { tool, calls } = withRecordedRuns(deleteResumeTool);
+    const { dependencies } = createCliHarness(
+      [tool],
+      {
+        [PICK_ACTION]: "Reactive Resume",
+        [PICK_RX_RESUME_TOOL]: deleteResumeTool.title,
+        [promptFor(deleteResumeTool, "id")]: "resume-1",
+        [RUN_IT]: true,
+      },
+      withSettingsFile(SAVED_SETTINGS),
+    );
+
+    expect(await runCli(dependencies)).toBe(ExitCode.Success);
+    expect(calls).toEqual([["--id", "resume-1"]]);
+  });
+
+  describe("with saved settings", () => {
+    /** Runs delete-resume directly and returns the API key its run received. */
+    async function apiKeyReceived(
+      environmentVariables: EnvironmentVariables,
+    ): Promise<string | undefined> {
+      const { tool, settingsReceived } = withRecordedRuns(deleteResumeTool);
+      const { dependencies } = createCliHarness(
+        [tool],
+        {},
+        {
+          commandLineArguments: ["delete-resume", "--id", "resume-1"],
+          environmentVariables,
+          ...withSettingsFile(SAVED_SETTINGS),
+        },
+      );
+
+      await runCli(dependencies);
+      return settingsReceived[0]?.[EnvironmentVariable.ApiKey];
+    }
+
+    it("lets a shell or .env value override a saved one", async () => {
+      expect(await apiKeyReceived({ RXRESUME_API_KEY: "shell-key" })).toBe(
+        "shell-key",
+      );
+    });
+
+    it("keeps a saved value over an empty one", async () => {
+      expect(await apiKeyReceived({ RXRESUME_API_KEY: "" })).toBe("saved-key");
+    });
   });
 
   it("prints the command and runs the tool with the answers", async () => {
@@ -550,7 +755,8 @@ describe("runCli", () => {
     const { dependencies, output } = createCliHarness(
       [tool],
       {
-        [PICK_TOOL]: updateResumeTool.title,
+        [PICK_ACTION]: "Reactive Resume",
+        [PICK_RX_RESUME_TOOL]: updateResumeTool.title,
         [promptFor(updateResumeTool, "id")]: "resume-1",
         [promptFor(updateResumeTool, "resume")]: "resume/Resume.md",
         [OPTIONAL_FLAGS]: [],
@@ -568,12 +774,31 @@ describe("runCli", () => {
     ]);
   });
 
+  it("hides a secret answer in the printed command, and runs the tool with it", async () => {
+    const { tool, calls } = withRecordedRuns(connectRxResumeTool);
+    const { dependencies, output } = createCliHarness([tool], {
+      [PICK_ACTION]: "Reactive Resume",
+      [PICK_RX_RESUME_TOOL]: connectRxResumeTool.title,
+      [promptFor(connectRxResumeTool, "api-key")]: "rr_secret",
+      [OPTIONAL_FLAGS]: [],
+      [RUN_IT]: true,
+    });
+
+    await runCli(dependencies);
+
+    expect(output).toEqual([
+      "bun run cli connect-rx-resume --api-key ••••••••",
+    ]);
+    expect(calls).toEqual([["--api-key", "rr_secret"]]);
+  });
+
   it("quotes an answer the shell would split in the printed command", async () => {
     const { tool } = withRecordedRuns(createResumeTool);
     const { dependencies, output } = createCliHarness(
       [tool],
       {
-        [PICK_TOOL]: createResumeTool.title,
+        [PICK_ACTION]: "Reactive Resume",
+        [PICK_RX_RESUME_TOOL]: createResumeTool.title,
         ...createRequiredScript,
         [RUN_IT]: true,
       },
@@ -588,7 +813,7 @@ describe("runCli", () => {
   });
 
   it("prints the error and fails when the tool throws", async () => {
-    // Without .env the tool stops at its settings check, before any request.
+    // Not connected, the tool stops at its settings check, before any request.
     const { dependencies, errors } = createCliHarness(
       [deleteCoverLetterTool],
       {},
@@ -597,7 +822,7 @@ describe("runCli", () => {
 
     expect(await runCli(dependencies)).toBe(ExitCode.Failure);
     expect(errors).toEqual([
-      expect.stringContaining("Missing RXRESUME_API_KEY"),
+      expect.stringContaining("Reactive Resume isn't connected"),
     ]);
   });
 
@@ -678,6 +903,7 @@ describe("runCli", () => {
         prompter: {
           select: cancel,
           input: cancel,
+          password: cancel,
           checkbox: cancel,
           confirm: cancel,
         },

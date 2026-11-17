@@ -92,7 +92,8 @@ function toOptionalFlagEntry(
 
 /**
  * Asks for one option's answer. A choice is picked from a select, which
- * can't produce an invalid value; every other kind is typed and validated.
+ * can't produce an invalid value; every other kind is typed and validated,
+ * hidden for a secret.
  */
 async function askForAnswer(
   option: OptionDescriptor,
@@ -103,6 +104,12 @@ async function askForAnswer(
     return prompter.select({
       question: option.question,
       choices: option.choices.map(toChoiceEntry),
+    });
+  }
+  if (option.kind !== OptionKind.Path && option.secret) {
+    return prompter.password({
+      question: option.question,
+      validate: answerValidator(option, pathLookup),
     });
   }
   return prompter.input({

@@ -152,8 +152,8 @@ bun run cli delete-cover-letter --id <letterId>
 - `--letter` is an `OptionKind.Path` that accepts `.md` and must exist.
 - `--company` is sent as `recipientCompany`.
 - On update, an optional flag that isn't given leaves the stored value as it is.
-- All three tools use `preflight: describeMissingSettings`, so they're
-  disabled in the menu until `.env` has the Reactive Resume settings.
+- All three tools use `preflight: requireConnection`, so they're disabled
+  in the menu until Reactive Resume is connected.
 - They follow the resume tools in the menu, in the order create, update,
   delete.
 
@@ -183,8 +183,8 @@ In use:
 
 `, template <name>` is printed only when `--template` was given, so it's
 visible that the letter no longer matches the resume's design. The origin
-comes from `RXRESUME_APP_URL` (already in `.env.example`), so a local instance
-works without code changes. Only the `/dashboard/<id>` path is in code.
+comes from `RXRESUME_APP_URL`, which Connect saves from `--address`, so a
+local instance works without code changes. Only the `/dashboard/<id>` path is in code.
 
 ## Changes by file
 

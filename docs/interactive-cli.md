@@ -5,51 +5,6 @@ Linear:
 · Follow-up:
 [BAC-53](https://linear.app/bck123/issue/BAC-53/move-test-fixtures-into-one-mocksts-per-tool-folder)
 
-> **Revision (glossary names):** names follow [GLOSSARY.md](GLOSSARY.md) and
-> spell out what they hold. The tools are `create-resume`, `update-resume`,
-> `delete-resume`, `create-cover-letter`, `update-cover-letter` and
-> `delete-cover-letter`. In `src/cli/`: `RunContext` → `ToolDependencies`,
-> `CliDeps` → `CliDependencies`, `PathContext` → `PathLookup`; `argv` →
-> `toolArguments` (a tool's) or `commandLineArguments` (runCli's), `cwd` →
-> `workingDirectory`, `env` → `environmentVariables`, `isTTY` →
-> `isInteractiveTerminal`, and an option's and a prompt's `message` →
-> `question`. In `src/rx-resume/api/`: `config.ts` → `settings.ts`
-> (`apiConfigProblem` → `describeMissingSettings`), `request` → `callApi`,
-> `*Body` → `*Request`, `RequestLog` → `ApiCallLog`, `baseUrl` → `apiUrl`.
-> Older names below keep the names of the time.
-
-> **Revision (merged platforms):** a platform's tools now live in its own
-> folder: `src/rx-resume/index.ts` declares them, `api/` holds the client and
-> `operations/` the API calls. `RunContext` carries `fetch`, ids, the clock,
-> file reads and output, so tests drive each tool through its argv.
-> `src/cli/` is five files (`menu.ts`, `command.ts`, `schema.ts`,
-> `registry.ts`, `errors.ts` and `tools/` are gone), the menu has no platform
-> headings, argv checks a `Text` option's `schema` too, and errors are plain
-> `Error` messages (`PromptCancelled` aside). `sync-resume/` is now
-> `resume-md/`. The layout and rules below are current; later sections
-> describe the earlier design, and AGENTS.md has the rules.
-
-> **Revision (inline fixtures):** there are no `mocks.ts` or `fixtures/`
-> files any more. Each test file declares its own doubles and synthetic data;
-> the CLI tests are one file, `src/cli/cli.test.ts`, the
-> Reactive Resume tests `src/rx-resume/index.test.ts`. The Testing section
-> below is updated; generic types live in `src/utils/types.ts`.
-
-> **Revision (removals):** `encode-cv`, `decode-cv` and `apply-job` are gone,
-> with `src/cv-base64/`, `src/careers-api/` and `src/apply-job/`, along with
-> the `Site` and `Job Application` platforms and `CAREERS_API_URL`. The
-> site-CV merge (`sync-resume/run.ts`, `merger.ts`) is gone too:
-> `src/sync-resume/` (now `src/resume-md/`) is only the `Resume.md` parser
-> that the resume operations import. Every tool left is a Reactive Resume tool.
-
-> **Revision (single-file tools):** each tool is now one file in
-> `src/cli/tools/<tool>.ts` that declares its options once with `defineTool`,
-> and every tool runs directly as `bun run cli <tool id> [flags]`. This removed
-> each tool's `flags.ts`, `definition.ts`, `index.ts`, `mocks.ts` and
-> `package.json` script. Adding `delete-rx-resume` the old way took 12 files;
-> now a tool is one file plus a registry line. [Delivery](#delivery) is kept
-> as the original history.
-
 ## Goal
 
 `bun run cli` opens a terminal menu that lists every resume-tools tool, grouped

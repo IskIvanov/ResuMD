@@ -51,6 +51,8 @@ export enum ExitCode {
 
 /** Non-tool menu entries. */
 export enum MenuAction {
+  /** From a platform's tools back to the first level. */
+  Back = "back",
   Exit = "exit",
 }
 
@@ -91,6 +93,11 @@ interface ValueOption extends BaseOption {
   kind: OptionKind.Text | OptionKind.List;
   /** Checked at the prompt and in the tool arguments. */
   schema?: z.ZodType<string>;
+  /**
+   * A value such as an API key: typed hidden in the menu and shown as
+   * `••••••••` in the printed command.
+   */
+  secret?: true;
 }
 
 /** A value picked from a fixed list: a select in the menu, checked in the tool arguments. */
@@ -157,8 +164,20 @@ export interface ToolDependencies {
   now: () => number;
   /** Reads a UTF-8 text file by its absolute path. */
   readFile: (absolutePath: string) => string;
+  /** Tells whether a file exists, by its absolute path. */
+  exists: (absolutePath: string) => boolean;
   /** Writes bytes to a file by its absolute path, replacing what's there. */
   writeFile: (absolutePath: string, bytes: Uint8Array) => void;
+  /**
+   * The absolute path of the settings Connect saves and every run reads:
+   * `~/.config/resume-tools/.env`.
+   */
+  settingsFile: string;
+  /**
+   * Writes a UTF-8 text file by its absolute path, replacing what's there and
+   * creating its folder, so only the user can read it.
+   */
+  writePrivateFile: (absolutePath: string, text: string) => void;
   log: (line: string) => void;
   logError: (line: string) => void;
 }
@@ -167,6 +186,11 @@ export interface ToolDependencies {
 export interface ToolSpec<TOptions extends OptionSpecs> {
   /** Also the first argument of the direct command: `bun run cli <id>`. */
   id: string;
+  /**
+   * The platform the tool runs against, e.g. "Reactive Resume"; the menu
+   * lists the tool under it. Left out for a tool that needs no platform.
+   */
+  platform?: string;
   title: string;
   description: string;
   options: TOptions;
@@ -190,6 +214,8 @@ export interface ToolDefinition<
   TValues extends AnyOptionValues = AnyOptionValues,
 > {
   id: string;
+  /** The platform the menu lists the tool under; absent when it needs none. */
+  platform?: string;
   title: string;
   description: string;
   /** The direct command, e.g. "bun run cli create-resume"; used in the printed command. */
@@ -224,8 +250,22 @@ export interface Choice<TValue> {
   disabled?: string;
 }
 
-/** A menu entry's value: the tool to run, or a non-tool action. */
-export type MenuValue = ToolDefinition | MenuAction;
+/** A platform on the first menu level; picking it lists the platform's tools. */
+export interface PlatformMenuEntry {
+  platform: string;
+}
+
+/** An entry's value on the first menu level: a platform, a tool that needs none, or Exit. */
+export type FirstLevelValue =
+  | ToolDefinition
+  | PlatformMenuEntry
+  | MenuAction.Exit;
+
+/** An entry's value in a platform's menu: one of its tools, Back or Exit. */
+export type PlatformLevelValue = ToolDefinition | MenuAction;
+
+/** A menu entry's value on either level. */
+export type MenuValue = FirstLevelValue | PlatformLevelValue;
 
 /** Returns true when the answer is valid, or the problem to show. */
 export type Validator = (answer: string) => true | string;
@@ -240,6 +280,8 @@ export interface Prompter {
     choices: readonly Choice<TValue>[];
   }): Promise<TValue>;
   input(prompt: { question: string; validate?: Validator }): Promise<string>;
+  /** Like input, with the answer masked as it's typed. */
+  password(prompt: { question: string; validate?: Validator }): Promise<string>;
   checkbox<TValue>(prompt: {
     question: string;
     choices: readonly Choice<TValue>[];
@@ -260,6 +302,4 @@ export interface CliDependencies extends ToolDependencies {
   prompter: Prompter;
   /** True when stdin and stdout are a terminal, so the menu can prompt. */
   isInteractiveTerminal: boolean;
-  /** Checks a path typed at a prompt. */
-  exists: (absolutePath: string) => boolean;
 }

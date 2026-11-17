@@ -35,38 +35,46 @@ Imports use explicit `.ts` extensions.
 Two layers, on shared utilities:
 
 - `src/cli/`: the CLI engine. It knows nothing about resumes or letters.
-  - `define-tool.ts`: `defineTool({ id, title, description, options,
-    preflight?, run })` turns one declaration into the menu prompts, the
-    usage line and the argument parser, so the menu and `bun run cli <tool>`
-    can't drift. Each option is declared once, keyed by flag, with a `kind`
-    (`Path`, `Text`, `List`, `Choice`), `required`, optional
-    `default(answers)`, path rules or `choices`. A `Choice` is a select in the
-    menu, rejected in the tool arguments unless it's one of `choices`, and
-    `run` gets the union of its values. A `Text` option can add a Zod
-    `schema`, checked at the prompt and in the tool arguments.
+  - `define-tool.ts`: `defineTool({ id, platform?, title, description,
+    options, preflight?, run })` turns one declaration into the menu prompts,
+    the usage line and the argument parser, so the menu and
+    `bun run cli <tool>` can't drift. Each option is declared once, keyed by
+    flag, with a `kind` (`Path`, `Text`, `List`, `Choice`), `required`,
+    optional `default(answers)`, path rules or `choices`. A `Choice` is a
+    select in the menu, rejected in the tool arguments unless it's one of
+    `choices`, and `run` gets the union of its values. A `Text` option can
+    add a Zod `schema`, checked at the prompt and in the tool arguments, and
+    `secret: true`, which types it hidden and prints it as `••••••••`.
+  - `platform` is a label, not a type: the menu's first level lists each
+    platform in order of first appearance, then the tools without one, then
+    Exit; picking a platform lists its tools, then Back and Exit. Nothing
+    else about a tool depends on it.
   - `prompt.ts` (answers → tool arguments, checking paths and schemas as
-    typed), `run-cli.ts` (`runCli`: a tool by id, or the menu;
-    `PromptCancelled`),
+    typed), `run-cli.ts` (`runCli`: a tool by id, or the two-level menu;
+    reads the saved settings first; `PromptCancelled`),
     `types.ts` (`OptionKind`, `ToolDependencies`, `CliDependencies`, …).
   - `index.ts` is the entry point and the registry: the only file that
     touches the real terminal, network, clock and file system, and the one
     place each platform's tool list is spread in.
   - A tool's `run(values, dependencies)` gets `ToolDependencies`:
     `workingDirectory`, `environmentVariables`, `fetch`, `newId`, `today`,
-    `now`, `readFile`, `log`, `logError`.
+    `now`, `readFile`, `exists`, `writeFile`, `settingsFile`,
+    `writePrivateFile` (readable only by the user), `log`, `logError`.
   - `preflight(environmentVariables)` returns a reason string when a tool
     can't run (e.g. missing API key); the menu lists it as disabled.
   - Exit codes: `0` ok, `1` failure, `130` cancelled.
 - `src/<platform>/`: a destination such as Reactive Resume, together with its
   tools; see Platform and Operation in `docs/GLOSSARY.md`. It imports the CLI
   only for `defineTool` and its types.
-  - `index.ts` declares the platform's tools and exports their list
-    (`RX_RESUME_TOOLS`); `types.ts` and `schema.ts` hold what the tools and
-    operations share.
-  - `api/`: the client, the `.env` settings, and the API's schemas and types.
+  - `index.ts` declares the platform's tools, each labelled with the
+    platform, and exports their list (`RX_RESUME_TOOLS`), Connect first;
+    `types.ts` and `schema.ts` hold what the tools and operations share.
+  - `api/`: the client, the settings Connect saves, and the API's schemas
+    and types.
   - `operations/<thing>/`: create, update and delete, as functions that take
     the client. They never read tool arguments, files or `process`.
-- `src/resume-md/`: the `Resume.md` parser, shared by any platform.
+- `src/resume-md/`: the `Resume.md` parser, shared by any platform, and the
+  tools that need no platform (`RESUME_MD_TOOLS`), such as `example-resume`.
 
 Both layers sit on `src/utils/`: generic helpers (strings, records, Markdown,
 Zod) that know nothing about resumes, letters or the CLI. It imports only
@@ -77,8 +85,8 @@ caller stays in that caller's file.
 
 | Folder       | Role |
 | ------------ | ---- |
-| `resume-md/` | `parser.ts` (only `parseResumeMd`: reads Resume.md once into typed logical lines, see `docs/GLOSSARY.md`; `classifyLine` is the only place that decides a line's kind), `schema.ts` (Zod validation), `types.ts` |
-| `rx-resume/` | The Reactive Resume platform. `index.ts` (the six tools, `RX_RESUME_TOOLS`), `types.ts` (cover-letter text and letter fields), `schema.ts` (`CoverLetterIdSchema`, the letter `.md` schemas). `api/`: `client.ts` (`RxResumeApiClient` with editor links, `RxResumeApiError`), `settings.ts` (`describeMissingSettings`, `connectRxResume(environmentVariables, fetch, apiCallLog)`), `schema.ts` (API shapes), `types.ts`. `operations/resume/`: `index.ts` (`createResume`, `updateResume`, `previewResumeUpdate`, `deleteResume`), `mapping.ts` (ResumeMd → API `data`, keeping hidden items and what matched stored items hold), `changes.ts` (`compareSections`, `assertNoSectionEmptied`), `layout.ts`. `operations/cover-letter/`: `index.ts` (create, update, delete), `parser.ts`. `index.test.ts`: every tool through its tool arguments, with `recordingFetch`, in-memory files and a stand-in for the Markdown export |
+| `resume-md/` | `parser.ts` (only `parseResumeMd`: reads Resume.md once into typed logical lines, see `docs/GLOSSARY.md`; `classifyLine` is the only place that decides a line's kind), `schema.ts` (Zod validation), `types.ts`. `index.ts` (`example-resume`, `RESUME_MD_TOOLS`), `example.ts` (Jane Doe's Resume.md, as a string). `index.test.ts`: `example-resume` through its tool arguments, with in-memory files |
+| `rx-resume/` | The Reactive Resume platform. `index.ts` (`connect-rx-resume` and the seven document tools, `RX_RESUME_TOOLS`), `types.ts` (cover-letter text and letter fields), `schema.ts` (`AddressSchema`, `CoverLetterIdSchema`, the letter `.md` schemas). `api/`: `client.ts` (`RxResumeApiClient` with editor links and `checkApiKey`, `RxResumeApiError`), `settings.ts` (`isConnected`, `settingsFor`, `replaceSavedSettings`, `connectRxResume(environmentVariables, fetch, apiCallLog)`), `schema.ts` (API shapes), `types.ts`. `operations/resume/`: `index.ts` (`createResume`, `updateResume`, `previewResumeUpdate`, `deleteResume`), `mapping.ts` (ResumeMd → API `data`, keeping hidden items and what matched stored items hold), `changes.ts` (`compareSections`, `assertNoSectionEmptied`), `layout.ts`. `operations/cover-letter/`: `index.ts` (create, update, delete), `parser.ts`. `index.test.ts`: every tool through its tool arguments, with `recordingFetch`, in-memory files and a stand-in for the Markdown export |
 | `utils/`     | `string.ts` (`slugify`, `splitList`), `record.ts` (`omitUndefined`, `pickNonEmptyStrings`, `fillDefaults`), `markdown.ts` (`splitSections`), `schema.ts` (`FieldProblem`, `requiredText`, `firstIssue`, `parseOrThrow`), `error.ts` (`describeCaught`), `types.ts` (`ValueOf`, `DefaultEntry`, `EnvironmentVariables`, `FetchFunction`) |
 
 Data flow: `Resume.md` → `create-resume` / `update-resume` →
@@ -92,8 +100,9 @@ the cover-letter endpoints.
 
 Gotchas:
 
-- `resume-md/` is not a tool: it is the `Resume.md` parser that
-  `rx-resume/operations/resume/` imports.
+- `resume-md/` is not a platform: it holds the `Resume.md` parser that
+  `rx-resume/operations/resume/` imports, and the tools that need no
+  platform.
 - `parseResumeMd` reads both the hand-written format and Reactive Resume's
   Markdown export, except that bullets are always `- text`: a `• ` line throws.
   The export holds only visible content, so `update-resume` must keep what it
@@ -102,10 +111,13 @@ Gotchas:
   in one file, `src/cli/cli.test.ts`, with their doubles (fake prompter,
   harness, `withRecordedRuns`). They use the Reactive Resume tools, so
   removing that platform means pointing them at another one.
-- `.env` (see `.env.example`): `RXRESUME_API_KEY`, `RXRESUME_API_URL`,
-  `RXRESUME_APP_URL`, optional `RXRESUME_DEBUG` (logs every
-  API call to stderr). Bun loads it; `cli/index.ts` passes `process.env` on
-  as the tool dependencies' `environmentVariables`.
+- Settings: `RXRESUME_API_KEY`, `RXRESUME_API_URL`, `RXRESUME_APP_URL`,
+  optional `RXRESUME_DEBUG` (logs every API call to stderr, never the key).
+  `connect-rx-resume` tests the key, then saves the first three to
+  `~/.config/resume-tools/.env` (mode 600), replacing only its own lines.
+  `runCli` reads that file with `parseEnv` and lays `process.env` over it:
+  shell variables, then a `.env` in the current folder (Bun loads it), then
+  the saved file. An empty value never hides a saved one.
 - `.gitignore` blocks every `*.md` except `README.md`, `docs/`, `AGENTS.md`,
   `CLAUDE.md` and `.claude/skills/`.
 - Gitignored personal data: `resume/RxResume/Resume.json`, `*.base64.txt`,
@@ -154,14 +166,20 @@ Gotchas:
 
 ## Adding a tool
 
-1. Declare it with `defineTool(...)` in `src/<platform>/index.ts` and append
-   it to the platform's tool list. `run` throws on failure, reads files with
-   `dependencies.readFile` and prints with `dependencies.log`.
+1. Declare it with `defineTool(...)` in `src/<platform>/index.ts`, with the
+   platform's `platform` label, and append it to the platform's tool list.
+   A tool that needs no platform leaves `platform` out and goes in
+   `src/resume-md/index.ts` and `RESUME_MD_TOOLS`. `run` throws on failure,
+   reads files with `dependencies.readFile` and prints with
+   `dependencies.log`.
 2. Put its API calls in `src/<platform>/operations/<thing>/index.ts`, as
    functions that take the client.
 3. Test it first through its tool arguments (for Reactive Resume: `runTool` with
-   `recordingFetch`, in `src/rx-resume/index.test.ts`).
-4. A new platform's tool list is spread into `tools` in `src/cli/index.ts`.
+   `recordingFetch`, in `src/rx-resume/index.test.ts`; for a tool without a
+   platform, `src/resume-md/index.test.ts`).
+4. A new platform's tool list is spread into `tools` in `src/cli/index.ts`,
+   before `RESUME_MD_TOOLS`, with a Connect tool first that saves its
+   settings.
 
 ## Removing a platform
 
