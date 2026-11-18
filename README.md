@@ -2,8 +2,8 @@
 
 Keep your resume and cover letters as Markdown files under version control, and
 sync them to resume platforms through their APIs. One `Resume.md` connects to every
-platform: [Reactive Resume](https://rxresu.me) is the first, and more, such as
-[JSON Resume](https://jsonresume.org), are planned.
+platform: [Reactive Resume](https://rxresu.me) is the first, and more are
+[planned](#planned).
 
 ## Who it's for
 
@@ -15,10 +15,22 @@ platform: [Reactive Resume](https://rxresu.me) is the first, and more, such as
 
 ## Platforms
 
-Each platform brings its own tools. The menu asks for a platform first, then
-lists its tools; the tools that need no platform sit beside the platforms.
+A platform is a resume builder the tools write to. Each one has its own section
+below with what it needs, its settings and its tools, and each is connected on
+its own: connecting one never touches another. The menu asks for a platform
+first, then lists only that platform's tools.
 
 ### Reactive Resume
+
+[Reactive Resume](https://rxresu.me) is an open-source resume builder, used at
+rxresu.me or self-hosted.
+
+- **Needs:** an API key from your Reactive Resume account's settings.
+- **Settings:** `RXRESUME_API_KEY`, `RXRESUME_API_URL` and `RXRESUME_APP_URL`,
+  saved by `connect-rx-resume` (see `.env.example`).
+- **Docs:** [Reactive Resume's Markdown export](docs/resume-md.md#reactive-resumes-markdown-export),
+  [what `update-resume` keeps](docs/resume-md.md#what-update-resume-keeps) and
+  [cover letters](docs/cover-letter.md).
 
 | Tool                  | What it does                                                                                 |
 | --------------------- | -------------------------------------------------------------------------------------------- |
@@ -31,7 +43,10 @@ lists its tools; the tools that need no platform sit beside the platforms.
 | `update-cover-letter` | Rewrites a cover letter from its `.md`, by id.                                               |
 | `delete-cover-letter` | Deletes a cover letter for good: moves it to Trash, then purges it.                          |
 
-### Without a platform
+## Tools without a platform
+
+These work on `Resume.md` alone and need no account or connection. The menu
+lists them after the platforms.
 
 | Tool             | What it does                                                                                      |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
@@ -74,8 +89,17 @@ it runs. Without a terminal, `bun run cli` prints every tool's usage line.
 
 ## Planned
 
-- More platforms, starting with [JSON Resume](https://jsonresume.org), all fed
-  by the same `Resume.md` parser.
+- More platforms, each with its own Connect tool and all fed by the same
+  `Resume.md` parser. Resume builders with a public API:
+  - [Mokaru](https://mokaru.ai) ([API](https://docs.mokaru.ai)): create,
+    update, delete and export resumes as PDF, and create, update and delete
+    cover letters. API keys need a Plus plan.
+  - [Enhancv](https://enhancv.com) ([API](https://developers.enhancv.com)):
+    create resumes from structured data, list them, export them as PDF and
+    delete them, but not update them. API keys need a Business Plus plan.
+  - [Careerflow](https://careerflow.ai) ([API](https://docs.careerflow.ai)):
+    create, update, clone, download and delete resumes, and generate cover
+    letters. An organization's owner or admin creates the API keys.
 - A CLI that renders a CV with a custom layout straight from `Resume.md`.
 
 ## Development
