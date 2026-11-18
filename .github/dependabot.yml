@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Bun packages: package.json and bun.lock.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # One PR for all minor and patch bumps instead of one per package.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "deps"
+
+  # Actions used in .github/workflows (checkout, setup-bun).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
