@@ -92,6 +92,9 @@ it runs. Without a terminal, `bun run cli` prints every tool's usage line.
 - [Glossary](docs/GLOSSARY.md): the terms used across the code and docs.
 - [AGENTS.md](AGENTS.md): architecture, conventions, and adding a tool or a
   platform.
+- [Working with an AI agent](docs/agentic-development.md): every change is
+  built test-first with an agent, then committed and put up for review
+  through the repo's skills.
 
 ## Planned
 
