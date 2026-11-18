@@ -7,6 +7,8 @@ platform: [Reactive Resume](https://rxresu.me) is the first, and more are
 
 ## Demo
 
+https://github.com/user-attachments/assets/64c21695-dc4a-453d-9c7c-c7d1e457436e
+
 Run `bun run cli` opens the menu, picks Reactive
 Resume to list its tools, goes back, then starts Connect, which asks for the
 API key hidden.
