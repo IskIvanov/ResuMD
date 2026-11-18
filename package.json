@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Keep a single Resume.md as the source of truth and sync it into CV builders like Reactive Resume.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "cli": "bun src/cli/index.ts",

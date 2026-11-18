@@ -121,3 +121,7 @@ bun run typecheck     # tsc --noEmit
 bun run format        # biome format --write .
 bun run format:check  # biome format .
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Iskren Ivanov
