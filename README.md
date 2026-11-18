@@ -1,4 +1,7 @@
-# resume-tools
+# resumd
+<p align="center">
+    <img src="docs/assets/banner.png" width="600" alt="resumd">
+</p>
 
 Keep your resume and cover letters as Markdown files under version control, and
 sync them to resume platforms through their APIs. One `Resume.md` connects to every
