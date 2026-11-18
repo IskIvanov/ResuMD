@@ -119,7 +119,13 @@ Gotchas:
   shell variables, then a `.env` in the current folder (Bun loads it), then
   the saved file. An empty value never hides a saved one.
 - `.gitignore` blocks every `*.md` except `README.md`, `docs/`, `AGENTS.md`,
-  `CLAUDE.md` and `.claude/skills/`.
+  `CLAUDE.md` and `.agents/skills/`.
+- Skills and hooks live in `.agents/` (`skills/<name>/`, `hooks/`), but
+  Claude Code reads neither there: it loads skills only from `.claude/skills/`
+  and hooks only from `.claude/settings.json`. So each skill has a symlink
+  `.claude/skills/<name> -> ../../.agents/skills/<name>`, and
+  `.claude/settings.json` runs the hook scripts by their `.agents/hooks/`
+  path.
 - Gitignored personal data: `resume/RxResume/Resume.json`, `*.base64.txt`,
   `*.pdf`, `*.docx`, `.env*`.
 
@@ -159,9 +165,9 @@ Gotchas:
   tools, never tools built for the test (`withRecordedRuns` swaps only a
   tool's `run`).
 - TDD: before writing any test, load the `tdd` skill
-  (`.claude/skills/tdd/`), confirm the seams under test with the user, then
+  (`.agents/skills/tdd/`), confirm the seams under test with the user, then
   work one red → green slice at a time. No logic without a failing test
-  first. A hook (`.claude/hooks/tdd-gate.sh`) denies edits to `*.test.ts`
+  first. A hook (`.agents/hooks/tdd-gate.sh`) denies edits to `*.test.ts`
   until the skill is loaded in the session.
 
 ## Adding a tool

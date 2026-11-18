@@ -6,9 +6,8 @@ node_modules/
 !docs/**/*.md
 !AGENTS.md
 !CLAUDE.md
-!.claude/skills/**/*.md
+!.agents/skills/**/*.md
 *RxResumeCollection
-*.agents
 skills-lock.json
 
 

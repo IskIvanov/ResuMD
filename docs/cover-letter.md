@@ -6,23 +6,6 @@ Linear:
 for where the code differs from or adds to the plan. Risk 3 below is
 resolved; the others are still open.
 
-> **Revision (merged platforms):** the cover-letter code now lives in
-> `src/rx-resume/operations/cover-letter/` (`index.ts`: create, update and
-> delete, taking the API client; `parser.ts`), and the three tools are
-> declared in `src/rx-resume/index.ts`, which also prints. `body.ts`,
-> `update.ts`, `delete.ts`, `CoverLetterError` and `camelCaseKeys` are gone:
-> failures are plain `Error` messages, and the tools map flags to API field
-> names directly. `letterDate` comes from the run context's `today`; luxon is
-> gone. The tests drive each tool through its argv with `recordingFetch`.
-> Paths below describe the original layout.
->
-> **Revision (glossary names):** the tools are `create-cover-letter`,
-> `update-cover-letter` and `delete-cover-letter`; the `.md`'s sections are
-> `## Recipient`, `## Letter` and `## Sign-off`, and errors name them as
-> `recipient`, `letter` and `signOff`; links print as `editor:`. The terms are
-> in [GLOSSARY.md](GLOSSARY.md). Sections from "Changes by file" on keep the
-> names of the time.
-
 ## Goal
 
 Manage a Reactive Resume cover letter from one hand-edited Markdown file, the

@@ -5,6 +5,12 @@ sync them to resume platforms through their APIs. One `Resume.md` connects to ev
 platform: [Reactive Resume](https://rxresu.me) is the first, and more, such as
 [JSON Resume](https://jsonresume.org), are planned.
 
+## Demo
+
+Run `bun run cli` opens the menu, picks Reactive
+Resume to list its tools, goes back, then starts Connect, which asks for the
+API key hidden.
+
 ## Who it's for
 
 - Anyone who wants to keep a versioned CV or cover letter in Markdown: one
