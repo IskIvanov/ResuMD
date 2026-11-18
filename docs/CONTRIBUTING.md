@@ -35,8 +35,8 @@ URL, status and time, never the key.
    bun run format:check  # biome format .
    ```
 
-   CI runs the same tests, typecheck and format check on every pull request
-   (`.github/workflows/ci.yml`).
+   CI runs the same tests, typecheck and format check on every push to any
+   branch and on every pull request (`.github/workflows/ci.yml`).
 
 6. Commit with [Conventional Commits](https://www.conventionalcommits.org)
    messages that say why, such as `feat(rx-resume): add download-resume tool`,

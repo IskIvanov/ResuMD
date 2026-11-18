@@ -1,6 +1,10 @@
 name: CI
 
 on:
+  # Every commit pushed to any branch, main included. Tags don't trigger it.
+  push:
+    branches: ["**"]
+  # Pull requests, including ones from forks, which push doesn't cover.
   pull_request:
 
 permissions:
