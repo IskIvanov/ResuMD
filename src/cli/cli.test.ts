@@ -91,7 +91,7 @@ const allSettings: EnvironmentVariables = {
 // ─── Prompter ─────────────────────────────────────────────────────────────────
 
 /** The CLI's own prompts, as the user sees them. */
-const PICK_ACTION = "What do you want to do?";
+const PICK_ACTION = "Select a platform from the list?";
 const PICK_RX_RESUME_TOOL = "Which Reactive Resume tool?";
 const OPTIONAL_FLAGS = "Set any optional flags?";
 const RUN_IT = "Run it?";

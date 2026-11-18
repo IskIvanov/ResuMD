@@ -222,7 +222,7 @@ async function pickTool(
 
   for (;;) {
     const firstLevelPick = await prompter.select<FirstLevelValue>({
-      question: "Select a platform from the list ?",
+      question: "Select a platform from the list?",
       choices: buildMenu(tools, environmentVariables),
     });
     if (firstLevelPick === MenuAction.Exit || "id" in firstLevelPick) {
