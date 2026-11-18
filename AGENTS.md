@@ -169,6 +169,12 @@ Gotchas:
   work one red → green slice at a time. No logic without a failing test
   first. A hook (`.agents/hooks/tdd-gate.sh`) denies edits to `*.test.ts`
   until the skill is loaded in the session.
+- Branches: nothing is changed on `main`. Before the first change, load the
+  `start-branch` skill (`.agents/skills/start-branch/`): it names the branch
+  after the Linear issue (its `gitBranchName`) or a summary of the request,
+  such as `docs-contributing-guide`. A hook
+  (`.agents/hooks/branch-reminder.sh`) reminds the agent on every prompt sent
+  on `main`.
 
 ## Adding a tool
 
