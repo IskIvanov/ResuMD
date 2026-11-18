@@ -113,14 +113,11 @@ it runs. Without a terminal, `bun run cli` prints every tool's usage line.
     letters. An organization's owner or admin creates the API keys.
 - A CLI that renders a CV with a custom layout straight from `Resume.md`.
 
-## Development
+## Contributing
 
-```bash
-bun run test          # vitest
-bun run typecheck     # tsc --noEmit
-bun run format        # biome format --write .
-bun run format:check  # biome format .
-```
+Bug reports, fixes, docs and new platforms are welcome. See
+[CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to report a bug, the checks a
+change must pass and how to open a pull request.
 
 ## License
 
