@@ -35,8 +35,8 @@ URL, status and time, never the key.
    bun install
    bunx vitest run       # vitest, one pass (bun run test watches)
    bun run typecheck     # tsc --noEmit
-   bun run format        # biome format --write .
-   bun run format:check  # biome format .
+   bun run format        # biome check --write .
+   bun run format:check  # biome check .
    ```
 
    CI runs the same tests, typecheck and format check on every push to any

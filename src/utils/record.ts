@@ -61,13 +61,11 @@ export function fillDefaults(
   entries: Readonly<Record<string, string>>,
   defaults: readonly DefaultEntry[],
 ): Record<string, string> {
-  return defaults.reduce<Record<string, string>>(
-    (known, [key, build]) => {
-      if (known[key] !== undefined || build === undefined) return known;
-      const value = build(known);
-      if (value === undefined) return known;
-      return { ...known, [key]: value };
-    },
-    { ...entries },
-  );
+  const known: Record<string, string> = { ...entries };
+  for (const [key, build] of defaults) {
+    if (known[key] !== undefined || build === undefined) continue;
+    const value = build(known);
+    if (value !== undefined) known[key] = value;
+  }
+  return known;
 }

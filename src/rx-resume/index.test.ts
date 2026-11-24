@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relative } from "path";
+import { relative } from "node:path";
 import type { ToolDependencies, ToolDefinition } from "../cli/types.ts";
 import type { EnvironmentVariables, FetchFunction } from "../utils/types.ts";
 import { CoverLetterLimit } from "./api/schema.ts";
@@ -404,9 +404,16 @@ const HIDDEN_PROJECT = {
   website: EMPTY_WEBSITE,
 };
 
-/** The `data` the second request (the PUT) sent. */
-function savedData(receivedRequests: ReceivedRequest[]): ResumeData {
-  return (receivedRequests[1]?.sentJson as { data: ResumeData }).data;
+/** The `data` a request sent; by default the second one (the PUT). */
+function savedData(
+  receivedRequests: ReceivedRequest[],
+  requestIndex = 1,
+): ResumeData {
+  const receivedRequest = receivedRequests[requestIndex];
+  if (receivedRequest === undefined) {
+    throw new Error(`No request ${requestIndex} was sent`);
+  }
+  return (receivedRequest.sentJson as { data: ResumeData }).data;
 }
 
 // ─── Cover letters ────────────────────────────────────────────────────────────
@@ -897,7 +904,7 @@ function exportedMarkdown(data: ResumeData): string {
     richTextToMarkdown(item.description),
   ]);
   const blocks = [
-    "# " + basics.name,
+    `# ${basics.name}`,
     `_${basics.headline}_`,
     contact.filter(Boolean).join(" · "),
     "## Summary",
@@ -1862,7 +1869,7 @@ describe("create-resume", () => {
       slug: "jane-doe",
       tags: ["cv"],
     });
-    const { data } = api.receivedRequests[2]?.sentJson as { data: ResumeData };
+    const data = savedData(api.receivedRequests, 2);
     expect(data.sections.experience.items).toEqual([
       expect.objectContaining({ company: "Example Corp" }),
     ]);
@@ -1877,7 +1884,7 @@ describe("create-resume", () => {
 
     await runTool(createResumeTool, toolArguments, { fetch: api.fetch });
 
-    const { data } = api.receivedRequests[2]?.sentJson as { data: ResumeData };
+    const data = savedData(api.receivedRequests, 2);
     expect(data.metadata.layout).toEqual({
       sidebarWidth: 35,
       pages: [

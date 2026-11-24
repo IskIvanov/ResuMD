@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf, vi } from "vitest";
-import { resolve } from "path";
+import { resolve } from "node:path";
 import {
   CoverLetterTemplate,
   EnvironmentVariable,

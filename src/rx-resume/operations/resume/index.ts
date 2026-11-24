@@ -14,7 +14,7 @@ import type {
   Resume,
   ResumeData,
 } from "../../api/types.ts";
-import { ResumeFormat } from "../../types.ts";
+import type { ResumeFormat } from "../../types.ts";
 import {
   assertNoSectionEmptied,
   compareSections,

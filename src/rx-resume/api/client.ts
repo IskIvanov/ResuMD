@@ -8,7 +8,7 @@
 
 import { describeCaught } from "../../utils/error.ts";
 import type { FetchFunction, ValueOf } from "../../utils/types.ts";
-import { ResumeFormat } from "../types.ts";
+import type { ResumeFormat } from "../types.ts";
 import {
   type ApiCallLog,
   type ApiErrorDetails,
