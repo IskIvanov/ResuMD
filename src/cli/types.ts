@@ -195,9 +195,9 @@ export interface ToolSpec<TOptions extends OptionSpecs> {
   description: string;
   options: TOptions;
   /** Returns why the tool can't run, or undefined when it can. */
-  preflight?: (
-    environmentVariables: EnvironmentVariables,
-  ) => string | undefined;
+  preflight?:
+    | ((environmentVariables: EnvironmentVariables) => string | undefined)
+    | undefined;
   /** Does the work with the parsed values; throws on failure. */
   run: (
     values: OptionValues<TOptions>,
@@ -215,7 +215,7 @@ export interface ToolDefinition<
 > {
   id: string;
   /** The platform the menu lists the tool under; absent when it needs none. */
-  platform?: string;
+  platform?: string | undefined;
   title: string;
   description: string;
   /** The direct command, e.g. "bun run cli create-resume"; used in the printed command. */
@@ -225,9 +225,9 @@ export interface ToolDefinition<
   /** The tool's options, each with its flag, in prompt order. */
   options: readonly OptionDescriptor[];
   /** Returns why the tool can't run, or undefined when it can. */
-  preflight?: (
-    environmentVariables: EnvironmentVariables,
-  ) => string | undefined;
+  preflight?:
+    | ((environmentVariables: EnvironmentVariables) => string | undefined)
+    | undefined;
   /**
    * Parses the tool arguments into the values run receives, without running
    * the tool. Throws for a missing option, an invalid choice or a value its

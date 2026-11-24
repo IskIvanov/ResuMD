@@ -474,41 +474,41 @@ describe("parseResumeMd", () => {
     });
 
     it("reads the intro paragraph after the role line", () => {
-      expect(parseWith().jobs[0].intro).toBe("Acme Corp builds widgets.");
+      expect(parseWith().jobs[0]?.intro).toBe("Acme Corp builds widgets.");
     });
 
     it("returns an empty intro when the job has no paragraph", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].intro).toBe("");
-      expect(jobs[1].intro).toBe("");
+      expect(jobs[0]?.intro).toBe("");
+      expect(jobs[1]?.intro).toBe("");
     });
 
     it('reads bullets without the leading "- "', () => {
-      expect(parseWith().jobs[0].bullets).toEqual([
+      expect(parseWith().jobs[0]?.bullets).toEqual([
         "Led end-to-end development of the widget platform.",
         "Built real-time data pipelines using GraphQL.",
       ]);
     });
 
     it("finds the bullets of a job without an intro paragraph", () => {
-      expect(parseWith().jobs[1].bullets).toEqual([
+      expect(parseWith().jobs[1]?.bullets).toEqual([
         "Owned the returns micro-frontend.",
       ]);
     });
 
     it('reads the tech stack without the "**Tech Stack:**" label', () => {
-      expect(parseWith().jobs[0].techStack).toBe("React, TypeScript, GraphQL");
+      expect(parseWith().jobs[0]?.techStack).toBe("React, TypeScript, GraphQL");
     });
 
     it("reads the company website from a bare URL line", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].website).toBe("https://acme.example/");
-      expect(jobs[1].website).toBe("");
+      expect(jobs[0]?.website).toBe("https://acme.example/");
+      expect(jobs[1]?.website).toBe("");
     });
 
     it("joins hard-wrapped bullet continuation lines into one bullet", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].bullets).toEqual([
+      expect(jobs[0]?.bullets).toEqual([
         "Extended Energy Per Unit, an efficiency metric industrial customers use to benchmark production against energy use",
         "Built a near-real-time mode for energy monitoring dashboards",
       ]);
@@ -516,7 +516,7 @@ describe("parseResumeMd", () => {
 
     it("joins hard-wrapped bullets separated by blank lines", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[1].bullets).toEqual([
+      expect(jobs[1]?.bullets).toEqual([
         "Architected full-stack solutions across React frontends and Java/AEM backends for enterprise e-commerce platforms",
         "Collaborated across distributed EU teams in Agile/Scrum environments, providing technical depth in both frontend and backend domains",
       ]);
@@ -524,7 +524,7 @@ describe("parseResumeMd", () => {
 
     it("joins a hard-wrapped Tech Stack line", () => {
       const { jobs } = parseWith({ experience: WRAPPED_EXPERIENCE_FIXTURE });
-      expect(jobs[0].techStack).toBe(
+      expect(jobs[0]?.techStack).toBe(
         "React, TypeScript, GraphQL, Node.js, Jest, ApexCharts, Highcharts, Styled Components",
       );
     });
@@ -560,7 +560,7 @@ describe("parseResumeMd", () => {
 
   describe("## Experience job references", () => {
     it('splits the "**Reference:**" line into its references on ","', () => {
-      expect(parseWith().jobs[0].references).toEqual([
+      expect(parseWith().jobs[0]?.references).toEqual([
         "manager@acme.example",
         "lead@acme.example",
       ]);
@@ -572,7 +572,7 @@ describe("parseResumeMd", () => {
 
     it('reads a "Reference:" line written without bold', () => {
       const experience = PLAIN_REFERENCE_EXPERIENCE_FIXTURE;
-      expect(parseWith({ experience }).jobs[0].references).toEqual([
+      expect(parseWith({ experience }).jobs[0]?.references).toEqual([
         "manager@acme.example",
         "lead@acme.example",
       ]);
@@ -580,7 +580,7 @@ describe("parseResumeMd", () => {
 
     it('does not take a plain "Reference:" line as the intro', () => {
       const experience = PLAIN_REFERENCE_EXPERIENCE_FIXTURE;
-      expect(parseWith({ experience }).jobs[0].intro).toBe("");
+      expect(parseWith({ experience }).jobs[0]?.intro).toBe("");
     });
 
     it.each([
@@ -594,18 +594,18 @@ describe("parseResumeMd", () => {
         line,
       );
       const [job] = parseWith({ experience }).jobs;
-      expect(job.references).toEqual([
+      expect(job?.references).toEqual([
         "manager@acme.example",
         "lead@acme.example",
       ]);
-      expect(job.intro).toBe("");
+      expect(job?.intro).toBe("");
     });
 
     it("reads a reference line written right under the tech stack", () => {
       const experience = UNSPACED_REFERENCE_EXPERIENCE_FIXTURE;
       const [job] = parseWith({ experience }).jobs;
-      expect(job.techStack).toBe("React, TypeScript");
-      expect(job.references).toEqual([
+      expect(job?.techStack).toBe("React, TypeScript");
+      expect(job?.references).toEqual([
         "manager@acme.example",
         "lead@acme.example",
       ]);
@@ -710,14 +710,14 @@ describe("parseResumeMd", () => {
 
     it("reads the intro line after the degree, before the bullets", () => {
       const { schools } = parseWith();
-      expect(schools[0].intro).toBe(
+      expect(schools[0]?.intro).toBe(
         "Coursework completed; transitioned to full-time role.",
       );
-      expect(schools[1].intro).toBe("85% Overall Average");
+      expect(schools[1]?.intro).toBe("85% Overall Average");
     });
 
     it('reads bullets as plain text without the leading "- "', () => {
-      expect(parseWith().schools[0].bullets).toEqual([
+      expect(parseWith().schools[0]?.bullets).toEqual([
         "LINK101 Course Title Here",
         "Plain bullet without link",
       ]);
@@ -735,7 +735,7 @@ describe("parseResumeMd", () => {
         "  University)",
         "- CS101 Software Engineering",
       ].join("\n");
-      expect(parseWith({ education }).schools[0].bullets).toEqual([
+      expect(parseWith({ education }).schools[0]?.bullets).toEqual([
         "ESMM290 Software Systems Architecture (in collaboration with Carnegie Mellon University)",
         "CS101 Software Engineering",
       ]);
@@ -767,25 +767,25 @@ describe("parseResumeMd", () => {
 
     it('keeps the full heading as the title, including " — "', () => {
       const { projects } = parseWith();
-      expect(projects[0].title).toBe("Widget Dashboard");
-      expect(projects[1].title).toBe("Acme Tools — Prototype");
+      expect(projects[0]?.title).toBe("Widget Dashboard");
+      expect(projects[1]?.title).toBe("Acme Tools — Prototype");
     });
 
     it("joins the hard-wrapped intro paragraph", () => {
-      expect(parseWith().projects[0].intro).toBe(
+      expect(parseWith().projects[0]?.intro).toBe(
         "A small example that streams widget prices in real time, built to try out server-sent events.",
       );
     });
 
     it("joins the hard-wrapped Tech Stack line", () => {
-      expect(parseWith().projects[0].techStack).toBe(
+      expect(parseWith().projects[0]?.techStack).toBe(
         "Next.js, React, Server Sent Events (provided by Next.js)",
       );
     });
 
     it("reads every markdown link of a project as label and url", () => {
       const { projects } = parseWith({ projects: LINKED_PROJECTS_FIXTURE });
-      expect(projects[0].links).toEqual([
+      expect(projects[0]?.links).toEqual([
         { label: "GitHub", url: "https://github.com/jane-doe/widgets" },
         { label: "Demo", url: "https://widgets.example/" },
       ]);
@@ -793,20 +793,20 @@ describe("parseResumeMd", () => {
 
     it("returns no links for plain labels without URLs", () => {
       const { projects } = parseWith({ projects: LINKED_PROJECTS_FIXTURE });
-      expect(projects[2].links).toEqual([]);
+      expect(projects[2]?.links).toEqual([]);
     });
 
     it("ignores links without an http(s) URL", () => {
       const { projects } = parseWith({ projects: LINKED_PROJECTS_FIXTURE });
-      expect(projects[3].links).toEqual([
+      expect(projects[3]?.links).toEqual([
         { label: "Slides", url: "http://slides.example/" },
       ]);
     });
 
     it("does not mistake a link line for the intro paragraph", () => {
       const { projects } = parseWith({ projects: LINKED_PROJECTS_FIXTURE });
-      expect(projects[1].intro).toBe("");
-      expect(projects[1].links).toHaveLength(1);
+      expect(projects[1]?.intro).toBe("");
+      expect(projects[1]?.links).toHaveLength(1);
     });
 
     it("returns an empty list when the section is missing", () => {
@@ -827,20 +827,20 @@ describe("parseResumeMd", () => {
     });
 
     it("reads the description from the paragraph under the heading", () => {
-      expect(parseWith().certifications[0].description).toBe(
+      expect(parseWith().certifications[0]?.description).toBe(
         "Covers threat modelling and secure defaults.",
       );
     });
 
     it("reads credential ids from a hard-wrapped **Credential ID:** line", () => {
-      expect(parseWith().certifications[0].credentialIds).toEqual([
+      expect(parseWith().certifications[0]?.credentialIds).toEqual([
         "EX-0001",
         "EX-0002",
       ]);
     });
 
     it("reads the link from a markdown link line", () => {
-      expect(parseWith().certifications[0].link).toEqual({
+      expect(parseWith().certifications[0]?.link).toEqual({
         label: "Credential",
         url: "https://example.com/cert/EX-0001",
       });
@@ -1184,7 +1184,7 @@ Prototype UI.
 
 [GitHub](https://github.com/jane-doe/widgets)
 `.trim();
-      expect(parseWith({ projects }).projects[0].links).toEqual([
+      expect(parseWith({ projects }).projects[0]?.links).toEqual([
         { label: "GitHub", url: "https://github.com/jane-doe/widgets" },
         { label: "Demo", url: "https://widgets.example/" },
       ]);
@@ -1218,7 +1218,7 @@ Prototype UI.
 
 [Thesis](https://example.com/thesis)
 `.trim();
-      expect(parseWith({ education }).schools[0].website).toEqual({
+      expect(parseWith({ education }).schools[0]?.website).toEqual({
         label: "Thesis",
         url: "https://example.com/thesis",
       });

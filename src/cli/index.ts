@@ -75,14 +75,23 @@ async function cancellable<TValue>(
   }
 }
 
+/** The validator for a prompt that takes any answer. */
+const acceptAny = (): true => true;
+
 /** Adapts the prompt library to the CLI's Prompter; it calls a question its `message`. */
 const prompter: Prompter = {
   select: ({ question, choices }) =>
     cancellable(select({ message: question, choices: [...choices] })),
   input: ({ question, validate }) =>
-    cancellable(input({ message: question, validate })),
+    cancellable(input({ message: question, validate: validate ?? acceptAny })),
   password: ({ question, validate }) =>
-    cancellable(password({ message: question, mask: "•", validate })),
+    cancellable(
+      password({
+        message: question,
+        mask: "•",
+        validate: validate ?? acceptAny,
+      }),
+    ),
   checkbox: ({ question, choices }) =>
     cancellable(checkbox({ message: question, choices: [...choices] })),
   confirm: ({ question, default: fallback }) =>

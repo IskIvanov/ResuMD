@@ -34,7 +34,7 @@ describe("fillDefaults", () => {
     expect(
       fillDefaults({ name: "Jane" }, [
         ["name", () => "ignored"],
-        ["slug", (known) => known.name.toLowerCase()],
+        ["slug", (known) => known.name?.toLowerCase()],
         ["path", (known) => `/${known.slug}`],
         ["tags", undefined],
       ]),
