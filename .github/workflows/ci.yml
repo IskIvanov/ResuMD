@@ -24,3 +24,5 @@ jobs:
         run: bun run typecheck
       - name: Format
         run: bun run format:check
+      - name: Dead code
+        run: bunx knip
