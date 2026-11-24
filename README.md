@@ -11,12 +11,12 @@ platform: [Reactive Resume](https://rxresu.me) is the first, and more are
 ## Demo
 
 <p align="center">
-    <img src="docs/assets/demo.gif" alt="bun run cli: the menu, the example resume, Connect and a direct run">
+    <img src="docs/assets/demo.gif" alt="bun run cli: writing the example Resume.md, then reading it in vi">
 </p>
 
-`bun run cli` opens the menu and lists Reactive Resume's tools, disabled until
-you connect. Then it writes the example `Resume.md`, starts Connect with the
-API key typed hidden and declines to run it, and finally runs a tool directly.
+`bun run cli` opens the menu, picks Example resume, sets `--output` to
+`Resume.md` and runs it. Then `vi` opens the new `Resume.md` and scrolls
+through it, to show the Markdown you fill in.
 The recording is [`docs/demo.tape`](docs/demo.tape): re-record it with
 `bun run demo` (needs [VHS](https://github.com/charmbracelet/vhs): `brew bundle`).
 
