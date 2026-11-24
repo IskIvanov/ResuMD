@@ -21,7 +21,7 @@ const SECTION_HEADING = /\n## /;
  */
 export function splitSections(markdown: string): Record<string, string> {
   return Object.fromEntries(
-    ("\n" + markdown)
+    `\n${markdown}`
       .split(SECTION_HEADING)
       .slice(1)
       .map((headingAndText) => {

@@ -14,8 +14,8 @@
  * 3. values: each answer converted for its kind, as run receives it.
  */
 
-import { resolve } from "path";
-import { parseArgs } from "util";
+import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { fillDefaults, pickNonEmptyStrings } from "../utils/record.ts";
 import { firstIssue } from "../utils/schema.ts";
 import { splitList } from "../utils/string.ts";

@@ -7,7 +7,7 @@
  * menu can't build tool arguments the tool would reject.
  */
 
-import { extname, resolve } from "path";
+import { extname, resolve } from "node:path";
 import { firstIssue } from "../utils/schema.ts";
 import {
   type Answers,

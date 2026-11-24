@@ -7,7 +7,7 @@
  */
 
 import type { z } from "zod";
-import type { EnvironmentVariables, FetchFunction } from "../../utils/types.ts";
+import type { FetchFunction } from "../../utils/types.ts";
 import type {
   BasicsSchema,
   BasicsCustomFieldSchema,

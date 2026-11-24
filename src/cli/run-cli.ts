@@ -8,7 +8,7 @@
  * a terminal or process.exit.
  */
 
-import { parseEnv } from "util";
+import { parseEnv } from "node:util";
 import { describeCaught } from "../utils/error.ts";
 import type { EnvironmentVariables } from "../utils/types.ts";
 import { promptOptions } from "./prompt.ts";

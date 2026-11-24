@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relative } from "path";
+import { relative } from "node:path";
 import type { ToolDependencies, ToolDefinition } from "../cli/types.ts";
 import type { EnvironmentVariables, FetchFunction } from "../utils/types.ts";
 import { CoverLetterLimit } from "./api/schema.ts";
@@ -897,7 +897,7 @@ function exportedMarkdown(data: ResumeData): string {
     richTextToMarkdown(item.description),
   ]);
   const blocks = [
-    "# " + basics.name,
+    `# ${basics.name}`,
     `_${basics.headline}_`,
     contact.filter(Boolean).join(" · "),
     "## Summary",

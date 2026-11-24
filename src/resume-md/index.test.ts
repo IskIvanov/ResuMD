@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relative } from "path";
+import { relative } from "node:path";
 import type { ToolDependencies, ToolDefinition } from "../cli/types.ts";
 import { exampleResumeTool } from "./index.ts";
 import { parseResumeMd } from "./parser.ts";

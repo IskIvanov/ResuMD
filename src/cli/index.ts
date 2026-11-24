@@ -10,16 +10,16 @@
  *      bun src/cli/index.ts <tool id> [flags]    (one tool, no prompts)
  */
 
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
-} from "fs";
-import { homedir } from "os";
-import { dirname, join } from "path";
+} from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { checkbox, confirm, input, password, select } from "@inquirer/prompts";
 import { RESUME_MD_TOOLS } from "../resume-md/index.ts";
 import { RX_RESUME_TOOLS } from "../rx-resume/index.ts";
