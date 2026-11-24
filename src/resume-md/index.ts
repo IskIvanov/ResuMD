@@ -27,10 +27,7 @@ const exampleResumeOptions = {
 
 type RunExampleResume = ToolSpec<typeof exampleResumeOptions>["run"];
 
-const runExampleResume: RunExampleResume = async (
-  { output },
-  dependencies,
-) => {
+const runExampleResume: RunExampleResume = async ({ output }, dependencies) => {
   if (dependencies.exists(output)) {
     throw new Error(
       `${output} already exists. Pass --output to write the example ` +
