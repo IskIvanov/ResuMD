@@ -25,6 +25,10 @@ URL, status and time, never the key.
 4. Update the docs the change touches: the tool tables in the
    [README](../README.md#platforms), or the page in `docs/`. `.gitignore`
    blocks every other `*.md`, so a new page goes in `docs/`.
+   If the change shows in the menu, re-record the README demo with
+   `bun run demo`: it plays `docs/demo.tape` with
+   [VHS](https://github.com/charmbracelet/vhs), which `brew bundle` installs
+   from the `Brewfile`.
 5. Check that everything passes:
 
    ```bash

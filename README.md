@@ -10,11 +10,15 @@ platform: [Reactive Resume](https://rxresu.me) is the first, and more are
 
 ## Demo
 
-https://github.com/user-attachments/assets/64c21695-dc4a-453d-9c7c-c7d1e457436e
+<p align="center">
+    <img src="docs/assets/demo.gif" alt="bun run cli: the menu, the example resume, Connect and a direct run">
+</p>
 
-Run `bun run cli` opens the menu, picks Reactive
-Resume to list its tools, goes back, then starts Connect, which asks for the
-API key hidden.
+`bun run cli` opens the menu and lists Reactive Resume's tools, disabled until
+you connect. Then it writes the example `Resume.md`, starts Connect with the
+API key typed hidden and declines to run it, and finally runs a tool directly.
+The recording is [`docs/demo.tape`](docs/demo.tape): re-record it with
+`bun run demo` (needs [VHS](https://github.com/charmbracelet/vhs): `brew bundle`).
 
 ## Who it's for
 
