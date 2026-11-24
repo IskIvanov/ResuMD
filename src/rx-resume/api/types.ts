@@ -97,7 +97,7 @@ export interface RxResumeClientDependencies extends RxResumeSettings {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 /** What the tools need to reach a Reactive Resume instance, read from `.env`. */
-export interface RxResumeSettings {
+interface RxResumeSettings {
   apiKey: string;
   /** The REST API's address, e.g. `https://rxresu.me/api/openapi`. */
   apiUrl: string;
