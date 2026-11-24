@@ -198,7 +198,11 @@ export class RxResumeApiClient {
       headers.set(ContentType.Header, ContentType.Json);
       jsonBody = JSON.stringify(requestBody);
     }
-    const httpRequest: RequestInit = { method, headers, body: jsonBody };
+    const httpRequest: RequestInit = {
+      method,
+      headers,
+      body: jsonBody ?? null,
+    };
 
     const startedAt = this.apiCallLog?.now();
     this.apiCallLog?.write(`→ ${method} ${endpointUrl}`);

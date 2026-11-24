@@ -164,7 +164,10 @@ export async function promptOptions(
     }
   }
 
-  return options
-    .filter((option) => answers[option.flag])
-    .flatMap((option) => [`--${option.flag}`, answers[option.flag]]);
+  const toolArguments: string[] = [];
+  for (const option of options) {
+    const answer = answers[option.flag];
+    if (answer) toolArguments.push(`--${option.flag}`, answer);
+  }
+  return toolArguments;
 }

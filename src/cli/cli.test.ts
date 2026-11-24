@@ -125,9 +125,9 @@ type ScriptedAnswer = string | readonly string[] | boolean;
 function createFakePrompter(script: PromptScript): Prompter {
   const timesAsked: Record<string, number> = {};
   const answer = (question: string): ScriptedAnswer => {
-    if (!(question in script))
-      throw new Error(`Unscripted prompt: ${question}`);
     const scripted = script[question];
+    if (scripted === undefined)
+      throw new Error(`Unscripted prompt: ${question}`);
     if (typeof scripted !== "object" || !("inTurn" in scripted)) {
       return scripted;
     }
@@ -564,7 +564,13 @@ function menuEntry(
   tool: ToolDefinition,
   environmentVariables: EnvironmentVariables,
 ): Choice<MenuValue> {
-  return buildPlatformMenu("Reactive Resume", [tool], environmentVariables)[0];
+  const [entry] = buildPlatformMenu(
+    "Reactive Resume",
+    [tool],
+    environmentVariables,
+  );
+  if (!entry) throw new Error(`No menu entry for ${tool.id}`);
+  return entry;
 }
 
 describe("RX_RESUME_TOOLS", () => {

@@ -7,7 +7,7 @@
  */
 
 import type { z } from "zod";
-import type { EnvironmentVariables, FetchFunction } from "../../utils/types.ts";
+import type { FetchFunction } from "../../utils/types.ts";
 import type {
   BasicsSchema,
   BasicsCustomFieldSchema,
@@ -91,7 +91,7 @@ export interface ApiCallLog {
 export interface RxResumeClientDependencies extends RxResumeSettings {
   fetch: FetchFunction;
   /** Set to log every API call; left out, the client writes nothing. */
-  apiCallLog?: ApiCallLog;
+  apiCallLog?: ApiCallLog | undefined;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
