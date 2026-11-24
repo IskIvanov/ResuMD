@@ -15,11 +15,7 @@ import {
 } from "../cli/types.ts";
 import { EXAMPLE_RESUME_MD } from "./example.ts";
 
-const TOOL_ID = "example-resume";
-const TOOL_TITLE = "Resume.md tools";
-const TOOL_DESCRIPTION = "tools that work on Resume.md alone";
-
-const resumeToolOptions = {
+const exampleResumeOptions = {
   output: {
     question: "Path to save Resume.md to",
     kind: OptionKind.Path,
@@ -29,7 +25,7 @@ const resumeToolOptions = {
   },
 } satisfies OptionSpecs;
 
-type RunExampleResume = ToolSpec<typeof resumeToolOptions>["run"];
+type RunExampleResume = ToolSpec<typeof exampleResumeOptions>["run"];
 
 const runExampleResume: RunExampleResume = async (
   { output },
@@ -50,10 +46,10 @@ const runExampleResume: RunExampleResume = async (
 
 /** Writes Jane Doe's Resume.md for a person to fill in with their own details. */
 export const exampleResumeTool = defineTool({
-  id: TOOL_ID,
-  title: TOOL_TITLE,
-  description: TOOL_DESCRIPTION,
-  options: resumeToolOptions,
+  id: "example-resume",
+  title: "Example resume",
+  description: "write a Resume.md to fill in",
+  options: exampleResumeOptions,
   run: runExampleResume,
 });
 

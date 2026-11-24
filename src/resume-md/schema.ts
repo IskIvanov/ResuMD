@@ -27,9 +27,7 @@ export const LinkSchema = z.object({
 export const HeaderSchema = z.object({
   name: z.string(),
   headline: z.string(),
-  // Email format check turned off for now; any text, or none, is accepted.
-//   email: z.email(FieldProblem.InvalidEmail),
-  email: z.string(),
+  email: z.email(FieldProblem.InvalidEmail),
   phone: z.string().regex(/^\+?[0-9\s\-()]*$/, "invalid phone number format"),
   location: z.string(),
   /** As written in Resume.md, with or without a protocol. */
