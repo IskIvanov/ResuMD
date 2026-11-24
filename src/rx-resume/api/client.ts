@@ -78,7 +78,7 @@ function itemPath(collection: string, id: string): string {
 }
 
 /** A non-2xx response, with the API's error code when it sent one. */
-export class RxResumeApiError extends Error {
+class RxResumeApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
 
@@ -198,7 +198,11 @@ export class RxResumeApiClient {
       headers.set(ContentType.Header, ContentType.Json);
       jsonBody = JSON.stringify(requestBody);
     }
-    const httpRequest: RequestInit = { method, headers, body: jsonBody };
+    const httpRequest: RequestInit = {
+      method,
+      headers,
+      body: jsonBody ?? null,
+    };
 
     const startedAt = this.apiCallLog?.now();
     this.apiCallLog?.write(`→ ${method} ${endpointUrl}`);

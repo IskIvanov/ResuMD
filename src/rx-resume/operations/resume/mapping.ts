@@ -87,7 +87,10 @@ function paragraph(html: string): string {
 }
 
 function escapeHtml(text: string): string {
-  return text.replace(HTML_SPECIAL_REGEX, (special) => HTML_ENTITIES[special]);
+  return text.replace(
+    HTML_SPECIAL_REGEX,
+    (special) => HTML_ENTITIES[special] ?? special,
+  );
 }
 
 /** An external link that opens in a new tab. */
@@ -123,7 +126,7 @@ function renderInline(text: string): string {
   );
   return renderEmphasis(withoutLinks).replace(
     ANCHOR_PLACEHOLDER_REGEX,
-    (_match, index: string) => anchors[Number(index)],
+    (_match, index: string) => anchors[Number(index)] ?? "",
   );
 }
 
@@ -506,6 +509,7 @@ export function applyResumeMd(
       );
       if (matchIndex < 0) return written;
       const [stored] = unmatchedItems.splice(matchIndex, 1);
+      if (!stored) return written;
       return { ...written, ...keep(stored, written), id: stored.id };
     });
 

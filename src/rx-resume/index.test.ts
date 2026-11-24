@@ -406,7 +406,7 @@ const HIDDEN_PROJECT = {
 
 /** The `data` the second request (the PUT) sent. */
 function savedData(receivedRequests: ReceivedRequest[]): ResumeData {
-  return (receivedRequests[1].sentJson as { data: ResumeData }).data;
+  return (receivedRequests[1]?.sentJson as { data: ResumeData }).data;
 }
 
 // ─── Cover letters ────────────────────────────────────────────────────────────
@@ -1109,7 +1109,7 @@ describe("update-resume", () => {
     });
 
     const { sections, summary } = savedData(api.receivedRequests);
-    expect(sections.experience.items[0].description).toContain(
+    expect(sections.experience.items[0]?.description).toContain(
       "<li><p>Led <strong>live mode</strong> for <em>R&amp;D</em> via " +
         '<a target="_blank" rel="noopener noreferrer nofollow" href="https://apollo.example/a_b_c">Apollo</a>' +
         ", &lt;Foo&gt; and snake_case_name, <s>gone</s> <u>under</u></p></li>",
@@ -1496,7 +1496,7 @@ describe("update-resume", () => {
 
     const id = expect.any(String);
     const { sections } = stored;
-    expect(api.receivedRequests[1].sentJson).toEqual({
+    expect(api.receivedRequests[1]?.sentJson).toEqual({
       data: {
         ...stored,
         basics: {
@@ -1723,7 +1723,7 @@ describe("update-resume", () => {
         inlineLink: false,
       },
     });
-    expect(data.sections.experience.items[0].description).toMatch(
+    expect(data.sections.experience.items[0]?.description).toMatch(
       /<p><strong>Reference:<\/strong> alex@example\.com, sam@example\.com<\/p>$/,
     );
   });
@@ -1857,12 +1857,12 @@ describe("create-resume", () => {
       ["GET", RESUME_URL],
       ["PUT", RESUME_URL],
     ]);
-    expect(api.receivedRequests[0].sentJson).toEqual({
+    expect(api.receivedRequests[0]?.sentJson).toEqual({
       name: "Jane Doe",
       slug: "jane-doe",
       tags: ["cv"],
     });
-    const { data } = api.receivedRequests[2].sentJson as { data: ResumeData };
+    const { data } = api.receivedRequests[2]?.sentJson as { data: ResumeData };
     expect(data.sections.experience.items).toEqual([
       expect.objectContaining({ company: "Example Corp" }),
     ]);
@@ -1877,7 +1877,7 @@ describe("create-resume", () => {
 
     await runTool(createResumeTool, toolArguments, { fetch: api.fetch });
 
-    const { data } = api.receivedRequests[2].sentJson as { data: ResumeData };
+    const { data } = api.receivedRequests[2]?.sentJson as { data: ResumeData };
     expect(data.metadata.layout).toEqual({
       sidebarWidth: 35,
       pages: [
@@ -2093,7 +2093,7 @@ describe("create-cover-letter", () => {
       { fetch: api.fetch },
     );
 
-    expect(api.receivedRequests[0].sentJson).toMatchObject({
+    expect(api.receivedRequests[0]?.sentJson).toMatchObject({
       applicationId: "application-1",
       recipientCompany: "Acme BV",
       template: CoverLetterTemplate.Onyx,
@@ -2186,7 +2186,7 @@ describe("update-cover-letter", () => {
       ["PUT", LETTER_URL],
     ]);
     // No layout, which PUT can't change, and no field that wasn't given.
-    expect(api.receivedRequests[1].sentJson).toEqual({
+    expect(api.receivedRequests[1]?.sentJson).toEqual({
       expectedRevision: LETTER_REVISION,
       recipient: RECIPIENT,
       content: CONTENT,
@@ -2218,7 +2218,7 @@ describe("update-cover-letter", () => {
       { fetch: api.fetch },
     );
 
-    expect(api.receivedRequests[1].sentJson).toMatchObject({
+    expect(api.receivedRequests[1]?.sentJson).toMatchObject({
       name: "Renamed",
       recipientCompany: "Acme BV",
       resumeId: "resume-2",

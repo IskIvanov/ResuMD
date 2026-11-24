@@ -7,7 +7,7 @@
  */
 
 import type { z } from "zod";
-import type { EnvironmentVariables, FetchFunction } from "../../utils/types.ts";
+import type { FetchFunction } from "../../utils/types.ts";
 import type {
   BasicsSchema,
   BasicsCustomFieldSchema,
@@ -91,13 +91,13 @@ export interface ApiCallLog {
 export interface RxResumeClientDependencies extends RxResumeSettings {
   fetch: FetchFunction;
   /** Set to log every API call; left out, the client writes nothing. */
-  apiCallLog?: ApiCallLog;
+  apiCallLog?: ApiCallLog | undefined;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 /** What the tools need to reach a Reactive Resume instance, read from `.env`. */
-export interface RxResumeSettings {
+interface RxResumeSettings {
   apiKey: string;
   /** The REST API's address, e.g. `https://rxresu.me/api/openapi`. */
   apiUrl: string;
