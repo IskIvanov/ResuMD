@@ -78,7 +78,7 @@ function itemPath(collection: string, id: string): string {
 }
 
 /** A non-2xx response, with the API's error code when it sent one. */
-export class RxResumeApiError extends Error {
+class RxResumeApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
 

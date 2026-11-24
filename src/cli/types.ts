@@ -251,7 +251,7 @@ export interface Choice<TValue> {
 }
 
 /** A platform on the first menu level; picking it lists the platform's tools. */
-export interface PlatformMenuEntry {
+interface PlatformMenuEntry {
   platform: string;
 }
 
