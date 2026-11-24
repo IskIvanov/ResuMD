@@ -166,8 +166,8 @@ function classifyLine(text: string): Line {
     return {
       kind: LineKind.Title,
       text,
-      title: titleMatch[1].trim(),
-      period: titleMatch[2].trim(),
+      title: (titleMatch[1] ?? "").trim(),
+      period: (titleMatch[2] ?? "").trim(),
     };
   }
 
@@ -186,8 +186,8 @@ function classifyLine(text: string): Line {
     return {
       kind: LineKind.Labelled,
       text,
-      label: labelledMatch[1].trim(),
-      value: labelledMatch[2],
+      label: (labelledMatch[1] ?? "").trim(),
+      value: labelledMatch[2] ?? "",
     };
   }
 
@@ -199,7 +199,11 @@ function classifyLine(text: string): Line {
 
   const italicMatch = ITALIC_LINE_REGEX.exec(text);
   if (italicMatch) {
-    return { kind: LineKind.Italic, text, italicText: italicMatch[1].trim() };
+    return {
+      kind: LineKind.Italic,
+      text,
+      italicText: (italicMatch[1] ?? "").trim(),
+    };
   }
 
   return { kind: LineKind.Paragraph, text };
@@ -274,7 +278,7 @@ function readSection(sectionMarkdown: string): Section {
 }
 
 function readOutline(markdown: string): ResumeOutline {
-  const [preamble] = `\n${markdown}`.split(SECTION_START);
+  const [preamble = ""] = `\n${markdown}`.split(SECTION_START);
   const headerLines = preamble
     .split("\n")
     .map((line) => line.trim())
@@ -381,7 +385,7 @@ function readDatedEntry({ heading, lines }: Entry): DatedEntry {
     return { name, title: "", period: "", details: qualifier, intro: "" };
   }
 
-  const [, name, title, period] = headingMatch;
+  const [, name = "", title = "", period = ""] = headingMatch;
   const [firstLine] = lines;
   if (firstLine?.kind === LineKind.Italic) {
     return {
@@ -430,8 +434,8 @@ function readDegree(
 /** Every markdown link with an http(s) URL, in document order. */
 function parseLinks(text: string): Link[] {
   return [...text.matchAll(MARKDOWN_LINK_REGEX)].map((linkMatch) => ({
-    label: linkMatch[1].trim(),
-    url: linkMatch[2],
+    label: (linkMatch[1] ?? "").trim(),
+    url: linkMatch[2] ?? "",
   }));
 }
 
@@ -476,7 +480,7 @@ function readHeader(headerLines: string[]): Header {
 
   return {
     name: nameLine?.slice(NAME_PREFIX.length).trim() ?? "",
-    headline: headline?.[1].trim() ?? "",
+    headline: headline?.[1]?.trim() ?? "",
     email,
     phone,
     location,
@@ -635,7 +639,7 @@ function readSkillGroups(lines: Line[]): SkillGroup[] {
   const exportedGroups = bulletTexts(lines).flatMap((bulletText) => {
     const skillMatch = EXPORTED_SKILL_REGEX.exec(bulletText);
     if (!skillMatch) return [];
-    const [, label, proficiency, keywords] = skillMatch;
+    const [, label = "", proficiency, keywords] = skillMatch;
     return [
       {
         label: label.trim(),
@@ -691,7 +695,7 @@ function splitFluency(qualifier: string): { fluency: string; level: number } {
   }
   const ratedMatch = LANGUAGE_RATED_REGEX.exec(qualifier);
   if (ratedMatch) {
-    return { fluency: ratedMatch[1], level: Number(ratedMatch[2]) };
+    return { fluency: ratedMatch[1] ?? "", level: Number(ratedMatch[2]) };
   }
   return { fluency: qualifier, level: NO_LANGUAGE_LEVEL };
 }
@@ -706,7 +710,7 @@ function readInterests(lines: Line[]): Interest[] {
     return bullets.map((bulletText) => {
       const interestMatch = EXPORTED_INTEREST_REGEX.exec(bulletText);
       return {
-        name: interestMatch?.[1].trim() ?? bulletText,
+        name: interestMatch?.[1]?.trim() ?? bulletText,
         keywords: splitSkills(interestMatch?.[2] ?? ""),
       };
     });
@@ -726,7 +730,9 @@ function readInterests(lines: Line[]): Interest[] {
  */
 function listedText(line: Line): string {
   if (line.kind !== LineKind.Bullet) return line.text;
-  return BOLD_PREFIX_REGEX.exec(line.bulletText)?.[1].trim() ?? line.bulletText;
+  return (
+    BOLD_PREFIX_REGEX.exec(line.bulletText)?.[1]?.trim() ?? line.bulletText
+  );
 }
 
 /**

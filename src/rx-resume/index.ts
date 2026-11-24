@@ -162,11 +162,11 @@ function printLetter(
 
 /** A cover-letter tool's field flags, named as the API names them. */
 function letterFields(values: {
-  name?: string;
-  "resume-id"?: string;
-  "application-id"?: string;
-  company?: string;
-  template?: CoverLetterTemplate;
+  name?: string | undefined;
+  "resume-id"?: string | undefined;
+  "application-id"?: string | undefined;
+  company?: string | undefined;
+  template?: CoverLetterTemplate | undefined;
 }): LetterFields {
   return {
     name: values.name,
