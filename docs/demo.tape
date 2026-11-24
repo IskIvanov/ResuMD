@@ -77,8 +77,7 @@ Wait+Screen /Wrote an example Resume.md/
 Wait+Line /resumd \$/
 Sleep 3s
 
-# 4. Open what it wrote in vi, scroll slowly down to the end so each section's
-# Markdown is readable, then back up to the top, and quit.
+# 4. Open what it wrote in vi, scroll down once and back up once, and quit.
 Type "# Step 2: open the new Resume.md to see its Markdown"
 Enter
 Sleep 1s
@@ -88,41 +87,10 @@ Enter
 Wait+Screen /Jane Doe/
 Sleep 3s
 
-# Down: half a screen at a time (Ctrl+D), pausing on each page so its
-# Markdown can be read. Line-by-line scrolling redraws every frame and made
-# the GIF 18 MB; half pages keep it small.
+# One half page down (Ctrl+D), then back up (Ctrl+U). Half pages, not
+# line-by-line scrolling, which redraws every frame and bloats the GIF.
 Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 2s
-Ctrl+D
-Sleep 3s
-
-# Up: back to the top (Ctrl+U), faster.
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
-Ctrl+U
-Sleep 700ms
+Sleep 2.5s
 Ctrl+U
 Sleep 2s
 Type ":q"
