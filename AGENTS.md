@@ -24,7 +24,7 @@ bun run cli <tool> [flags]   # run one tool directly
 bun run test                 # vitest (watch mode; use `bunx vitest run` for one pass)
 bunx vitest run src/utils/string.test.ts -t slugify   # one file / one test
 bun run typecheck            # tsc --noEmit
-bun run format               # biome format --write . (formatter only, linter off)
+bun run format               # biome check --write . (format + lint)
 ```
 
 Style (biome): 2 spaces, 80 cols, double quotes, semicolons, trailing commas.
