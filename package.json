@@ -1,17 +1,26 @@
 {
-  "name": "resumd",
+  "name": "resumd-cli",
   "version": "0.1.0",
-  "private": true,
   "description": "Keep a single Resume.md as the source of truth and sync it into CV builders",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IskIvanov/ResuMD.git"
+  },
+  "bin": {
+    "resumd": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "engines": {"node": ">=20"},
   "type": "module",
   "scripts": {
-    "cli": "bun src/cli/index.ts",
-    "demo": "vhs docs/demo.tape",
-    "format": "biome check --write .",
-    "format:check": "biome check .",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
+      "cli": "bun src/cli/index.ts",
+      "demo": "vhs docs/demo.tape",
+      "format": "biome check --write .",
+      "format:check": "biome check .",
+      "test": "vitest",
+      "typecheck": "tsc --noEmit",
+      "prepublish": "bun run typecheck && bunx vitest run && bun run build"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.8.1",

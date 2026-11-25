@@ -58,7 +58,7 @@ rxresu.me or self-hosted.
 | `update-cover-letter` | Rewrites a cover letter from its `.md`, by id.                                               |
 | `delete-cover-letter` | Deletes a cover letter for good: moves it to Trash, then purges it.                          |
 
-## Tools without a platform
+## Non-platform tools
 
 These work on `Resume.md` alone and need no account or connection. The menu
 lists them after the platforms.
@@ -69,26 +69,40 @@ lists them after the platforms.
 
 ## Quick start
 
-Requires [Bun](https://bun.sh) and, for Reactive Resume, an API key from your
-account's settings.
+Requires [Node.js](https://nodejs.org) 20 or later and, for Reactive Resume,
+an API key from your account's settings.
 
 ```bash
-bun install
-bun run cli example-resume   # 1. writes Resume.md; fill in your details
-bun run cli                  # 2. pick Reactive Resume, then Connect
-bun run cli                  # 3. pick Reactive Resume, then a tool
-bun run cli <tool> [flags]   # or run one tool directly
+npm install -g resumd-cli    # or run it once with: npx resumd-cli
+resumd example-resume        # 1. writes Resume.md; fill in your details
+resumd                       # 2. pick Reactive Resume, then Connect
+resumd                       # 3. pick Reactive Resume, then a tool
+resumd <tool> [flags]        # or run one tool directly
 ```
 
 Connect tests your key, then saves it with your instance's address in
 `~/.config/resume-tools/.env`, readable only by you, so every later run uses it
 from any folder. Connect from the menu, where the key is typed hidden:
 `connect-rx-resume --api-key …` leaves the key in your shell history. To change
-the key, connect again; to disconnect, delete that file. A shell variable or a
-`.env` in the current folder (see `.env.example`) overrides a saved setting.
+the key, connect again; to disconnect, delete that file. A shell variable
+overrides a saved setting.
 
 The menu asks for each option and prints the matching direct command before
-it runs. Without a terminal, `bun run cli` prints every tool's usage line.
+it runs. Without a terminal, `resumd` prints every tool's usage line.
+
+### From source
+
+Requires [Bun](https://bun.sh). `bun run cli` takes the place of `resumd`:
+
+```bash
+bun install
+bun run cli example-resume
+bun run cli                  # the menu
+bun run cli <tool> [flags]   # one tool directly
+```
+
+Run from source, a `.env` in the current folder (see `.env.example`) also
+overrides a saved setting, since Bun loads it.
 
 ## Documentation
 
@@ -108,16 +122,19 @@ it runs. Without a terminal, `bun run cli` prints every tool's usage line.
 ## Planned
 
 - More platforms, each with its own Connect tool and all fed by the same
-  `Resume.md` parser. Resume builders with a public API:
-  - [Mokaru](https://mokaru.ai) ([API](https://docs.mokaru.ai)): create,
-    update, delete and export resumes as PDF, and create, update and delete
-    cover letters. API keys need a Plus plan.
-  - [Enhancv](https://enhancv.com) ([API](https://developers.enhancv.com)):
-    create resumes from structured data, list them, export them as PDF and
-    delete them, but not update them. API keys need a Business Plus plan.
-  - [Careerflow](https://careerflow.ai) ([API](https://docs.careerflow.ai)):
-    create, update, clone, download and delete resumes, and generate cover
-    letters. An organization's owner or admin creates the API keys.
+  `Resume.md` parser:
+  - [JSON Resume](https://jsonresume.org)
+    ([schema](https://jsonresume.org/schema)): an open JSON standard for
+    resumes, rendered by community themes. `Resume.md` would be written out
+    as a `resume.json`, which the JSON Resume registry can publish from a
+    GitHub gist.
+  - [RenderCV](https://github.com/rendercv/rendercv), as an export tool rather
+    than a platform with an API: write `Resume.md` as RenderCV's YAML, checked
+    against its JSON Schema, then render it to PDF locally with
+    `rendercv render` (needs Python 3.12+). No account or API key.
+- More tools without a platform:
+  - `example-cover-letter`: writes an example cover-letter `.md` to fill in,
+    like `example-resume` does for `Resume.md`.
 - A CLI that renders a CV with a custom layout straight from `Resume.md`.
 
 ## Contributing

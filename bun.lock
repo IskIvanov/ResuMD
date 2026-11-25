@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "resumd",
+      "name": "resumd-cli",
       "dependencies": {
         "@inquirer/prompts": "^8.8.1",
         "zod": "^4.6.7",

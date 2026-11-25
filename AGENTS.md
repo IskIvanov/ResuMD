@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for working in `resume-tools`. See [README.md](README.md) for user docs
+Guidance for working in `resumd`. See [README.md](README.md) for user docs
 and [docs/interactive-cli.md](docs/interactive-cli.md) for the CLI design.
 
 ## What this is
@@ -10,10 +10,9 @@ downloaded as Reactive Resume's Markdown export, and syncs it into Reactive
 Resume via its API. A
 cover-letter `.md` drives a Reactive Resume cover letter the same way.
 
-This folder is a standalone private repo (`IskIvanov/Resume-Tools`) cloned into
-`packages/resume-tools/` of the Portfolio repo, which gitignores it. Run `git`
-here against this repo's own history. It holds code and templates only, never a
-real `Resume.md`.
+This repo (`IskIvanov/resumd`) is published to npm as `resumd`: its `bin`
+runs `dist/cli.js`, a Node (>=20) bundle of `src/cli/index.ts`, and only
+`dist/` ships. It holds code and templates only, never a real `Resume.md`.
 
 ## Commands
 
@@ -118,8 +117,8 @@ Gotchas:
   `connect-rx-resume` tests the key, then saves the first three to
   `~/.config/resume-tools/.env` (mode 600), replacing only its own lines.
   `runCli` reads that file with `parseEnv` and lays `process.env` over it:
-  shell variables, then a `.env` in the current folder (Bun loads it), then
-  the saved file. An empty value never hides a saved one.
+  shell variables, then a `.env` in the current folder (only under Bun,
+  which loads it; the npm build runs on Node), then the saved file. An empty value never hides a saved one.
 - `.gitignore` blocks every `*.md` except `README.md`, `docs/`, `AGENTS.md`,
   `CLAUDE.md` and `.agents/skills/`.
 - Skills and hooks live in `.agents/` (`skills/<name>/`, `hooks/`), but
