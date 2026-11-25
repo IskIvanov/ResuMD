@@ -1,3 +1,4 @@
+dist/
 node_modules/
 
 # The resume itself lives with the consumer and is passed via --resume.
