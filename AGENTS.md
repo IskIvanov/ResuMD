@@ -10,8 +10,8 @@ downloaded as Reactive Resume's Markdown export, and syncs it into Reactive
 Resume via its API. A
 cover-letter `.md` drives a Reactive Resume cover letter the same way.
 
-This repo (`IskIvanov/resumd`) is published to npm as `resumd`: its `bin`
-runs `dist/cli.js`, a Node (>=20) bundle of `src/cli/index.ts`, and only
+This repo (`IskIvanov/resumd`) is published to npm as `resumd-cli`: its
+`resumd` bin runs `dist/cli.js`, a Node (>=20) bundle of `src/cli/index.ts`, and only
 `dist/` ships. It holds code and templates only, never a real `Resume.md`.
 
 ## Commands
